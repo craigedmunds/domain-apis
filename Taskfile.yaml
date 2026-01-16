@@ -183,32 +183,6 @@ tasks:
     cmds:
       - npm run test:watch
 
-  test:acceptance:
-    desc: Run acceptance tests
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm test
-
-  test:acceptance:headed:
-    desc: Run acceptance tests in headed mode (see browser)
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm run test:headed
-
-  test:acceptance:ui:
-    desc: Run acceptance tests in UI mode (interactive)
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm run test:ui
-
-  test:acceptance:install:
-    desc: Install acceptance test dependencies and Playwright browsers
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm install
-      - cd {{.TESTS_DIR}}/acceptance && npx playwright install
-
-  test:acceptance:report:
-    desc: View acceptance test report
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm run report
-
   # Installation
   install:
     desc: Install dependencies
@@ -426,6 +400,20 @@ tasks:
     dir: tests/acceptance/ui
     cmds:
       - npm run report
+
+  test:acceptance:install:
+    desc: Install acceptance test dependencies and Playwright browsers
+    dir: tests/acceptance/ui
+    cmds:
+      - npm install
+      - npx playwright install
+      
+  test:acceptance:gateway:install:
+    desc: Install gateway acceptance test dependencies and Playwright browsers
+    dir: tests/acceptance/gateway
+    cmds:
+      - npm install
+      - npx playwright install
 
   # Status check
   status:

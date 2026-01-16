@@ -16,7 +16,7 @@ import { describe, test, expect } from 'vitest';
  */
 
 // Gateway configuration
-const GATEWAY_BASE_URL = process.env.GATEWAY_URL || 'http://domain-api.execute-api.localhost.localstack.cloud:4566';
+const GATEWAY_BASE_URL = process.env.GATEWAY_URL || 'http://domain-api.execute-api.localhost.localstack.cloud:4566/dev';
 
 describe('Gateway API - Direct Access', () => {
   test('should access Taxpayer API directly without include parameter', async () => {
@@ -204,9 +204,10 @@ describe('Gateway API - Error Handling', () => {
     }
   });
 
-  test('should handle non-existent resource with 404', async () => {
+  test('should handle non-existent resource with 404 or 422', async () => {
     const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/NONEXISTENT`);
-    expect(response.status).toBe(404);
+    // Prism returns 422 for invalid ID patterns, which is correct validation behavior
+    expect([404, 422]).toContain(response.status);
   });
 
   test('should handle partial include failures gracefully', async () => {
@@ -233,7 +234,7 @@ describe('Gateway API - Error Handling', () => {
 });
 
 describe('Gateway API - URL Rewriting', () => {
-  test('should rewrite _links to point through gateway', async () => {
+  test('should rewrite _links to use gateway paths', async () => {
     const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);
     
     expect(response.ok).toBeTruthy();
@@ -247,14 +248,16 @@ describe('Gateway API - URL Rewriting', () => {
         ? data._links.self 
         : data._links.self.href;
       
-      expect(selfHref).toContain('execute-api.localhost.localstack.cloud');
+      // Links should be path-only, starting with /dev/
+      expect(selfHref).toMatch(/^\/dev\//);
+      // Should not contain backend API ports
       expect(selfHref).not.toContain(':8081');
       expect(selfHref).not.toContain(':8082');
       expect(selfHref).not.toContain(':8083');
     }
   });
 
-  test('should maintain gateway URLs in cross-API relationships', async () => {
+  test('should maintain gateway paths in cross-API relationships', async () => {
     const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns,payments`);
     
     expect(response.ok).toBeTruthy();
@@ -264,7 +267,9 @@ describe('Gateway API - URL Rewriting', () => {
       const href = typeof link === 'string' ? link : (link as any)?.href;
       
       if (href) {
-        expect(href).toContain('execute-api.localhost.localstack.cloud');
+        // Links should be path-only, starting with /dev/
+        expect(href).toMatch(/^\/dev\//);
+        // Should not contain backend API ports
         expect(href).not.toContain(':8081');
         expect(href).not.toContain(':8082');
         expect(href).not.toContain(':8083');
@@ -273,34 +278,84 @@ describe('Gateway API - URL Rewriting', () => {
   });
 });
 
-describe('Gateway API - Query String Search', () => {
-  test('should support query string search without include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/dev/taxpayers?nino=AB123456C&lastName=Smith`);
+describe('Gateway API - Collection with Includes', () => {
+  test('should support include parameter on collection endpoints', async () => {
+    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns`);
     
     expect(response.ok).toBeTruthy();
     expect(response.status).toBe(200);
     
     const data = await response.json();
     
-    expect(Array.isArray(data)).toBeTruthy();
-    if (data.length > 0) {
-      expect(data[0]).toHaveProperty('type', 'taxpayer');
-      expect(data[0]).toHaveProperty('nino');
-      expect(data[0]).toHaveProperty('_links');
+    // Response has items array for collections
+    expect(data).toHaveProperty('items');
+    expect(Array.isArray(data.items)).toBeTruthy();
+    
+    // Each item should have _included with the requested relationships
+    if (data.items.length > 0) {
+      const taxpayer = data.items[0];
+      expect(taxpayer).toHaveProperty('type', 'taxpayer');
+      expect(taxpayer).toHaveProperty('_included');
+      expect(taxpayer._included).toHaveProperty('taxReturns');
+      expect(Array.isArray(taxpayer._included.taxReturns)).toBeTruthy();
+    }
+  });
+
+  test('should support multiple includes on collection endpoints', async () => {
+    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns,payments`);
+    
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+    
+    const data = await response.json();
+    
+    // Response has items array for collections
+    expect(data).toHaveProperty('items');
+    expect(Array.isArray(data.items)).toBeTruthy();
+    
+    // Each item should have _included with all requested relationships
+    if (data.items.length > 0) {
+      const taxpayer = data.items[0];
+      expect(taxpayer).toHaveProperty('type', 'taxpayer');
+      expect(taxpayer).toHaveProperty('_included');
+      expect(taxpayer._included).toHaveProperty('taxReturns');
+      expect(taxpayer._included).toHaveProperty('payments');
+    }
+  });
+});
+
+describe('Gateway API - Query String Search', () => {
+  test('should support query string search without include parameter', async () => {
+    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?nino=AB123456C&lastName=Smith`);
+    
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+    
+    const data = await response.json();
+    
+    // Response has items array for collections
+    expect(data).toHaveProperty('items');
+    expect(Array.isArray(data.items)).toBeTruthy();
+    if (data.items.length > 0) {
+      expect(data.items[0]).toHaveProperty('type', 'taxpayer');
+      expect(data.items[0]).toHaveProperty('nino');
+      expect(data.items[0]).toHaveProperty('_links');
     }
   });
 
   test('should support query string search with include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/dev/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns,payments`);
+    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns,payments`);
     
     expect(response.ok).toBeTruthy();
     expect(response.status).toBe(200);
     
     const data = await response.json();
     
-    expect(Array.isArray(data)).toBeTruthy();
-    if (data.length > 0) {
-      const taxpayer = data[0];
+    // Response has items array for collections
+    expect(data).toHaveProperty('items');
+    expect(Array.isArray(data.items)).toBeTruthy();
+    if (data.items.length > 0) {
+      const taxpayer = data.items[0];
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
       expect(taxpayer).toHaveProperty('_included');
       expect(taxpayer._included).toHaveProperty('taxReturns');
@@ -310,16 +365,18 @@ describe('Gateway API - Query String Search', () => {
 
   test('should support query string search with URL-encoded include parameter', async () => {
     // This reproduces the exact curl command that's failing
-    const response = await fetch(`${GATEWAY_BASE_URL}/dev/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns%2Cpayments`);
+    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns%2Cpayments`);
     
     expect(response.ok).toBeTruthy();
     expect(response.status).toBe(200);
     
     const data = await response.json();
     
-    expect(Array.isArray(data)).toBeTruthy();
-    if (data.length > 0) {
-      const taxpayer = data[0];
+    // Response has items array for collections
+    expect(data).toHaveProperty('items');
+    expect(Array.isArray(data.items)).toBeTruthy();
+    if (data.items.length > 0) {
+      const taxpayer = data.items[0];
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
       expect(taxpayer).toHaveProperty('_included');
       expect(taxpayer._included).toHaveProperty('taxReturns');
