@@ -273,6 +273,61 @@ describe('Gateway API - URL Rewriting', () => {
   });
 });
 
+describe('Gateway API - Query String Search', () => {
+  test('should support query string search without include parameter', async () => {
+    const response = await fetch(`${GATEWAY_BASE_URL}/dev/taxpayers?nino=AB123456C&lastName=Smith`);
+    
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+    
+    const data = await response.json();
+    
+    expect(Array.isArray(data)).toBeTruthy();
+    if (data.length > 0) {
+      expect(data[0]).toHaveProperty('type', 'taxpayer');
+      expect(data[0]).toHaveProperty('nino');
+      expect(data[0]).toHaveProperty('_links');
+    }
+  });
+
+  test('should support query string search with include parameter', async () => {
+    const response = await fetch(`${GATEWAY_BASE_URL}/dev/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns,payments`);
+    
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+    
+    const data = await response.json();
+    
+    expect(Array.isArray(data)).toBeTruthy();
+    if (data.length > 0) {
+      const taxpayer = data[0];
+      expect(taxpayer).toHaveProperty('type', 'taxpayer');
+      expect(taxpayer).toHaveProperty('_included');
+      expect(taxpayer._included).toHaveProperty('taxReturns');
+      expect(taxpayer._included).toHaveProperty('payments');
+    }
+  });
+
+  test('should support query string search with URL-encoded include parameter', async () => {
+    // This reproduces the exact curl command that's failing
+    const response = await fetch(`${GATEWAY_BASE_URL}/dev/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns%2Cpayments`);
+    
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+    
+    const data = await response.json();
+    
+    expect(Array.isArray(data)).toBeTruthy();
+    if (data.length > 0) {
+      const taxpayer = data[0];
+      expect(taxpayer).toHaveProperty('type', 'taxpayer');
+      expect(taxpayer).toHaveProperty('_included');
+      expect(taxpayer._included).toHaveProperty('taxReturns');
+      expect(taxpayer._included).toHaveProperty('payments');
+    }
+  });
+});
+
 describe('Gateway API - CORS Support', () => {
   test('should include CORS headers in responses', async () => {
     const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);

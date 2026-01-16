@@ -36,7 +36,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
 - [ ] 3. Create Taxpayer API specification
   - [x] 3.1 Create taxpayer-api.yaml OpenAPI specification
     - Define API info (title, version, description)
-    - Define server URL: /api/taxpayer/v1
+    - Define server URL: /taxpayer/v1
     - Define Taxpayer schema with NINO validation
     - Reference shared Address schema
     - Define all endpoints (GET /taxpayers, GET /taxpayers/{id}, POST /taxpayers, PUT /taxpayers/{id}, DELETE /taxpayers/{id})
@@ -55,7 +55,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
 - [ ] 4. Create Income Tax API specification
   - [x] 4.1 Create income-tax-api.yaml OpenAPI specification
     - Define API info (title, version, description)
-    - Define server URL: /api/income-tax/v1
+    - Define server URL: /income-tax/v1
     - Define TaxReturn schema with tax year validation
     - Define Assessment schema
     - Reference shared Money and DateRange schemas
@@ -75,7 +75,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
 - [ ] 5. Create Payment API specification
   - [x] 5.1 Create payment-api.yaml OpenAPI specification
     - Define API info (title, version, description)
-    - Define server URL: /api/payment/v1
+    - Define server URL: /payment/v1
     - Define Payment schema with payment method enum
     - Define PaymentAllocation schema
     - Reference shared Money schema

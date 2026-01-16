@@ -14,14 +14,14 @@ The Domain API POC demonstrates how to model complex domains across multiple RES
 
 The system consists of three separate Domain APIs:
 
-### 1. Taxpayer API (`/api/taxpayer/v1`)
+### 1. Taxpayer API (`/taxpayer/v1`)
 Manages taxpayer identity and registration information.
 
 **Key Resources:**
 - `Taxpayer` - Taxpayer identity with NINO, name, and address
 - Relationships to tax returns and payments
 
-### 2. Income Tax API (`/api/income-tax/v1`)
+### 2. Income Tax API (`/income-tax/v1`)
 Handles income tax returns, assessments, and calculations.
 
 **Key Resources:**
@@ -29,7 +29,7 @@ Handles income tax returns, assessments, and calculations.
 - `Assessment` - Tax assessment with calculated amounts
 - Relationships to taxpayers and payment allocations
 
-### 3. Payment API (`/api/payment/v1`)
+### 3. Payment API (`/payment/v1`)
 Manages tax payments and payment allocations.
 
 **Key Resources:**
@@ -113,13 +113,13 @@ Once the mock servers are running, you can test them with curl:
 
 ```bash
 # Get a taxpayer
-curl http://localhost:8081/api/taxpayer/v1/taxpayers/TP123456
+curl http://localhost:8081/taxpayer/v1/taxpayers/TP123456
 
 # Get tax returns for a taxpayer
-curl http://localhost:8082/api/income-tax/v1/tax-returns?taxpayerId=TP123456
+curl http://localhost:8082/income-tax/v1/tax-returns?taxpayerId=TP123456
 
 # Get payments for a taxpayer
-curl http://localhost:8083/api/payment/v1/payments?taxpayerId=TP123456
+curl http://localhost:8083/payment/v1/payments?taxpayerId=TP123456
 ```
 
 ## Documentation
@@ -161,7 +161,7 @@ One of the key features of this architecture is the ability to navigate between 
 
 1. **Get a taxpayer:**
    ```bash
-   curl http://localhost:8081/api/taxpayer/v1/taxpayers/TP123456
+   curl http://localhost:8081/taxpayer/v1/taxpayers/TP123456
    ```
 
    Response includes `_links` with URLs to related resources:
@@ -172,14 +172,14 @@ One of the key features of this architecture is the ability to navigate between 
      "nino": "AB123456C",
      "_links": {
        "self": {
-         "href": "http://localhost:8081/api/taxpayer/v1/taxpayers/TP123456"
+         "href": "http://localhost:8081/taxpayer/v1/taxpayers/TP123456"
        },
        "taxReturns": {
-         "href": "http://localhost:8082/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+         "href": "http://localhost:8082/income-tax/v1/tax-returns?taxpayerId=TP123456",
          "type": "collection"
        },
        "payments": {
-         "href": "http://localhost:8083/api/payment/v1/payments?taxpayerId=TP123456",
+         "href": "http://localhost:8083/payment/v1/payments?taxpayerId=TP123456",
          "type": "collection"
        }
      }
@@ -188,7 +188,7 @@ One of the key features of this architecture is the ability to navigate between 
 
 2. **Follow the taxReturns link:**
    ```bash
-   curl http://localhost:8082/api/income-tax/v1/tax-returns?taxpayerId=TP123456
+   curl http://localhost:8082/income-tax/v1/tax-returns?taxpayerId=TP123456
    ```
 
 3. **Follow links from tax returns to payments:**
@@ -200,7 +200,7 @@ To reduce the number of API calls, use the `include` parameter to embed related 
 
 ```bash
 # Get taxpayer with tax returns included
-curl "http://localhost:8081/api/taxpayer/v1/taxpayers/TP123456?include=taxReturns"
+curl "http://localhost:8081/taxpayer/v1/taxpayers/TP123456?include=taxReturns"
 ```
 
 Response includes both the taxpayer and related tax returns:

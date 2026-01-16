@@ -129,13 +129,13 @@ paths:
                         reference: "TAX-2023-001"
                         status: "cleared"
                         _links:
-                          self: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                          self: "/payments/PM20230001"
                           taxpayer:
-                            href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            href: "/taxpayers/TP123456"
                             type: "taxpayer"
                             title: "Taxpayer who made this payment"
                           allocations:
-                            href: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                            href: "/payments/PM20230001/allocations"
                             type: "collection"
                             title: "Allocations for this payment"
                       - id: "PM20230002"
@@ -149,17 +149,17 @@ paths:
                         reference: "TAX-2023-002"
                         status: "cleared"
                         _links:
-                          self: "http://localhost:8080/api/payment/v1/payments/PM20230002"
+                          self: "/payments/PM20230002"
                           taxpayer:
-                            href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP789012"
+                            href: "/taxpayers/TP789012"
                             type: "taxpayer"
                             title: "Taxpayer who made this payment"
                           allocations:
-                            href: "http://localhost:8080/api/payment/v1/payments/PM20230002/allocations"
+                            href: "/payments/PM20230002/allocations"
                             type: "collection"
                             title: "Allocations for this payment"
                     _links:
-                      self: "http://localhost:8080/api/payment/v1/payments"
+                      self: "/payments"
                 withIncludes:
                   summary: List of payments with included taxpayers
                   value:
@@ -175,13 +175,13 @@ paths:
                         reference: "TAX-2023-001"
                         status: "cleared"
                         _links:
-                          self: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                          self: "/payments/PM20230001"
                           taxpayer:
-                            href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            href: "/taxpayers/TP123456"
                             type: "taxpayer"
                             title: "Taxpayer who made this payment"
                           allocations:
-                            href: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                            href: "/payments/PM20230001/allocations"
                             type: "collection"
                             title: "Allocations for this payment"
                     _included:
@@ -193,9 +193,9 @@ paths:
                             firstName: "John"
                             lastName: "Smith"
                           _links:
-                            self: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            self: "/taxpayers/TP123456"
                     _links:
-                      self: "http://localhost:8080/api/payment/v1/payments?include=taxpayer"
+                      self: "/payments?include=taxpayer"
         '400':
           $ref: '../shared/shared-components.yaml#/components/responses/BadRequest'
 
@@ -245,7 +245,7 @@ paths:
               schema:
                 type: string
                 format: uri
-              example: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+              example: "/payments/PM20230001"
           content:
             application/json:
               schema:
@@ -262,13 +262,13 @@ paths:
                 reference: "TAX-2023-001"
                 status: "pending"
                 _links:
-                  self: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                  self: "/payments/PM20230001"
                   taxpayer:
-                    href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                    href: "/taxpayers/TP123456"
                     type: "taxpayer"
                     title: "Taxpayer who made this payment"
                   allocations:
-                    href: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                    href: "/payments/PM20230001/allocations"
                     type: "collection"
                     title: "Allocations for this payment"
         '400':
@@ -318,13 +318,13 @@ paths:
                     reference: "TAX-2023-001"
                     status: "cleared"
                     _links:
-                      self: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                      self: "/payments/PM20230001"
                       taxpayer:
-                        href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                        href: "/taxpayers/TP123456"
                         type: "taxpayer"
                         title: "Taxpayer who made this payment"
                       allocations:
-                        href: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                        href: "/payments/PM20230001/allocations"
                         type: "collection"
                         title: "Allocations for this payment"
                 withIncludes:
@@ -341,13 +341,13 @@ paths:
                     reference: "TAX-2023-001"
                     status: "cleared"
                     _links:
-                      self: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                      self: "/payments/PM20230001"
                       taxpayer:
-                        href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                        href: "/taxpayers/TP123456"
                         type: "taxpayer"
                         title: "Taxpayer who made this payment"
                       allocations:
-                        href: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                        href: "/payments/PM20230001/allocations"
                         type: "collection"
                         title: "Allocations for this payment"
                     _includes:
@@ -362,7 +362,7 @@ paths:
                             firstName: "John"
                             lastName: "Smith"
                           _links:
-                            self: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            self: "/taxpayers/TP123456"
                       allocations:
                         - id: "PA20230001"
                           type: "payment-allocation"
@@ -373,13 +373,13 @@ paths:
                             currency: "GBP"
                           allocationDate: "2024-02-01T10:30:00Z"
                           _links:
-                            self: "http://localhost:8080/api/payment/v1/allocations/PA20230001"
+                            self: "/allocations/PA20230001"
                             payment:
-                              href: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                              href: "/payments/PM20230001"
                               type: "payment"
                               title: "Payment for this allocation"
                             taxReturn:
-                              href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                              href: "/tax-returns/TR20230001"
                               type: "tax-return"
                               title: "Tax return receiving this allocation"
         '404':
@@ -439,17 +439,17 @@ paths:
                       currency: "GBP"
                     allocationDate: "2024-02-01T10:30:00Z"
                     _links:
-                      self: "http://localhost:8080/api/payment/v1/allocations/PA20230001"
+                      self: "/allocations/PA20230001"
                       payment:
-                        href: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                        href: "/payments/PM20230001"
                         type: "payment"
                         title: "Payment for this allocation"
                       taxReturn:
-                        href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                        href: "/tax-returns/TR20230001"
                         type: "tax-return"
                         title: "Tax return receiving this allocation"
                 _links:
-                  self: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                  self: "/payments/PM20230001/allocations"
         '404':
           $ref: '../shared/shared-components.yaml#/components/responses/NotFound'
 
@@ -496,7 +496,7 @@ paths:
               schema:
                 type: string
                 format: uri
-              example: "http://localhost:8080/api/payment/v1/allocations/PA20230001"
+              example: "/allocations/PA20230001"
           content:
             application/json:
               schema:
@@ -511,13 +511,13 @@ paths:
                   currency: "GBP"
                 allocationDate: "2024-02-01T10:30:00Z"
                 _links:
-                  self: "http://localhost:8080/api/payment/v1/allocations/PA20230001"
+                  self: "/allocations/PA20230001"
                   payment:
-                    href: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                    href: "/payments/PM20230001"
                     type: "payment"
                     title: "Payment for this allocation"
                   taxReturn:
-                    href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                    href: "/tax-returns/TR20230001"
                     type: "tax-return"
                     title: "Tax return receiving this allocation"
         '400':
@@ -645,7 +645,7 @@ components:
                       type: string
                       format: uri
                       description: URL to the taxpayer resource
-                      example: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                      example: "/taxpayers/TP123456"
                     type:
                       type: string
                       enum:
@@ -663,7 +663,7 @@ components:
                       type: string
                       format: uri
                       description: URL to the payment's allocations
-                      example: "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations"
+                      example: "/payments/PM20230001/allocations"
                     type:
                       type: string
                       enum:
@@ -816,7 +816,7 @@ components:
                       type: string
                       format: uri
                       description: URL to the payment resource
-                      example: "http://localhost:8080/api/payment/v1/payments/PM20230001"
+                      example: "/payments/PM20230001"
                     type:
                       type: string
                       enum:
@@ -834,7 +834,7 @@ components:
                       type: string
                       format: uri
                       description: URL to the tax return resource
-                      example: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                      example: "/tax-returns/TR20230001"
                     type:
                       type: string
                       enum:

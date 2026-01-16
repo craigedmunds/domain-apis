@@ -9,14 +9,14 @@
   },
   "allocationDate": "2024-01-31T14:30:00Z",
   "_links": {
-    "self": "http://localhost:8080/api/payment/v1/allocations/PA20230001",
+    "self": "http://localhost:8080/payment/v1/allocations/PA20230001",
     "payment": {
-      "href": "http://localhost:8080/api/payment/v1/payments/PM20230001",
+      "href": "http://localhost:8080/payment/v1/payments/PM20230001",
       "type": "payment",
       "title": "Payment being allocated"
     },
     "taxReturn": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001",
       "type": "tax-return",
       "title": "Tax return receiving the allocation"
     }

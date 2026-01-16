@@ -21,14 +21,14 @@
       },
       "dateOfBirth": "1980-05-15",
       "_links": {
-        "self": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+        "self": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
         "taxReturns": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
           "type": "collection",
           "title": "Tax returns for this taxpayer"
         },
         "payments": {
-          "href": "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456",
+          "href": "http://localhost:8080/payment/v1/payments?taxpayerId=TP123456",
           "type": "collection",
           "title": "Payments made by this taxpayer"
         }
@@ -53,19 +53,19 @@
         "currency": "GBP"
       },
       "_links": {
-        "self": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+        "self": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001",
         "taxpayer": {
-          "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+          "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
           "type": "taxpayer",
           "title": "Taxpayer who filed this return"
         },
         "assessments": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001/assessments",
           "type": "collection",
           "title": "Assessments for this return"
         },
         "allocations": {
-          "href": "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001",
+          "href": "http://localhost:8080/payment/v1/allocations?taxReturnId=TR20230001",
           "type": "collection",
           "title": "Payment allocations for this return"
         }
@@ -82,9 +82,9 @@
       },
       "dueDate": "2024-01-31",
       "_links": {
-        "self": "http://localhost:8080/api/income-tax/v1/assessments/AS20230001",
+        "self": "http://localhost:8080/income-tax/v1/assessments/AS20230001",
         "taxReturn": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001",
           "type": "tax-return",
           "title": "Tax return for this assessment"
         }
@@ -103,14 +103,14 @@
       "reference": "TAX-2023-001",
       "status": "cleared",
       "_links": {
-        "self": "http://localhost:8080/api/payment/v1/payments/PM20230001",
+        "self": "http://localhost:8080/payment/v1/payments/PM20230001",
         "taxpayer": {
-          "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+          "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
           "type": "taxpayer",
           "title": "Taxpayer who made this payment"
         },
         "allocations": {
-          "href": "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations",
+          "href": "http://localhost:8080/payment/v1/payments/PM20230001/allocations",
           "type": "collection",
           "title": "Allocations for this payment"
         }
@@ -127,14 +127,14 @@
       },
       "allocationDate": "2024-01-31T14:30:00Z",
       "_links": {
-        "self": "http://localhost:8080/api/payment/v1/allocations/PA20230001",
+        "self": "http://localhost:8080/payment/v1/allocations/PA20230001",
         "payment": {
-          "href": "http://localhost:8080/api/payment/v1/payments/PM20230001",
+          "href": "http://localhost:8080/payment/v1/payments/PM20230001",
           "type": "payment",
           "title": "Payment being allocated"
         },
         "taxReturn": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001",
           "type": "tax-return",
           "title": "Tax return receiving the allocation"
         }
@@ -217,13 +217,13 @@
       "steps": [
         {
           "step": 1,
-          "action": "GET /api/taxpayer/v1/taxpayers/TP123456",
+          "action": "GET /taxpayer/v1/taxpayers/TP123456",
           "result": "Get taxpayer resource with _links.taxReturns"
         },
         {
           "step": 2,
           "action": "Follow _links.taxReturns.href",
-          "url": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+          "url": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
           "result": "Get collection of tax returns for this taxpayer"
         }
       ]
@@ -233,19 +233,19 @@
       "steps": [
         {
           "step": 1,
-          "action": "GET /api/income-tax/v1/tax-returns/TR20230001",
+          "action": "GET /income-tax/v1/tax-returns/TR20230001",
           "result": "Get tax return resource with _links.allocations"
         },
         {
           "step": 2,
           "action": "Follow _links.allocations.href",
-          "url": "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001",
+          "url": "http://localhost:8080/payment/v1/allocations?taxReturnId=TR20230001",
           "result": "Get collection of payment allocations for this tax return"
         },
         {
           "step": 3,
           "action": "Follow each allocation's _links.payment.href",
-          "url": "http://localhost:8080/api/payment/v1/payments/PM20230001",
+          "url": "http://localhost:8080/payment/v1/payments/PM20230001",
           "result": "Get the actual payment resource"
         }
       ]
@@ -255,25 +255,25 @@
       "steps": [
         {
           "step": 1,
-          "action": "GET /api/taxpayer/v1/taxpayers/TP123456",
+          "action": "GET /taxpayer/v1/taxpayers/TP123456",
           "result": "Get taxpayer resource"
         },
         {
           "step": 2,
           "action": "Follow _links.taxReturns.href",
-          "url": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+          "url": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
           "result": "Get tax returns collection"
         },
         {
           "step": 3,
           "action": "Select a tax return and follow _links.allocations.href",
-          "url": "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001",
+          "url": "http://localhost:8080/payment/v1/allocations?taxReturnId=TR20230001",
           "result": "Get payment allocations for the tax return"
         },
         {
           "step": 4,
           "action": "Follow allocation's _links.payment.href",
-          "url": "http://localhost:8080/api/payment/v1/payments/PM20230001",
+          "url": "http://localhost:8080/payment/v1/payments/PM20230001",
           "result": "Get the payment resource"
         }
       ]
@@ -283,7 +283,7 @@
       "steps": [
         {
           "step": 1,
-          "action": "GET /api/taxpayer/v1/taxpayers/TP123456?include=taxReturns",
+          "action": "GET /taxpayer/v1/taxpayers/TP123456?include=taxReturns",
           "result": "Get taxpayer with embedded tax returns in _included field"
         },
         {
@@ -305,7 +305,7 @@
       {
         "check": "Correct base paths",
         "status": "✓",
-        "note": "Each API uses its designated base path (/api/taxpayer/v1, /api/income-tax/v1, /api/payment/v1)"
+        "note": "Each API uses its designated base path (/taxpayer/v1, /income-tax/v1, /payment/v1)"
       },
       {
         "check": "Link metadata",

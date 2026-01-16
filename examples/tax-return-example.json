@@ -17,19 +17,19 @@
     "currency": "GBP"
   },
   "_links": {
-    "self": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+    "self": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001",
     "taxpayer": {
-      "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+      "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
       "type": "taxpayer",
       "title": "Taxpayer who filed this return"
     },
     "assessments": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001/assessments",
       "type": "collection",
       "title": "Assessments for this return"
     },
     "allocations": {
-      "href": "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001",
+      "href": "http://localhost:8080/payment/v1/allocations?taxReturnId=TR20230001",
       "type": "collection",
       "title": "Payment allocations for this return"
     }

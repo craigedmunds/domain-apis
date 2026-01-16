@@ -121,7 +121,7 @@ components:
           type: string
           format: uri
           description: URL to the current resource
-          example: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+          example: "/taxpayers/TP123456"
       additionalProperties:
         oneOf:
           - type: string
@@ -136,7 +136,7 @@ components:
                 type: string
                 format: uri
                 description: URL to the related resource
-                example: "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456"
+                example: "/tax-returns?taxpayerId=TP123456"
               type:
                 type: string
                 description: Resource type or 'collection' for lists
@@ -146,13 +146,13 @@ components:
                 description: Human-readable description of the relationship
                 example: "Tax returns for this taxpayer"
       example:
-        self: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+        self: "/taxpayers/TP123456"
         taxReturns:
-          href: "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456"
+          href: "/tax-returns?taxpayerId=TP123456"
           type: "collection"
           title: "Tax returns for this taxpayer"
         payments:
-          href: "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456"
+          href: "/payments?taxpayerId=TP123456"
           type: "collection"
           title: "Payments made by this taxpayer"
 

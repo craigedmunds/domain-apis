@@ -70,9 +70,9 @@ All resources follow a consistent pattern for relationships:
 ```json
 {
   "_links": {
-    "self": "http://localhost:8080/api/{domain}/v1/{resource}/{id}",
+    "self": "http://localhost:8080/{domain}/v1/{resource}/{id}",
     "relatedResource": {
-      "href": "http://localhost:8080/api/{other-domain}/v1/{resource}/{id}",
+      "href": "http://localhost:8080/{other-domain}/v1/{resource}/{id}",
       "type": "resource-type",
       "title": "Human-readable description"
     }
@@ -118,9 +118,9 @@ All relationship URLs in the example data follow these rules:
 
 ✓ **Absolute URLs**: Include scheme and host (http://localhost:8080)
 ✓ **Correct base paths**: Each API uses its designated path
-  - Taxpayer API: `/api/taxpayer/v1`
-  - Income Tax API: `/api/income-tax/v1`
-  - Payment API: `/api/payment/v1`
+  - Taxpayer API: `/taxpayer/v1`
+  - Income Tax API: `/income-tax/v1`
+  - Payment API: `/payment/v1`
 ✓ **Link metadata**: All links include `type` and `title` fields
 ✓ **Bidirectional**: Resources link back to their related resources
 ✓ **Collection indicators**: Links specify if they point to a collection or single resource
@@ -142,17 +142,17 @@ prism mock specs/payment/payment-api.yaml --port 8083
 
 1. **Start with a taxpayer**:
    ```bash
-   curl http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456
+   curl http://localhost:8080/taxpayer/v1/taxpayers/TP123456
    ```
 
 2. **Follow the taxReturns link**:
    ```bash
-   curl http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456
+   curl http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456
    ```
 
 3. **Follow the allocations link from a tax return**:
    ```bash
-   curl http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001
+   curl http://localhost:8080/payment/v1/allocations?taxReturnId=TR20230001
    ```
 
 ### Using the Include Parameter
@@ -161,7 +161,7 @@ Reduce API calls by including related resources:
 
 ```bash
 # Get taxpayer with embedded tax returns
-curl "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456?include=taxReturns"
+curl "http://localhost:8080/taxpayer/v1/taxpayers/TP123456?include=taxReturns"
 ```
 
 The response will include both the taxpayer and their tax returns in a single response.

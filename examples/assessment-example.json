@@ -9,9 +9,9 @@
   },
   "dueDate": "2024-01-31",
   "_links": {
-    "self": "http://localhost:8080/api/income-tax/v1/assessments/AS20230001",
+    "self": "http://localhost:8080/income-tax/v1/assessments/AS20230001",
     "taxReturn": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001",
       "type": "tax-return",
       "title": "Tax return for this assessment"
     }

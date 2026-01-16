@@ -76,11 +76,15 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     const primaryData: ResourceResponse = await primaryResponse.json();
 
-    // Rewrite URLs in _links to point through gateway (always, not just with includes)
-    const rewrittenData = rewriteLinksToGateway(primaryData);
-
-    // 3. If no include parameter, return rewritten response
+    // 3. If no include parameter, rewrite URLs and return
     if (!includeParam) {
+      const rewrittenData = rewriteLinksToGateway(primaryData);
+      
+      // Also rewrite links in items array if present
+      if (rewrittenData.items && Array.isArray(rewrittenData.items)) {
+        rewrittenData.items = rewrittenData.items.map(item => rewriteLinksToGateway(item));
+      }
+      
       return {
         statusCode: primaryResponse.status,
         headers: corsHeaders,
@@ -88,16 +92,33 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    // 4. Parse include parameter and fetch related resources
+    // 4. Parse include parameter and fetch related resources (using backend URLs)
     const includes = includeParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
     console.log(`Fetching included resources: ${includes.join(', ')}`);
 
-    const includedData = await fetchIncludedResources(rewrittenData, includes);
+    const includedData = await fetchIncludedResources(primaryData, includes);
 
-    // 5. Merge and return aggregated response
+    // 5. Rewrite URLs in primary data and included resources, then return
+    const rewrittenPrimaryData = rewriteLinksToGateway(primaryData);
+    
+    // Also rewrite links in items array if present
+    if (rewrittenPrimaryData.items && Array.isArray(rewrittenPrimaryData.items)) {
+      rewrittenPrimaryData.items = rewrittenPrimaryData.items.map(item => rewriteLinksToGateway(item));
+    }
+    
+    const rewrittenIncludedData: Record<string, any[]> = {};
+    
+    for (const [relationshipName, resources] of Object.entries(includedData)) {
+      if (Array.isArray(resources)) {
+        rewrittenIncludedData[relationshipName] = resources.map(resource => 
+          rewriteLinksToGateway(resource)
+        );
+      }
+    }
+
     const aggregatedResponse = {
-      ...rewrittenData,
-      _included: includedData,
+      ...rewrittenPrimaryData,
+      _included: rewrittenIncludedData,
     };
 
     return {
@@ -121,6 +142,40 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       }),
     };
   }
+}
+
+/**
+ * Convert path-only or localhost URLs to backend container URLs for Lambda to fetch
+ */
+function convertToBackendUrl(url: string): string {
+  // If it's a path-only URL (starts with /), determine which backend based on the path
+  if (url.startsWith('/')) {
+    if (url.startsWith('/taxpayers') || url.startsWith('/taxpayer')) {
+      return (process.env.TAXPAYER_API_URL || 'http://domain-api-taxpayer:4010') + url;
+    }
+    if (url.startsWith('/tax-returns') || url.startsWith('/assessments') || url.startsWith('/income-tax')) {
+      return (process.env.INCOME_TAX_API_URL || 'http://domain-api-income-tax:4010') + url;
+    }
+    if (url.startsWith('/payments') || url.startsWith('/allocations') || url.startsWith('/payment')) {
+      return (process.env.PAYMENT_API_URL || 'http://domain-api-payment:4010') + url;
+    }
+  }
+
+  // Map localhost ports to backend container URLs
+  const localhostMappings: Record<string, string> = {
+    'http://localhost:8081': process.env.TAXPAYER_API_URL || 'http://domain-api-taxpayer:4010',
+    'http://localhost:8082': process.env.INCOME_TAX_API_URL || 'http://domain-api-income-tax:4010',
+    'http://localhost:8083': process.env.PAYMENT_API_URL || 'http://domain-api-payment:4010',
+  };
+
+  for (const [localhostUrl, backendUrl] of Object.entries(localhostMappings)) {
+    if (url.startsWith(localhostUrl)) {
+      return url.replace(localhostUrl, backendUrl);
+    }
+  }
+
+  // If already a backend URL, return as-is
+  return url;
 }
 
 /**
@@ -197,10 +252,10 @@ async function fetchIncludedResources(
     }
 
     try {
-      // Convert gateway URL back to backend URL for fetching
-      const backendUrl = gatewayUrlToBackendUrl(href);
-      console.log(`Fetching ${relationshipName} from backend: ${backendUrl}`);
-      const response = await fetch(backendUrl);
+      // Convert localhost URLs to container names for Lambda to fetch
+      const backendHref = convertToBackendUrl(href);
+      console.log(`Fetching ${relationshipName} from ${backendHref}`);
+      const response = await fetch(backendHref);
       
       if (response.ok) {
         const data: ResourceResponse = await response.json();
@@ -228,23 +283,23 @@ async function fetchIncludedResources(
 }
 
 /**
- * Rewrite backend API URLs in _links to point through gateway
+ * Rewrite backend API URLs in _links to add stage prefix
  */
 function rewriteLinksToGateway(data: ResourceResponse): ResourceResponse {
   if (!data._links) {
     return data;
   }
 
-  const gatewayUrl = process.env.GATEWAY_URL || 'http://localhost:4566';
+  const stage = process.env.STAGE || 'dev';
   const rewrittenLinks: Record<string, LinkObject | string> = {};
 
   for (const [key, link] of Object.entries(data._links)) {
     if (typeof link === 'string') {
-      rewrittenLinks[key] = rewriteUrl(link, gatewayUrl);
+      rewrittenLinks[key] = addStagePrefix(link, stage);
     } else if (link && typeof link === 'object' && link.href) {
       rewrittenLinks[key] = {
         ...link,
-        href: rewriteUrl(link.href, gatewayUrl),
+        href: addStagePrefix(link.href, stage),
       };
     } else {
       rewrittenLinks[key] = link;
@@ -258,51 +313,30 @@ function rewriteLinksToGateway(data: ResourceResponse): ResourceResponse {
 }
 
 /**
- * Rewrite a single URL from backend to gateway
+ * Add stage prefix to path-only URLs
+ * 
+ * Backend APIs MUST return path-only URLs (e.g., /taxpayers/TP123456).
+ * This function adds the stage prefix (e.g., /dev/taxpayers/TP123456).
  */
-function rewriteUrl(url: string, gatewayUrl: string): string {
-  // Replace backend API URLs with gateway URL
-  const backendUrls = [
-    'http://taxpayer-api:4010',
-    'http://income-tax-api:4010',
-    'http://payment-api:4010',
-    'http://localhost:8081',
-    'http://localhost:8082',
-    'http://localhost:8083',
-  ];
-
-  for (const backendUrl of backendUrls) {
-    if (url.startsWith(backendUrl)) {
-      return url.replace(backendUrl, gatewayUrl);
+function addStagePrefix(url: string, stage: string): string {
+  // All URLs from backend APIs should be path-only
+  if (!url.startsWith('/')) {
+    console.warn(`Expected path-only URL but received: ${url}`);
+    // If it's a full URL, this is a backend API bug - log and try to extract path
+    try {
+      const urlObj = new URL(url);
+      url = urlObj.pathname;
+    } catch (error) {
+      // If we can't parse it, return as-is and let it fail visibly
+      return url;
     }
   }
 
-  return url;
-}
-
-/**
- * Convert gateway URL back to backend URL for fetching
- */
-function gatewayUrlToBackendUrl(url: string): string {
-  try {
-    const urlObj = new URL(url);
-    const path = urlObj.pathname + urlObj.search;
-    
-    // Route based on path to appropriate backend
-    if (path.startsWith('/taxpayers')) {
-      return `${process.env.TAXPAYER_API_URL || 'http://taxpayer-api:4010'}${path}`;
-    }
-    if (path.startsWith('/tax-returns') || path.startsWith('/assessments')) {
-      return `${process.env.INCOME_TAX_API_URL || 'http://income-tax-api:4010'}${path}`;
-    }
-    if (path.startsWith('/payments') || path.startsWith('/allocations')) {
-      return `${process.env.PAYMENT_API_URL || 'http://payment-api:4010'}${path}`;
-    }
-    
-    // If we can't route it, return the original URL
-    return url;
-  } catch (error) {
-    console.error('Failed to convert gateway URL to backend URL:', url, error);
-    return url;
+  // Remove existing stage prefix if present (e.g., /dev/taxpayers -> /taxpayers)
+  const stagePattern = /^\/(dev|prod|staging)\//;
+  if (stagePattern.test(url)) {
+    url = url.replace(stagePattern, '/');
   }
+  
+  return `/${stage}${url}`;
 }

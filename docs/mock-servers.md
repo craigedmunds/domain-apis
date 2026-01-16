@@ -131,14 +131,14 @@ Mock responses include relationship links to other APIs:
   "id": "TP123456",
   "type": "taxpayer",
   "_links": {
-    "self": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+    "self": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
     "taxReturns": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
       "type": "collection",
       "title": "Tax returns for this taxpayer"
     },
     "payments": {
-      "href": "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456",
+      "href": "http://localhost:8080/payment/v1/payments?taxpayerId=TP123456",
       "type": "collection",
       "title": "Payments made by this taxpayer"
     }

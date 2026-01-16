@@ -6,9 +6,9 @@ This is a proof-of-concept for a multi-API domain architecture representing port
 
 The system consists of three separate Domain APIs:
 
-1. **Taxpayer API** (`/api/taxpayer/v1`) - Manages taxpayer identity and registration information
-2. **Income Tax API** (`/api/income-tax/v1`) - Handles income tax returns, assessments, and calculations
-3. **Payment API** (`/api/payment/v1`) - Manages tax payments and payment allocations
+1. **Taxpayer API** (`/taxpayer/v1`) - Manages taxpayer identity and registration information
+2. **Income Tax API** (`/income-tax/v1`) - Handles income tax returns, assessments, and calculations
+3. **Payment API** (`/payment/v1`) - Manages tax payments and payment allocations
 
 Each API has its own OpenAPI specification but shares common components through reusable specification fragments.
 

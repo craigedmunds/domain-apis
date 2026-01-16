@@ -135,21 +135,21 @@ paths:
                           amount: 7500.00
                           currency: "GBP"
                         _links:
-                          self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                          self: "/tax-returns/TR20230001"
                           taxpayer:
-                            href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            href: "/taxpayers/TP123456"
                             type: "taxpayer"
                             title: "Taxpayer who filed this return"
                           assessments:
-                            href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                            href: "/tax-returns/TR20230001/assessments"
                             type: "collection"
                             title: "Assessments for this return"
                           allocations:
-                            href: "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001"
+                            href: "/allocations?taxReturnId=TR20230001"
                             type: "collection"
                             title: "Payment allocations for this return"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/tax-returns"
+                      self: "/tax-returns"
                 withIncludes:
                   summary: List of tax returns with included taxpayer and assessments
                   value:
@@ -169,13 +169,13 @@ paths:
                           amount: 7500.00
                           currency: "GBP"
                         _links:
-                          self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                          self: "/tax-returns/TR20230001"
                           taxpayer:
-                            href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            href: "/taxpayers/TP123456"
                             type: "taxpayer"
                             title: "Taxpayer who filed this return"
                           assessments:
-                            href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                            href: "/tax-returns/TR20230001/assessments"
                             type: "collection"
                             title: "Assessments for this return"
                     _included:
@@ -187,7 +187,7 @@ paths:
                             firstName: "John"
                             lastName: "Smith"
                           _links:
-                            self: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            self: "/taxpayers/TP123456"
                       assessments:
                         - id: "AS20230001"
                           type: "assessment"
@@ -198,9 +198,9 @@ paths:
                             currency: "GBP"
                           dueDate: "2024-01-31"
                           _links:
-                            self: "http://localhost:8080/api/income-tax/v1/assessments/AS20230001"
+                            self: "/assessments/AS20230001"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/tax-returns?include=taxpayer,assessments"
+                      self: "/tax-returns?include=taxpayer,assessments"
         '400':
           $ref: '../shared/shared-components.yaml#/components/responses/BadRequest'
 
@@ -252,7 +252,7 @@ paths:
               schema:
                 type: string
                 format: uri
-              example: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+              example: "/tax-returns/TR20230001"
           content:
             application/json:
               schema:
@@ -273,17 +273,17 @@ paths:
                   amount: 7500.00
                   currency: "GBP"
                 _links:
-                  self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                  self: "/tax-returns/TR20230001"
                   taxpayer:
-                    href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                    href: "/taxpayers/TP123456"
                     type: "taxpayer"
                     title: "Taxpayer who filed this return"
                   assessments:
-                    href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                    href: "/tax-returns/TR20230001/assessments"
                     type: "collection"
                     title: "Assessments for this return"
                   allocations:
-                    href: "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001"
+                    href: "/allocations?taxReturnId=TR20230001"
                     type: "collection"
                     title: "Payment allocations for this return"
         '400':
@@ -337,17 +337,17 @@ paths:
                       amount: 7500.00
                       currency: "GBP"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                      self: "/tax-returns/TR20230001"
                       taxpayer:
-                        href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                        href: "/taxpayers/TP123456"
                         type: "taxpayer"
                         title: "Taxpayer who filed this return"
                       assessments:
-                        href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                        href: "/tax-returns/TR20230001/assessments"
                         type: "collection"
                         title: "Assessments for this return"
                       allocations:
-                        href: "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001"
+                        href: "/allocations?taxReturnId=TR20230001"
                         type: "collection"
                         title: "Payment allocations for this return"
                 withIncludes:
@@ -368,17 +368,17 @@ paths:
                       amount: 7500.00
                       currency: "GBP"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                      self: "/tax-returns/TR20230001"
                       taxpayer:
-                        href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                        href: "/taxpayers/TP123456"
                         type: "taxpayer"
                         title: "Taxpayer who filed this return"
                       assessments:
-                        href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                        href: "/tax-returns/TR20230001/assessments"
                         type: "collection"
                         title: "Assessments for this return"
                       allocations:
-                        href: "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001"
+                        href: "/allocations?taxReturnId=TR20230001"
                         type: "collection"
                         title: "Payment allocations for this return"
                     _includes:
@@ -397,9 +397,9 @@ paths:
                             postcode: "SW1A 2AA"
                             country: "GB"
                           _links:
-                            self: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                            self: "/taxpayers/TP123456"
                             taxReturns:
-                              href: "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456"
+                              href: "/tax-returns?taxpayerId=TP123456"
                               type: "collection"
                               title: "Tax returns for this taxpayer"
                       assessments:
@@ -412,9 +412,9 @@ paths:
                             currency: "GBP"
                           dueDate: "2024-01-31"
                           _links:
-                            self: "http://localhost:8080/api/income-tax/v1/assessments/AS20230001"
+                            self: "/assessments/AS20230001"
                             taxReturn:
-                              href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                              href: "/tax-returns/TR20230001"
                               type: "tax-return"
                               title: "Tax return for this assessment"
         '404':
@@ -474,13 +474,13 @@ paths:
                       currency: "GBP"
                     dueDate: "2024-01-31"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/assessments/AS20230001"
+                      self: "/assessments/AS20230001"
                       taxReturn:
-                        href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                        href: "/tax-returns/TR20230001"
                         type: "tax-return"
                         title: "Tax return for this assessment"
                 _links:
-                  self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                  self: "/tax-returns/TR20230001/assessments"
         '404':
           $ref: '../shared/shared-components.yaml#/components/responses/NotFound'
 
@@ -526,9 +526,9 @@ paths:
                       currency: "GBP"
                     dueDate: "2024-01-31"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/assessments/AS20230001"
+                      self: "/assessments/AS20230001"
                       taxReturn:
-                        href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                        href: "/tax-returns/TR20230001"
                         type: "tax-return"
                         title: "Tax return for this assessment"
                 withIncludes:
@@ -543,9 +543,9 @@ paths:
                       currency: "GBP"
                     dueDate: "2024-01-31"
                     _links:
-                      self: "http://localhost:8080/api/income-tax/v1/assessments/AS20230001"
+                      self: "/assessments/AS20230001"
                       taxReturn:
-                        href: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                        href: "/tax-returns/TR20230001"
                         type: "tax-return"
                         title: "Tax return for this assessment"
                     _includes:
@@ -564,9 +564,9 @@ paths:
                             amount: 7500.00
                             currency: "GBP"
                           _links:
-                            self: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                            self: "/tax-returns/TR20230001"
                             taxpayer:
-                              href: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                              href: "/taxpayers/TP123456"
                               type: "taxpayer"
                               title: "Taxpayer who filed this return"
         '404':
@@ -671,7 +671,7 @@ components:
                       type: string
                       format: uri
                       description: URL to the taxpayer who filed this return
-                      example: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+                      example: "/taxpayers/TP123456"
                     type:
                       type: string
                       enum:
@@ -689,7 +689,7 @@ components:
                       type: string
                       format: uri
                       description: URL to assessments for this return
-                      example: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments"
+                      example: "/tax-returns/TR20230001/assessments"
                     type:
                       type: string
                       enum:
@@ -707,7 +707,7 @@ components:
                       type: string
                       format: uri
                       description: URL to payment allocations for this return
-                      example: "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001"
+                      example: "/allocations?taxReturnId=TR20230001"
                     type:
                       type: string
                       enum:
@@ -864,7 +864,7 @@ components:
                       type: string
                       format: uri
                       description: URL to the tax return for this assessment
-                      example: "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+                      example: "/tax-returns/TR20230001"
                     type:
                       type: string
                       enum:

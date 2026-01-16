@@ -107,12 +107,13 @@ tasks:
   # Start everything - LocalStack + mock APIs
   start:
     desc: Start LocalStack and all backend mock servers
+    deps: [lambda:ensure]
     cmds:
       - echo "Starting Domain API POC with LocalStack..."
       - docker-compose up -d
       - echo "Waiting for services to be ready..."
       - sleep 5
-      - task: gateway:init
+      - task: gateway:deploy
       - echo ""
       - echo "=== Services Started ==="
       - echo "Documentation - http://localhost:8080"
@@ -208,16 +209,6 @@ tasks:
     cmds:
       - cd {{.TESTS_DIR}}/acceptance && npm run report
 
-  test:acceptance:skipped:
-    desc: Run only the slow/skipped acceptance tests (Swagger UI rendering tests)
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm run test:skipped
-
-  test:acceptance:skipped:headed:
-    desc: Run slow/skipped acceptance tests in headed mode
-    cmds:
-      - cd {{.TESTS_DIR}}/acceptance && npm run test:skipped:headed
-
   # Installation
   install:
     desc: Install dependencies
@@ -235,11 +226,18 @@ tasks:
       - rm -rf coverage
 
   # Gateway management tasks
-  gateway:init:
-    desc: Initialize API Gateway and Lambda in LocalStack
+  gateway:deploy:
+    desc: Deploy Lambda and initialize API Gateway in LocalStack
+    deps: [lambda:ensure]
     cmds:
-      - echo "Initializing API Gateway and Lambda..."
+      - echo "Deploying Lambda and API Gateway to LocalStack..."
+      - docker cp gateway/lambda/aggregation-lambda.zip domain-api-localstack:/tmp/
       - docker-compose exec -T localstack /tools/localstack-init.sh
+
+  gateway:init:
+    desc: Initialize API Gateway and Lambda in LocalStack (deprecated - use gateway:deploy)
+    cmds:
+      - task: gateway:deploy
 
   gateway:logs:
     desc: View gateway logs
@@ -312,6 +310,17 @@ tasks:
       - echo "✓ Cleanup complete"
 
   # Lambda management tasks
+  lambda:ensure:
+    desc: Ensure Lambda is built and ready for deployment
+    cmds:
+      - |
+        if [ ! -f gateway/lambda/aggregation-lambda.zip ]; then
+          echo "Lambda package not found, building..."
+          task lambda:package
+        else
+          echo "✓ Lambda package already exists"
+        fi
+
   lambda:install:
     desc: Install Lambda dependencies
     dir: gateway/lambda

@@ -30,19 +30,17 @@ fi
 echo ""
 echo "=== Preparing Lambda Function ==="
 
-# Check if the built Lambda package exists
-LAMBDA_PACKAGE="/tools/../gateway/lambda/aggregation-lambda.zip"
+# Check if the Lambda package exists in /tmp (copied by task start)
+LAMBDA_PACKAGE="/tmp/aggregation-lambda.zip"
 
 if [ ! -f "$LAMBDA_PACKAGE" ]; then
   echo "✗ Lambda package not found at $LAMBDA_PACKAGE"
-  echo "  Please run 'task lambda:package' to build the Lambda function first"
+  echo "  The Lambda package should be copied by 'task start'"
+  echo "  Please ensure the Lambda is built and copied to the container"
   exit 1
 fi
 
 echo "✓ Found Lambda package at $LAMBDA_PACKAGE"
-
-# Copy Lambda package to /tmp for deployment
-cp "$LAMBDA_PACKAGE" /tmp/aggregation-lambda.zip
 
 # Create IAM role for Lambda (LocalStack doesn't enforce IAM, but needs the structure)
 echo ""
@@ -61,11 +59,11 @@ awslocal lambda create-function \
   --function-name aggregation-lambda \
   --runtime nodejs18.x \
   --role arn:aws:iam::000000000000:role/lambda-execution-role \
-  --handler index.handler \
+  --handler dist/index.handler \
   --zip-file fileb:///tmp/aggregation-lambda.zip \
   --timeout 30 \
   --memory-size 256 \
-  --environment Variables="{TAXPAYER_API_URL=http://taxpayer-api:4010,INCOME_TAX_API_URL=http://income-tax-api:4010,PAYMENT_API_URL=http://payment-api:4010,GATEWAY_URL=http://domain-api.execute-api.localhost.localstack.cloud:4566}" \
+  --environment Variables="{TAXPAYER_API_URL=http://domain-api-taxpayer:4010,INCOME_TAX_API_URL=http://domain-api-income-tax:4010,PAYMENT_API_URL=http://domain-api-payment:4010,GATEWAY_URL=http://domain-api.execute-api.localhost.localstack.cloud:4566/dev}" \
   >/dev/null 2>&1 || {
     echo "  Function exists, updating code..."
     awslocal lambda update-function-code \
@@ -74,9 +72,10 @@ awslocal lambda create-function \
       >/dev/null 2>&1
     awslocal lambda update-function-configuration \
       --function-name aggregation-lambda \
+      --handler dist/index.handler \
       --timeout 30 \
       --memory-size 256 \
-      --environment Variables="{TAXPAYER_API_URL=http://taxpayer-api:4010,INCOME_TAX_API_URL=http://income-tax-api:4010,PAYMENT_API_URL=http://payment-api:4010,GATEWAY_URL=http://domain-api.execute-api.localhost.localstack.cloud:4566}" \
+      --environment Variables="{TAXPAYER_API_URL=http://domain-api-taxpayer:4010,INCOME_TAX_API_URL=http://domain-api-income-tax:4010,PAYMENT_API_URL=http://domain-api-payment:4010,GATEWAY_URL=http://domain-api.execute-api.localhost.localstack.cloud:4566/dev}" \
       >/dev/null 2>&1
   }
 
@@ -173,7 +172,7 @@ echo "  Custom domain:     http://$API_ID.execute-api.localhost.localstack.cloud
 echo ""
 echo "Example usage:"
 echo "  Direct API access:"
-echo "    curl http://localhost:8081/taxpayers/TP123456"
+echo "    curl http://localhost:8081/taxpayer/v1/taxpayers/TP123456"
 echo ""
 echo "  Gateway with custom domain:"
 echo "    curl \"http://$API_ID.execute-api.localhost.localstack.cloud:4566/taxpayers/TP123456\""

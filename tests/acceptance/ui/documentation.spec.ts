@@ -84,7 +84,7 @@ test.describe('Documentation Site', () => {
     await expect(taxpayerCard.locator('.api-card__tag')).toContainText('v1.0.0');
     
     // Verify endpoint
-    await expect(taxpayerCard.locator('.api-card__endpoint')).toContainText('/api/taxpayer/v1');
+    await expect(taxpayerCard.locator('.api-card__endpoint')).toContainText('/taxpayer/v1');
     
     // Verify features
     const features = taxpayerCard.locator('.api-card__features li');
@@ -106,7 +106,7 @@ test.describe('Documentation Site', () => {
     await expect(incomeTaxCard.locator('.api-card__title')).toContainText('Income Tax API');
     
     // Verify endpoint
-    await expect(incomeTaxCard.locator('.api-card__endpoint')).toContainText('/api/income-tax/v1');
+    await expect(incomeTaxCard.locator('.api-card__endpoint')).toContainText('/income-tax/v1');
     
     // Verify features
     const features = incomeTaxCard.locator('.api-card__features li');
@@ -126,7 +126,7 @@ test.describe('Documentation Site', () => {
     await expect(paymentCard.locator('.api-card__title')).toContainText('Payment API');
     
     // Verify endpoint
-    await expect(paymentCard.locator('.api-card__endpoint')).toContainText('/api/payment/v1');
+    await expect(paymentCard.locator('.api-card__endpoint')).toContainText('/payment/v1');
     
     // Verify features
     const features = paymentCard.locator('.api-card__features li');
@@ -172,11 +172,12 @@ test.describe('Documentation Site', () => {
     
     // Verify resource links are present
     const resourceLinks = infoSection.locator('ul').first().locator('li');
-    await expect(resourceLinks).toHaveCount(3);
+    await expect(resourceLinks).toHaveCount(4);
     
     // Verify specific links
     await expect(infoSection.locator('a[href="getting-started.md"]')).toBeVisible();
     await expect(infoSection.locator('a[href="mock-servers.md"]')).toBeVisible();
+    await expect(infoSection.locator('a[href="acceptance-testing.md"]')).toBeVisible();
     await expect(infoSection.locator('a[href="../specs/shared/shared-components.yaml"]')).toBeVisible();
   });
 

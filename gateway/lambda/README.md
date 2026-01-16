@@ -17,7 +17,7 @@ This Lambda function provides cross-API aggregation capabilities for the Domain 
 - `TAXPAYER_API_URL`: URL for Taxpayer API backend (default: `http://taxpayer-api:4010`)
 - `INCOME_TAX_API_URL`: URL for Income Tax API backend (default: `http://income-tax-api:4010`)
 - `PAYMENT_API_URL`: URL for Payment API backend (default: `http://payment-api:4010`)
-- `GATEWAY_URL`: Gateway URL for URL rewriting (default: `http://localhost:4566`)
+- `STAGE`: API Gateway stage name (default: `dev`) - used to prefix URLs
 
 ## Building
 

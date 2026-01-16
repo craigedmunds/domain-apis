@@ -13,7 +13,7 @@ describe('Aggregation Lambda Handler', () => {
     process.env.TAXPAYER_API_URL = 'http://taxpayer-api:4010';
     process.env.INCOME_TAX_API_URL = 'http://income-tax-api:4010';
     process.env.PAYMENT_API_URL = 'http://payment-api:4010';
-    process.env.GATEWAY_URL = 'http://gateway:4566';
+    process.env.STAGE = 'dev';
   });
 
   const createMockEvent = (overrides: Partial<APIGatewayProxyEvent> = {}): APIGatewayProxyEvent => ({
@@ -386,7 +386,32 @@ describe('Aggregation Lambda Handler', () => {
   });
 
   describe('URL Rewriting', () => {
-    it('should rewrite backend URLs to gateway URLs', async () => {
+    it('should add stage prefix to path-only URLs', async () => {
+      const event = createMockEvent();
+      const primaryData = {
+        id: 'TP123456',
+        type: 'taxpayer',
+        _links: {
+          self: { href: '/taxpayers/TP123456' },
+          taxReturns: { href: '/tax-returns?taxpayerId=TP123456' },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => primaryData,
+      } as any);
+
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      const body = JSON.parse(result.body);
+      expect(body._links.self.href).toBe('/dev/taxpayers/TP123456');
+      expect(body._links.taxReturns.href).toBe('/dev/tax-returns?taxpayerId=TP123456');
+    });
+
+    it('should convert backend URLs to path-only with stage prefix', async () => {
       const event = createMockEvent();
       const primaryData = {
         id: 'TP123456',
@@ -407,11 +432,11 @@ describe('Aggregation Lambda Handler', () => {
 
       expect(result.statusCode).toBe(200);
       const body = JSON.parse(result.body);
-      expect(body._links.self.href).toBe('http://gateway:4566/taxpayers/TP123456');
-      expect(body._links.taxReturns.href).toBe('http://gateway:4566/tax-returns?taxpayerId=TP123456');
+      expect(body._links.self.href).toBe('/dev/taxpayers/TP123456');
+      expect(body._links.taxReturns.href).toBe('/dev/tax-returns?taxpayerId=TP123456');
     });
 
-    it('should rewrite localhost URLs', async () => {
+    it('should convert localhost URLs to path-only with stage prefix', async () => {
       const event = createMockEvent();
       const primaryData = {
         id: 'TP123456',
@@ -431,7 +456,7 @@ describe('Aggregation Lambda Handler', () => {
 
       expect(result.statusCode).toBe(200);
       const body = JSON.parse(result.body);
-      expect(body._links.self.href).toBe('http://gateway:4566/taxpayers/TP123456');
+      expect(body._links.self.href).toBe('/dev/taxpayers/TP123456');
     });
 
     it('should preserve string links during rewriting', async () => {
@@ -454,7 +479,7 @@ describe('Aggregation Lambda Handler', () => {
 
       expect(result.statusCode).toBe(200);
       const body = JSON.parse(result.body);
-      expect(body._links.self).toBe('http://gateway:4566/taxpayers/TP123456');
+      expect(body._links.self).toBe('/dev/taxpayers/TP123456');
     });
   });
 

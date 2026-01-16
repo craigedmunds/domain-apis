@@ -25,8 +25,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./docs:/web:ro
-      - ./specs:/web/specs:ro
+      - ./docs:/web
+      - ./specs:/web/specs
     environment:
       - FOLDER=/web
       - PORT=8080

@@ -703,9 +703,9 @@ All resources follow a consistent structure:
     // Resource-specific attributes
   },
   "_links": {
-    "self": {"href": "http://api/resource/id"},
+    "self": {"href": "/resource/id"},
     "related-resource": {
-      "href": "http://other-api/resource/id",
+      "href": "/resource/id",
       "type": "resource-type",
       "title": "Human readable description"
     }
@@ -909,21 +909,66 @@ This structure:
 
 ### Relationship Link Format
 
+**IMPORTANT: URL Format Decision**
+
+All URLs in `_links` fields MUST be **path-only** (relative URLs without scheme, host, or port). This applies to:
+- Backend API responses (mock servers and real implementations)
+- Gateway responses (after URL rewriting)
+- All OpenAPI specification examples
+
+**Rationale**:
+- **Portability**: Path-only URLs work across different environments (local, staging, production) without modification
+- **Gateway Flexibility**: The gateway can add stage prefixes (e.g., `/dev`, `/prod`) without parsing full URLs
+- **Simplicity**: Clients don't need to handle different hostnames or ports
+- **Standard Practice**: Follows REST HATEOAS principles where relative URLs are preferred
+
+**Backend API Responsibility**:
+- Backend APIs (Taxpayer, Income Tax, Payment) return path-only URLs in all `_links` fields
+- Example: `/taxpayers/TP123456` not `http://localhost:8081/taxpayers/TP123456`
+
+**Gateway Responsibility**:
+- Gateway receives path-only URLs from backend APIs
+- Gateway adds stage prefix to all URLs in responses
+- Example: `/taxpayers/TP123456` becomes `/dev/taxpayers/TP123456`
+- Gateway does NOT convert to full URLs - keeps them as paths
+
 Relationships are represented in the `_links` object:
 
 ```json
 {
   "_links": {
     "self": {
-      "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456"
+      "href": "/taxpayers/TP123456"
     },
     "taxReturns": {
-      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
+      "href": "/tax-returns?taxpayerId=TP123456",
       "type": "collection",
       "title": "Tax returns for this taxpayer"
     },
     "payments": {
-      "href": "http://localhost:8080/payment/v1/payments?taxpayerId=TP123456",
+      "href": "/payments?taxpayerId=TP123456",
+      "type": "collection",
+      "title": "Payments made by this taxpayer"
+    }
+  }
+}
+```
+
+**After Gateway Processing** (with stage prefix):
+
+```json
+{
+  "_links": {
+    "self": {
+      "href": "/dev/taxpayers/TP123456"
+    },
+    "taxReturns": {
+      "href": "/dev/tax-returns?taxpayerId=TP123456",
+      "type": "collection",
+      "title": "Tax returns for this taxpayer"
+    },
+    "payments": {
+      "href": "/dev/payments?taxpayerId=TP123456",
       "type": "collection",
       "title": "Payments made by this taxpayer"
     }
@@ -1100,7 +1145,7 @@ PaymentAllocation:
 
 A complete example showing resource relationships:
 
-**1. Get Taxpayer** (`GET /api/taxpayer/v1/taxpayers/TP123456`):
+**1. Get Taxpayer** (`GET /taxpayer/v1/taxpayers/TP123456`):
 ```json
 {
   "id": "TP123456",
@@ -1117,15 +1162,15 @@ A complete example showing resource relationships:
   },
   "_links": {
     "self": {
-      "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+      "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456"
     },
     "taxReturns": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
       "type": "collection",
       "title": "Tax returns for this taxpayer"
     },
     "payments": {
-      "href": "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456",
+      "href": "http://localhost:8080/payment/v1/payments?taxpayerId=TP123456",
       "type": "collection",
       "title": "Payments made by this taxpayer"
     }
@@ -1133,7 +1178,7 @@ A complete example showing resource relationships:
 }
 ```
 
-**2. Get Taxpayer with Included Tax Returns** (`GET /api/taxpayer/v1/taxpayers/TP123456?include=taxReturns`):
+**2. Get Taxpayer with Included Tax Returns** (`GET /taxpayer/v1/taxpayers/TP123456?include=taxReturns`):
 ```json
 {
   "id": "TP123456",
@@ -1150,15 +1195,15 @@ A complete example showing resource relationships:
   },
   "_links": {
     "self": {
-      "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+      "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456"
     },
     "taxReturns": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
       "type": "collection",
       "title": "Tax returns for this taxpayer"
     },
     "payments": {
-      "href": "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456",
+      "href": "http://localhost:8080/payment/v1/payments?taxpayerId=TP123456",
       "type": "collection",
       "title": "Payments made by this taxpayer"
     }
@@ -1178,14 +1223,14 @@ A complete example showing resource relationships:
         "taxDue": {"amount": 7500.00, "currency": "GBP"},
         "_links": {
           "self": {
-            "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+            "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001"
           },
           "taxpayer": {
-            "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+            "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
             "type": "taxpayer"
           },
           "assessments": {
-            "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments",
+            "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001/assessments",
             "type": "collection"
           }
         }
@@ -1195,7 +1240,7 @@ A complete example showing resource relationships:
 }
 ```
 
-**3. Follow Tax Returns Link** (`GET /api/income-tax/v1/tax-returns?taxpayerId=TP123456`):
+**3. Follow Tax Returns Link** (`GET /income-tax/v1/tax-returns?taxpayerId=TP123456`):
 ```json
 {
   "items": [
@@ -1209,20 +1254,20 @@ A complete example showing resource relationships:
       "taxDue": {"amount": 7500.00, "currency": "GBP"},
       "_links": {
         "self": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"
+          "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001"
         },
         "taxpayer": {
-          "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+          "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456",
           "type": "taxpayer",
           "title": "Taxpayer who filed this return"
         },
         "assessments": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001/assessments",
           "type": "collection",
           "title": "Assessments for this return"
         },
         "allocations": {
-          "href": "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001",
+          "href": "http://localhost:8080/payment/v1/allocations?taxReturnId=TR20230001",
           "type": "collection",
           "title": "Payment allocations for this return"
         }
@@ -1231,7 +1276,7 @@ A complete example showing resource relationships:
   ],
   "_links": {
     "self": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456"
+      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456"
     }
   }
 }
@@ -1298,9 +1343,9 @@ After analyzing all acceptance criteria, several properties can be consolidated:
 
 **Validates: Requirements 4.5**
 
-### Property 9: Cross-API Link Format
+### Property 9: Path-Only Link Format
 
-*For any* relationship link in a resource that points to a resource in a different Domain API, the URL must be absolute (include scheme and host), must include the target API's base path, and must include metadata fields (type, title).
+*For any* relationship link in a resource response, the URL must be a path-only URL (starting with `/`), must not include scheme, host, or port, and must include metadata fields (type, title) for cross-API relationships.
 
 **Validates: Requirements 5.1, 5.2, 5.5**
 
