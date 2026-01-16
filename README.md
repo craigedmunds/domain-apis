@@ -117,20 +117,35 @@ This opens Swagger UI with all three API specifications loaded.
 ## Testing
 
 ```bash
-# Run all tests
-npm test
+# Run all tests (unit, property, integration)
+task test
 
 # Run unit tests only
-npm run test:unit
+task test:unit
 
 # Run property-based tests only
-npm run test:property
+task test:property
 
 # Run integration tests only
-npm run test:integration
+task test:integration
+
+# Run acceptance tests (separate Playwright project)
+task test:acceptance
+
+# Run acceptance tests in headed mode (see browser)
+task test:acceptance:headed
+
+# Run acceptance tests in UI mode (interactive)
+task test:acceptance:ui
+
+# Install acceptance test dependencies
+task test:acceptance:install
+
+# View acceptance test report
+task test:acceptance:report
 ```
 
-**Note**: Acceptance tests are maintained in a separate project. See [Acceptance Testing Guide](docs/ACCEPTANCE_TESTING.md) for details.
+**Note**: Acceptance tests are maintained in a separate Playwright project at `tests/acceptance/`. See [Acceptance Testing Guide](docs/acceptance-testing.md) for details.
 
 ## Documentation
 
@@ -138,7 +153,7 @@ npm run test:integration
 - [Mock Server Setup](docs/mock-servers.md)
 - [API Architecture](docs/architecture.md)
 - [Cross-API Traversal](docs/cross-api-traversal.md)
-- [Acceptance Testing Guide](docs/ACCEPTANCE_TESTING.md)
+- [Acceptance Testing Guide](docs/acceptance-testing.md)
 - [Taxpayer API Documentation](docs/taxpayer/)
 - [Income Tax API Documentation](docs/income-tax/)
 - [Payment API Documentation](docs/payment/)

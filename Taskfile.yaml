@@ -100,9 +100,9 @@ tasks:
   docs:serve:
     desc: Serve API documentation on http://localhost:8080
     cmds:
-      - echo "Serving documentation at http://localhost:8080/docs"
+      - echo "Starting documentation server at http://localhost:8080"
       - echo "Press Ctrl+C to stop the server"
-      - npx http-server . -p 8080 -o /docs
+      - docker-compose up docs
 
   # Start everything - LocalStack + mock APIs
   start:
@@ -181,6 +181,42 @@ tasks:
     desc: Run tests in watch mode
     cmds:
       - npm run test:watch
+
+  test:acceptance:
+    desc: Run acceptance tests
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm test
+
+  test:acceptance:headed:
+    desc: Run acceptance tests in headed mode (see browser)
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm run test:headed
+
+  test:acceptance:ui:
+    desc: Run acceptance tests in UI mode (interactive)
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm run test:ui
+
+  test:acceptance:install:
+    desc: Install acceptance test dependencies and Playwright browsers
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm install
+      - cd {{.TESTS_DIR}}/acceptance && npx playwright install
+
+  test:acceptance:report:
+    desc: View acceptance test report
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm run report
+
+  test:acceptance:skipped:
+    desc: Run only the slow/skipped acceptance tests (Swagger UI rendering tests)
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm run test:skipped
+
+  test:acceptance:skipped:headed:
+    desc: Run slow/skipped acceptance tests in headed mode
+    cmds:
+      - cd {{.TESTS_DIR}}/acceptance && npm run test:skipped:headed
 
   # Installation
   install:
@@ -274,6 +310,52 @@ tasks:
       - echo "Cleaning up all gateway resources..."
       - docker-compose down -v
       - echo "✓ Cleanup complete"
+
+  # Lambda management tasks
+  lambda:install:
+    desc: Install Lambda dependencies
+    dir: gateway/lambda
+    cmds:
+      - npm install
+
+  lambda:build:
+    desc: Build aggregation Lambda function
+    dir: gateway/lambda
+    cmds:
+      - npm run build
+
+  lambda:package:
+    desc: Build and package Lambda function for deployment
+    dir: gateway/lambda
+    cmds:
+      - npm run package
+
+  lambda:deploy:
+    desc: Deploy Lambda to LocalStack
+    deps: [lambda:package]
+    cmds:
+      - echo "Deploying Lambda to LocalStack..."
+      - docker cp gateway/lambda/aggregation-lambda.zip domain-api-localstack:/tmp/
+      - docker-compose exec -T localstack awslocal lambda update-function-code --function-name aggregation-lambda --zip-file fileb:///tmp/aggregation-lambda.zip
+      - echo "✓ Lambda deployed successfully"
+
+  lambda:logs:
+    desc: View Lambda logs
+    cmds:
+      - docker-compose exec -T localstack awslocal logs tail /aws/lambda/aggregation-lambda --follow
+
+  lambda:test:
+    desc: Run Lambda unit tests
+    dir: gateway/lambda
+    cmds:
+      - npm test
+
+  lambda:clean:
+    desc: Clean Lambda build artifacts
+    dir: gateway/lambda
+    cmds:
+      - npm run clean
+      - rm -f aggregation-lambda.zip
 
   # Status check
   status:

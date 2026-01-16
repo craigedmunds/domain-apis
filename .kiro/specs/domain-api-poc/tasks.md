@@ -118,7 +118,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Verify gateway is accessible at clean URL (e.g., http://domain-api.execute-api.localhost.localstack.cloud:4566/taxpayers)
     - _Requirements: 8.3_
   
-  - [ ] 7.3 Create aggregation Lambda function
+  - [x] 7.3 Create aggregation Lambda function
     - Set up Lambda project structure (TypeScript/Node.js)
     - Implement request routing to backend APIs
     - Implement include parameter parsing
@@ -220,15 +220,16 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Verify responses match OAS schemas
     - _Requirements: 7.1, 8.5_
   
-  - [ ] 11.3 Create separate acceptance test project
-    - Create new project directory outside main repo (e.g., domain-api-acceptance-tests/)
-    - Set up Playwright with own package.json and dependencies
-    - Write acceptance tests for API explorer functionality
-    - Test spec file loading from documentation site
-    - Test API selection and switching
-    - Test "Try it out" functionality
-    - Document how to run acceptance tests
-    - _Requirements: 7.1, 8.5_
+  - [x] 11.3 Create acceptance test project
+    - Create `tests/acceptance` directory within repository
+    - Initialize separate Playwright project with `npm init` in tests/acceptance
+    - Install Playwright and dependencies in tests/acceptance (separate from main project)
+    - Create playwright.config.js with baseURL pointing to local server
+    - Write acceptance tests for API explorer (spec loading, API selection, "Try it out")
+    - Write acceptance tests for documentation site (homepage, API docs navigation)
+    - Add npm scripts for running acceptance tests
+    - Update main project documentation with instructions for running acceptance tests
+    - _Requirements: 7.1, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
 
 - [ ] 12. Implement API servers (language-specific)
   - [x] 12.1 Choose implementation language and framework
@@ -291,8 +292,10 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
   - Test complete cross-API traversal scenarios
   - Verify all relationship links resolve correctly
   - Test OAS Viewer/Executor with real APIs
+  - Run acceptance tests from tests/acceptance
+  - Ensure all tests pass (unit + property + integration + acceptance)
   - Ensure all tests pass, ask the user if questions arise.
-  - _Requirements: All_
+  - _Requirements: All, 9.7_
 
 ## Notes
 

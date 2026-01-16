@@ -113,3 +113,17 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 3. THE System SHALL provide mock servers or stubs for each Domain_API based on the OAS files
 4. THE System SHALL include example data that demonstrates cross-API relationships
 5. THE System SHALL validate that all relationship URLs are correctly formed and resolvable
+
+### Requirement 9: Acceptance Testing
+
+**User Story:** As a developer, I want automated acceptance tests that validate critical user journeys, so that I can ensure the system meets requirements before considering work complete.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide acceptance tests in a separate Playwright project at `tests/acceptance` within the repository
+2. THE acceptance test project SHALL have its own package.json and dependencies independent of the main project
+3. THE System SHALL include acceptance tests for API explorer functionality including spec loading, API selection, and interactive execution
+4. THE System SHALL include acceptance tests for documentation site functionality including homepage navigation and API documentation pages
+5. WHEN acceptance tests are run, THE System SHALL validate critical user journeys against running mock servers or real API implementations
+6. THE System SHALL provide clear documentation on how to run acceptance tests
+7. THE acceptance tests SHALL pass before the POC is considered complete
