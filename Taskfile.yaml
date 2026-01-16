@@ -119,7 +119,7 @@ tasks:
       - echo "Taxpayer API - http://localhost:8081"
       - echo "Income Tax API - http://localhost:8082"
       - echo "Payment API - http://localhost:8083"
-      - echo "API Gateway - http://localhost:4566"
+      - echo "API Gateway - See output above for URL"
       - echo ""
       - echo "Run 'task gateway:test' to test the APIs"
       - echo "Run 'task stop' to stop all services"
@@ -128,7 +128,7 @@ tasks:
     desc: Stop all services
     cmds:
       - echo "Stopping all services..."
-      - docker-compose down
+      - docker-compose down -v
 
   # Swagger UI
   swagger:
@@ -255,12 +255,12 @@ tasks:
       - echo "Payment API:"
       - curl -s "http://localhost:8083/payments?taxpayerId=TP123456" | jq . || echo "Failed"
       - echo ""
-      - echo "=== Testing Gateway Access ==="
+      - echo "=== Testing Gateway Access (Custom Domain) ==="
       - echo "Gateway (without include):"
-      - curl -s "http://localhost:4566/restapis/gwube6mq8f/dev/_user_request_/taxpayers/TP123456" | jq . || echo "Failed"
+      - curl -s "http://domain-api.execute-api.localhost.localstack.cloud:4566/dev/taxpayers/TP123456" | jq . || echo "Failed"
       - echo ""
       - echo "Gateway (with include parameter):"
-      - curl -s "http://localhost:4566/restapis/gwube6mq8f/dev/_user_request_/taxpayers/TP123456?include=taxReturns" | jq . || echo "Failed"
+      - curl -s "http://domain-api.execute-api.localhost.localstack.cloud:4566/dev/taxpayers/TP123456?include=taxReturns" | jq . || echo "Failed"
 
   gateway:restart:
     desc: Restart all gateway services

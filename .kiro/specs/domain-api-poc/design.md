@@ -439,21 +439,23 @@ awslocal lambda create-function \
   --handler index.handler \
   --zip-file fileb://aggregation-lambda.zip
 
-echo "Creating API Gateway..."
-API_ID=$(awslocal apigateway create-rest-api \
+echo "Creating API Gateway with custom ID..."
+# Use a custom API ID for cleaner URLs
+CUSTOM_API_ID="domain-api"
+
+awslocal apigateway create-rest-api \
   --name domain-api-gateway \
-  --query 'id' \
-  --output text)
+  --rest-api-id $CUSTOM_API_ID
 
 # Get root resource
 ROOT_ID=$(awslocal apigateway get-resources \
-  --rest-api-id $API_ID \
+  --rest-api-id $CUSTOM_API_ID \
   --query 'items[0].id' \
   --output text)
 
 # Create proxy resource
 RESOURCE_ID=$(awslocal apigateway create-resource \
-  --rest-api-id $API_ID \
+  --rest-api-id $CUSTOM_API_ID \
   --parent-id $ROOT_ID \
   --path-part '{proxy+}' \
   --query 'id' \
@@ -461,14 +463,14 @@ RESOURCE_ID=$(awslocal apigateway create-resource \
 
 # Create ANY method
 awslocal apigateway put-method \
-  --rest-api-id $API_ID \
+  --rest-api-id $CUSTOM_API_ID \
   --resource-id $RESOURCE_ID \
   --http-method ANY \
   --authorization-type NONE
 
 # Create Lambda integration
 awslocal apigateway put-integration \
-  --rest-api-id $API_ID \
+  --rest-api-id $CUSTOM_API_ID \
   --resource-id $RESOURCE_ID \
   --http-method ANY \
   --type AWS_PROXY \
@@ -477,12 +479,20 @@ awslocal apigateway put-integration \
 
 # Deploy API
 awslocal apigateway create-deployment \
-  --rest-api-id $API_ID \
+  --rest-api-id $CUSTOM_API_ID \
   --stage-name dev
 
 echo "✓ API Gateway setup complete"
-echo "API Gateway URL: http://localhost:4566/restapis/$API_ID/dev/_user_request_/taxpayer/v1/taxpayers"
+echo ""
+echo "Gateway URL (LocalStack format): http://localhost:4566/restapis/$CUSTOM_API_ID/dev/_user_request_"
+echo "Gateway URL (Custom domain): http://$CUSTOM_API_ID.execute-api.localhost.localstack.cloud:4566"
+echo ""
+echo "Example requests:"
+echo "  curl http://$CUSTOM_API_ID.execute-api.localhost.localstack.cloud:4566/taxpayers"
+echo "  curl http://$CUSTOM_API_ID.execute-api.localhost.localstack.cloud:4566/taxpayers/TP123456?include=taxReturns"
 ```
+
+**Note on LocalStack Custom Domains**: LocalStack supports custom API IDs and provides a special domain format `{api-id}.execute-api.localhost.localstack.cloud:4566` that maps to the API Gateway. This provides cleaner URLs without requiring the full `/restapis/{id}/dev/_user_request_` path. The custom domain format works with LocalStack's DNS resolution and is the recommended approach for local development.
 
 #### Taskfile Integration
 

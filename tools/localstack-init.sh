@@ -42,8 +42,26 @@ const http = require('http');
 exports.handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
   
-  const { path, httpMethod, queryStringParameters, body } = event;
+  const { path, httpMethod, queryStringParameters, body, headers } = event;
   const includeParam = queryStringParameters?.include;
+  
+  // Handle CORS preflight requests
+  if (httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400'
+      },
+      body: ''
+    };
+  }
+  
+  // Determine gateway base URL from the request
+  const gatewayHost = headers?.Host || headers?.host || 'domain-api.execute-api.localhost.localstack.cloud:4566';
+  const gatewayBaseUrl = `http://${gatewayHost}`;
   
   try {
     // Route to appropriate backend API
@@ -54,18 +72,33 @@ exports.handler = async (event) => {
     const primaryResponse = await fetchUrl(backendUrl, httpMethod, body);
     const primaryData = JSON.parse(primaryResponse);
     
+    // Rewrite URLs in the primary response
+    rewriteLinks(primaryData, gatewayBaseUrl);
+    
     // If no include parameter, return as-is
     if (!includeParam) {
       return {
         statusCode: 200,
         body: JSON.stringify(primaryData),
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
       };
     }
     
     // Parse include parameter and fetch related resources
     const includes = includeParam.split(',').map(s => s.trim());
     const includedData = await fetchIncludedResources(primaryData, includes);
+    
+    // Rewrite URLs in included resources
+    for (const [relationshipName, resources] of Object.entries(includedData)) {
+      if (Array.isArray(resources)) {
+        resources.forEach(resource => rewriteLinks(resource, gatewayBaseUrl));
+      }
+    }
     
     // Merge and return
     const aggregatedResponse = {
@@ -76,7 +109,12 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       body: JSON.stringify(aggregatedResponse),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      }
     };
     
   } catch (error) {
@@ -90,7 +128,12 @@ exports.handler = async (event) => {
           details: error.message
         }
       }),
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+      }
     };
   }
 };
@@ -111,6 +154,69 @@ function routeToBackend(path) {
   }
   
   throw new Error(`No backend found for path: ${path}`);
+}
+
+function rewriteLinks(obj, gatewayBaseUrl) {
+  if (!obj || typeof obj !== 'object') {
+    return;
+  }
+  
+  // Rewrite _links object
+  if (obj._links) {
+    for (const [key, value] of Object.entries(obj._links)) {
+      if (typeof value === 'string') {
+        // Simple string URL
+        obj._links[key] = rewriteUrl(value, gatewayBaseUrl);
+      } else if (value && typeof value === 'object' && value.href) {
+        // Link object with href
+        value.href = rewriteUrl(value.href, gatewayBaseUrl);
+      }
+    }
+  }
+  
+  // Recursively process arrays
+  if (Array.isArray(obj)) {
+    obj.forEach(item => rewriteLinks(item, gatewayBaseUrl));
+  }
+  
+  // Recursively process nested objects (but not _links to avoid infinite loop)
+  for (const [key, value] of Object.entries(obj)) {
+    if (key !== '_links' && typeof value === 'object') {
+      rewriteLinks(value, gatewayBaseUrl);
+    }
+  }
+}
+
+function rewriteUrl(url, gatewayBaseUrl) {
+  if (!url || typeof url !== 'string') {
+    return url;
+  }
+  
+  try {
+    const urlObj = new URL(url);
+    
+    // Map backend API paths to gateway paths
+    const pathMappings = {
+      '/api/taxpayer/v1': '',
+      '/api/income-tax/v1': '',
+      '/api/payment/v1': ''
+    };
+    
+    let newPath = urlObj.pathname;
+    for (const [oldPrefix, newPrefix] of Object.entries(pathMappings)) {
+      if (newPath.startsWith(oldPrefix)) {
+        newPath = newPrefix + newPath.substring(oldPrefix.length);
+        break;
+      }
+    }
+    
+    // Construct new URL with gateway base and rewritten path
+    const newUrl = `${gatewayBaseUrl}${newPath}${urlObj.search}`;
+    return newUrl;
+  } catch (error) {
+    console.error('Failed to rewrite URL:', url, error);
+    return url; // Return original if rewrite fails
+  }
 }
 
 async function fetchUrl(url, method = 'GET', body = null) {
@@ -208,14 +314,19 @@ echo "✓ Lambda function created/updated"
 echo ""
 echo "=== Creating API Gateway ==="
 
+# Use a custom API ID for cleaner URLs via tags
+CUSTOM_API_ID="domain-api"
+
 # Check if API already exists
 API_ID=$(awslocal apigateway get-rest-apis --query "items[?name=='domain-api-gateway'].id" --output text 2>/dev/null)
 
 if [ -z "$API_ID" ] || [ "$API_ID" == "None" ]; then
-  echo "  Creating new API Gateway..."
+  echo "  Creating new API Gateway with custom ID: $CUSTOM_API_ID"
+  # Use tags to set custom ID (LocalStack-specific feature)
   API_ID=$(awslocal apigateway create-rest-api \
     --name domain-api-gateway \
     --description "Domain API Gateway for POC" \
+    --tags "{\"_custom_id_\":\"$CUSTOM_API_ID\"}" \
     --query 'id' \
     --output text)
   echo "  API ID: $API_ID"
@@ -284,12 +395,17 @@ echo $API_ID > /tmp/api-gateway-id.txt
 echo ""
 echo "=== Setup Complete ==="
 echo ""
-echo "API Gateway URL: http://localhost:4566/restapis/$API_ID/dev/_user_request_"
+echo "API Gateway URLs:"
+echo "  LocalStack format: http://localhost:4566/restapis/$API_ID/dev/_user_request_"
+echo "  Custom domain:     http://$API_ID.execute-api.localhost.localstack.cloud:4566"
 echo ""
 echo "Example usage:"
 echo "  Direct API access:"
 echo "    curl http://localhost:8081/taxpayers/TP123456"
 echo ""
+echo "  Gateway with custom domain:"
+echo "    curl \"http://$API_ID.execute-api.localhost.localstack.cloud:4566/taxpayers/TP123456\""
+echo ""
 echo "  Gateway with aggregation:"
-echo "    curl \"http://localhost:4566/restapis/$API_ID/dev/_user_request_/taxpayers/TP123456?include=taxReturns\""
+echo "    curl \"http://$API_ID.execute-api.localhost.localstack.cloud:4566/taxpayers/TP123456?include=taxReturns\""
 echo ""

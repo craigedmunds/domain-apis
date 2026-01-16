@@ -111,8 +111,11 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Create docker-compose.yml with LocalStack service
     - Configure LocalStack for API Gateway and Lambda services
     - Add backend mock API services to docker-compose
-    - Create tools/localstack-init.sh initialization script
+    - Create tools/localstack-init.sh initialization script with custom API ID
+    - Configure gateway to use execute-api.localhost.localstack.cloud domain format
+    - Update OpenAPI specs to include correct gateway server URL
     - Add Taskfile tasks for gateway management (start, stop, init, logs, status)
+    - Verify gateway is accessible at clean URL (e.g., http://domain-api.execute-api.localhost.localstack.cloud:4566/taxpayers)
     - _Requirements: 8.3_
   
   - [ ] 7.3 Create aggregation Lambda function
@@ -121,6 +124,9 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Implement include parameter parsing
     - Implement parallel fetching of related resources
     - Implement response merging into _included structure
+    - Implement URL rewriting in _links to point through gateway
+    - Rewrite backend API URLs (localhost:8081/8082/8083) to gateway URL
+    - Add CORS headers to Lambda responses for browser compatibility
     - Handle partial failures gracefully
     - Add error handling for gateway-level issues
     - _Requirements: 4.4, 5.3_
