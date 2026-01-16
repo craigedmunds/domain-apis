@@ -13,7 +13,9 @@ The acceptance tests are maintained as a **separate Playwright project** with it
 
 ## Test Coverage
 
-### API Explorer Tests (`tests/api-explorer.spec.ts`)
+### UI Tests
+
+#### API Explorer Tests (`ui/api-explorer.spec.ts`)
 
 Validates the interactive API explorer functionality:
 
@@ -31,7 +33,7 @@ Validates the interactive API explorer functionality:
 
 **Requirements validated:** 7.1, 8.5, 9.1, 9.2, 9.3, 9.4
 
-### Documentation Site Tests (`tests/documentation.spec.ts`)
+#### Documentation Site Tests (`ui/documentation.spec.ts`)
 
 Validates the documentation site functionality:
 
@@ -49,6 +51,25 @@ Validates the documentation site functionality:
 - ✅ Navigation between all API docs
 
 **Requirements validated:** 7.1, 7.2, 9.1, 9.5, 9.6
+
+### Gateway API Tests
+
+#### Gateway API Tests (`gateway/gateway-api.spec.ts`)
+
+Validates the API Gateway aggregation functionality:
+
+- ✅ Direct API access without include parameter
+- ✅ Single include parameter (taxReturns, payments, assessments)
+- ✅ Multiple include parameters (comma-separated)
+- ✅ Cross-API resource traversal via includes
+- ✅ Error handling for invalid includes
+- ✅ Graceful degradation for partial failures
+- ✅ URL rewriting in _links field
+- ✅ All _links point through gateway (not backend APIs)
+- ✅ CORS headers in responses
+- ✅ OPTIONS preflight request handling
+
+**Requirements validated:** 4.4, 5.3, 9.1, 9.5, 9.7
 
 ## Prerequisites
 
@@ -98,6 +119,9 @@ npm run test:explorer
 # Run only documentation tests
 npm run test:docs
 
+# Run only gateway API tests
+npm run test:gateway
+
 # Run only slow tests (Swagger UI rendering)
 npm run test:skipped
 
@@ -117,6 +141,9 @@ The main project includes convenience scripts:
 task test:acceptance                    # Fast tests only
 task test:acceptance:headed             # Fast tests in headed mode
 task test:acceptance:ui                 # Interactive UI mode
+task test:acceptance:gateway            # Run gateway API tests
+task test:acceptance:explorer           # Run API explorer tests
+task test:acceptance:docs               # Run documentation tests
 task test:acceptance:skipped            # Run slow tests only
 task test:acceptance:skipped:headed     # Run slow tests in headed mode
 task test:acceptance:report             # View test report
@@ -177,25 +204,32 @@ This starts the `docs` service from `docker-compose.yml`, which serves the stati
 
 ```
 tests/acceptance/
-├── tests/
-│   ├── api-explorer.spec.ts      # API explorer functionality tests
-│   └── documentation.spec.ts     # Documentation site tests
+├── ui/
+│   ├── api-explorer.spec.ts      # UI tests for API explorer
+│   └── documentation.spec.ts     # UI tests for documentation site
+├── gateway/
+│   └── gateway-api.spec.ts       # API tests for gateway functionality
 ├── playwright.config.ts           # Playwright configuration
 ├── package.json                   # Separate dependencies
 └── README.md                      # This file
 ```
 
+This structure provides clear separation between:
+- **UI tests** (`ui/`) - Playwright tests that interact with the browser UI
+- **Gateway API tests** (`gateway/`) - Tests that make HTTP requests to the gateway API
+
 ## Writing New Tests
 
 When adding new acceptance tests:
 
-1. Create a new `.spec.ts` file in the `tests/` directory
-2. Import test utilities: `import { test, expect } from '@playwright/test';`
-3. Use descriptive test names that explain the user journey
-4. Add comments linking tests to requirements
-5. Follow the existing test patterns
+1. Determine if it's a UI test or API test
+2. Create a new `.spec.ts` file in the appropriate directory (`ui/` or `gateway/`)
+3. Import test utilities: `import { test, expect } from '@playwright/test';`
+4. Use descriptive test names that explain the user journey
+5. Add comments linking tests to requirements
+6. Follow the existing test patterns
 
-Example:
+Example UI test:
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -208,6 +242,21 @@ test.describe('New Feature', () => {
   test('should validate critical user journey', async ({ page }) => {
     // Test implementation
     await expect(page.locator('.feature')).toBeVisible();
+  });
+});
+```
+
+Example Gateway API test:
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('New Gateway Feature', () => {
+  test('should handle new aggregation pattern', async ({ request }) => {
+    const response = await request.get('http://gateway-url/resource');
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    expect(data).toHaveProperty('expectedField');
   });
 });
 ```

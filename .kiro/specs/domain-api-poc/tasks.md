@@ -115,7 +115,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Configure gateway to use execute-api.localhost.localstack.cloud domain format
     - Update OpenAPI specs to include correct gateway server URL
     - Add Taskfile tasks for gateway management (start, stop, init, logs, status)
-    - Verify gateway is accessible at clean URL (e.g., http://domain-api.execute-api.localhost.localstack.cloud:4566/taxpayers)
+    - Verify gateway is accessible at clean URL (e.g., http://domain-api.execute-api.localhost.localstack.cloud:4566/dev/taxpayers)
     - _Requirements: 8.3_
   
   - [x] 7.3 Create aggregation Lambda function
@@ -143,14 +143,16 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - **Property 15: Include Parameter Embedding**
     - **Validates: Requirements 4.4, 5.3**
   
-  - [ ]* 7.6 Write integration tests for gateway aggregation
-    - Test single relationship include via gateway
-    - Test multiple relationship includes via gateway
-    - Test cross-API includes via gateway
-    - Test invalid relationship names
-    - Test unavailable related resources
-    - Test direct API access (without gateway) still works
-    - _Requirements: 4.4, 5.3_
+  - [x] 7.6 Write acceptance tests for gateway API
+    - Create tests/acceptance/gateway/gateway-api.spec.ts
+    - Test direct API invocation (without include parameter)
+    - Test API invocation with single include parameter
+    - Test API invocation with multiple include parameters
+    - Test cross-API resource traversal via includes
+    - Test error handling for invalid includes
+    - Test URL rewriting in _links field
+    - Test that _links always point through gateway
+    - _Requirements: 4.4, 5.3, 9.1, 9.5, 9.7_
 
 - [ ] 8. Generate and test mock servers
   - [x] 8.1 Generate mock servers from OpenAPI specs
@@ -225,8 +227,9 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Initialize separate Playwright project with `npm init` in tests/acceptance
     - Install Playwright and dependencies in tests/acceptance (separate from main project)
     - Create playwright.config.js with baseURL pointing to local server
-    - Write acceptance tests for API explorer (spec loading, API selection, "Try it out")
-    - Write acceptance tests for documentation site (homepage, API docs navigation)
+    - Organize tests into subdirectories: ui/ for UI tests, gateway/ for API tests
+    - Write acceptance tests for API explorer in tests/acceptance/ui/api-explorer.spec.ts
+    - Write acceptance tests for documentation site in tests/acceptance/ui/documentation.spec.ts
     - Add npm scripts for running acceptance tests
     - Update main project documentation with instructions for running acceptance tests
     - _Requirements: 7.1, 8.5, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_

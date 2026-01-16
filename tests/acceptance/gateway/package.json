@@ -1,0 +1,22 @@
+{
+  "name": "domain-api-gateway-acceptance-tests",
+  "version": "1.0.0",
+  "description": "Gateway API acceptance tests for Domain API POC",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "keywords": [
+    "acceptance-tests",
+    "api-testing",
+    "gateway"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "vitest": "^1.0.0"
+  }
+}

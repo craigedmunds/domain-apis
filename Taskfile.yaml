@@ -357,6 +357,67 @@ tasks:
       - npm run clean
       - rm -f aggregation-lambda.zip
 
+  # Acceptance test tasks
+  test:acceptance:
+    desc: Run all acceptance tests (UI and Gateway)
+    cmds:
+      - task: test:acceptance:ui:all
+      - task: test:acceptance:gateway
+
+  test:acceptance:ui:all:
+    desc: Run all UI acceptance tests
+    dir: tests/acceptance/ui
+    cmds:
+      - npm test
+
+  test:acceptance:headed:
+    desc: Run UI acceptance tests in headed mode
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run test:headed
+
+  test:acceptance:ui:
+    desc: Run UI acceptance tests in UI mode (interactive)
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run test:ui
+
+  test:acceptance:gateway:
+    desc: Run gateway API acceptance tests
+    dir: tests/acceptance/gateway
+    cmds:
+      - npm test
+
+  test:acceptance:explorer:
+    desc: Run API explorer acceptance tests
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run test:explorer
+
+  test:acceptance:docs:
+    desc: Run documentation site acceptance tests
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run test:docs
+
+  test:acceptance:skipped:
+    desc: Run slow acceptance tests (Swagger UI rendering)
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run test:skipped
+
+  test:acceptance:skipped:headed:
+    desc: Run slow acceptance tests in headed mode
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run test:skipped:headed
+
+  test:acceptance:report:
+    desc: View acceptance test report
+    dir: tests/acceptance/ui
+    cmds:
+      - npm run report
+
   # Status check
   status:
     desc: Show project status

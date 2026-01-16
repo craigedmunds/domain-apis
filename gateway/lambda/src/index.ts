@@ -197,8 +197,10 @@ async function fetchIncludedResources(
     }
 
     try {
-      console.log(`Fetching ${relationshipName} from ${href}`);
-      const response = await fetch(href);
+      // Convert gateway URL back to backend URL for fetching
+      const backendUrl = gatewayUrlToBackendUrl(href);
+      console.log(`Fetching ${relationshipName} from backend: ${backendUrl}`);
+      const response = await fetch(backendUrl);
       
       if (response.ok) {
         const data: ResourceResponse = await response.json();
@@ -276,4 +278,31 @@ function rewriteUrl(url: string, gatewayUrl: string): string {
   }
 
   return url;
+}
+
+/**
+ * Convert gateway URL back to backend URL for fetching
+ */
+function gatewayUrlToBackendUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    const path = urlObj.pathname + urlObj.search;
+    
+    // Route based on path to appropriate backend
+    if (path.startsWith('/taxpayers')) {
+      return `${process.env.TAXPAYER_API_URL || 'http://taxpayer-api:4010'}${path}`;
+    }
+    if (path.startsWith('/tax-returns') || path.startsWith('/assessments')) {
+      return `${process.env.INCOME_TAX_API_URL || 'http://income-tax-api:4010'}${path}`;
+    }
+    if (path.startsWith('/payments') || path.startsWith('/allocations')) {
+      return `${process.env.PAYMENT_API_URL || 'http://payment-api:4010'}${path}`;
+    }
+    
+    // If we can't route it, return the original URL
+    return url;
+  } catch (error) {
+    console.error('Failed to convert gateway URL to backend URL:', url, error);
+    return url;
+  }
 }

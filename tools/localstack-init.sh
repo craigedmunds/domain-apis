@@ -28,257 +28,21 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
 fi
 
 echo ""
-echo "=== Creating Lambda Function ==="
+echo "=== Preparing Lambda Function ==="
 
-# Create a simple aggregation Lambda function
-LAMBDA_DIR="/tmp/lambda"
-mkdir -p $LAMBDA_DIR
+# Check if the built Lambda package exists
+LAMBDA_PACKAGE="/tools/../gateway/lambda/aggregation-lambda.zip"
 
-cat > $LAMBDA_DIR/index.js << 'EOF'
-// Simple aggregation Lambda for Domain API Gateway
-const https = require('https');
-const http = require('http');
+if [ ! -f "$LAMBDA_PACKAGE" ]; then
+  echo "✗ Lambda package not found at $LAMBDA_PACKAGE"
+  echo "  Please run 'task lambda:package' to build the Lambda function first"
+  exit 1
+fi
 
-exports.handler = async (event) => {
-  console.log('Event:', JSON.stringify(event, null, 2));
-  
-  const { path, httpMethod, queryStringParameters, body, headers } = event;
-  const includeParam = queryStringParameters?.include;
-  
-  // Handle CORS preflight requests
-  if (httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400'
-      },
-      body: ''
-    };
-  }
-  
-  // Determine gateway base URL from the request
-  const gatewayHost = headers?.Host || headers?.host || 'domain-api.execute-api.localhost.localstack.cloud:4566';
-  const gatewayBaseUrl = `http://${gatewayHost}`;
-  
-  try {
-    // Route to appropriate backend API
-    const backendUrl = routeToBackend(path);
-    console.log('Routing to:', backendUrl);
-    
-    // Fetch primary resource
-    const primaryResponse = await fetchUrl(backendUrl, httpMethod, body);
-    const primaryData = JSON.parse(primaryResponse);
-    
-    // Rewrite URLs in the primary response
-    rewriteLinks(primaryData, gatewayBaseUrl);
-    
-    // If no include parameter, return as-is
-    if (!includeParam) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify(primaryData),
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }
-      };
-    }
-    
-    // Parse include parameter and fetch related resources
-    const includes = includeParam.split(',').map(s => s.trim());
-    const includedData = await fetchIncludedResources(primaryData, includes);
-    
-    // Rewrite URLs in included resources
-    for (const [relationshipName, resources] of Object.entries(includedData)) {
-      if (Array.isArray(resources)) {
-        resources.forEach(resource => rewriteLinks(resource, gatewayBaseUrl));
-      }
-    }
-    
-    // Merge and return
-    const aggregatedResponse = {
-      ...primaryData,
-      _included: includedData
-    };
-    
-    return {
-      statusCode: 200,
-      body: JSON.stringify(aggregatedResponse),
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-      }
-    };
-    
-  } catch (error) {
-    console.error('Error:', error);
-    return {
-      statusCode: 502,
-      body: JSON.stringify({
-        error: {
-          code: 'GATEWAY_ERROR',
-          message: 'Failed to aggregate resources',
-          details: error.message
-        }
-      }),
-      headers: { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-      }
-    };
-  }
-};
+echo "✓ Found Lambda package at $LAMBDA_PACKAGE"
 
-function routeToBackend(path) {
-  const backends = {
-    '/taxpayers': process.env.TAXPAYER_API_URL || 'http://taxpayer-api:4010',
-    '/tax-returns': process.env.INCOME_TAX_API_URL || 'http://income-tax-api:4010',
-    '/assessments': process.env.INCOME_TAX_API_URL || 'http://income-tax-api:4010',
-    '/payments': process.env.PAYMENT_API_URL || 'http://payment-api:4010',
-    '/allocations': process.env.PAYMENT_API_URL || 'http://payment-api:4010'
-  };
-  
-  for (const [prefix, url] of Object.entries(backends)) {
-    if (path.startsWith(prefix)) {
-      return `${url}${path}`;
-    }
-  }
-  
-  throw new Error(`No backend found for path: ${path}`);
-}
-
-function rewriteLinks(obj, gatewayBaseUrl) {
-  if (!obj || typeof obj !== 'object') {
-    return;
-  }
-  
-  // Rewrite _links object
-  if (obj._links) {
-    for (const [key, value] of Object.entries(obj._links)) {
-      if (typeof value === 'string') {
-        // Simple string URL
-        obj._links[key] = rewriteUrl(value, gatewayBaseUrl);
-      } else if (value && typeof value === 'object' && value.href) {
-        // Link object with href
-        value.href = rewriteUrl(value.href, gatewayBaseUrl);
-      }
-    }
-  }
-  
-  // Recursively process arrays
-  if (Array.isArray(obj)) {
-    obj.forEach(item => rewriteLinks(item, gatewayBaseUrl));
-  }
-  
-  // Recursively process nested objects (but not _links to avoid infinite loop)
-  for (const [key, value] of Object.entries(obj)) {
-    if (key !== '_links' && typeof value === 'object') {
-      rewriteLinks(value, gatewayBaseUrl);
-    }
-  }
-}
-
-function rewriteUrl(url, gatewayBaseUrl) {
-  if (!url || typeof url !== 'string') {
-    return url;
-  }
-  
-  try {
-    const urlObj = new URL(url);
-    
-    // Map backend API paths to gateway paths
-    const pathMappings = {
-      '/api/taxpayer/v1': '',
-      '/api/income-tax/v1': '',
-      '/api/payment/v1': ''
-    };
-    
-    let newPath = urlObj.pathname;
-    for (const [oldPrefix, newPrefix] of Object.entries(pathMappings)) {
-      if (newPath.startsWith(oldPrefix)) {
-        newPath = newPrefix + newPath.substring(oldPrefix.length);
-        break;
-      }
-    }
-    
-    // Construct new URL with gateway base and rewritten path
-    const newUrl = `${gatewayBaseUrl}${newPath}${urlObj.search}`;
-    return newUrl;
-  } catch (error) {
-    console.error('Failed to rewrite URL:', url, error);
-    return url; // Return original if rewrite fails
-  }
-}
-
-async function fetchUrl(url, method = 'GET', body = null) {
-  return new Promise((resolve, reject) => {
-    const urlObj = new URL(url);
-    const protocol = urlObj.protocol === 'https:' ? https : http;
-    
-    const options = {
-      hostname: urlObj.hostname,
-      port: urlObj.port,
-      path: urlObj.pathname + urlObj.search,
-      method: method,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    };
-    
-    const req = protocol.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve(data));
-    });
-    
-    req.on('error', reject);
-    
-    if (body) {
-      req.write(body);
-    }
-    
-    req.end();
-  });
-}
-
-async function fetchIncludedResources(primaryData, includes) {
-  const links = primaryData._links || {};
-  const includedData = {};
-  
-  const fetchPromises = includes.map(async (relationshipName) => {
-    const link = links[relationshipName];
-    if (!link || !link.href) {
-      return;
-    }
-    
-    try {
-      const response = await fetchUrl(link.href);
-      const data = JSON.parse(response);
-      includedData[relationshipName] = Array.isArray(data.items) ? data.items : [data];
-    } catch (error) {
-      console.error(`Failed to fetch ${relationshipName}:`, error);
-    }
-  });
-  
-  await Promise.all(fetchPromises);
-  return includedData;
-}
-EOF
-
-# Create Lambda deployment package
-cd $LAMBDA_DIR
-zip -q aggregation-lambda.zip index.js
-
-echo "✓ Lambda function code created"
+# Copy Lambda package to /tmp for deployment
+cp "$LAMBDA_PACKAGE" /tmp/aggregation-lambda.zip
 
 # Create IAM role for Lambda (LocalStack doesn't enforce IAM, but needs the structure)
 echo ""
@@ -298,13 +62,21 @@ awslocal lambda create-function \
   --runtime nodejs18.x \
   --role arn:aws:iam::000000000000:role/lambda-execution-role \
   --handler index.handler \
-  --zip-file fileb://aggregation-lambda.zip \
-  --environment Variables="{TAXPAYER_API_URL=http://taxpayer-api:4010,INCOME_TAX_API_URL=http://income-tax-api:4010,PAYMENT_API_URL=http://payment-api:4010}" \
+  --zip-file fileb:///tmp/aggregation-lambda.zip \
+  --timeout 30 \
+  --memory-size 256 \
+  --environment Variables="{TAXPAYER_API_URL=http://taxpayer-api:4010,INCOME_TAX_API_URL=http://income-tax-api:4010,PAYMENT_API_URL=http://payment-api:4010,GATEWAY_URL=http://domain-api.execute-api.localhost.localstack.cloud:4566}" \
   >/dev/null 2>&1 || {
     echo "  Function exists, updating code..."
     awslocal lambda update-function-code \
       --function-name aggregation-lambda \
-      --zip-file fileb://aggregation-lambda.zip \
+      --zip-file fileb:///tmp/aggregation-lambda.zip \
+      >/dev/null 2>&1
+    awslocal lambda update-function-configuration \
+      --function-name aggregation-lambda \
+      --timeout 30 \
+      --memory-size 256 \
+      --environment Variables="{TAXPAYER_API_URL=http://taxpayer-api:4010,INCOME_TAX_API_URL=http://income-tax-api:4010,PAYMENT_API_URL=http://payment-api:4010,GATEWAY_URL=http://domain-api.execute-api.localhost.localstack.cloud:4566}" \
       >/dev/null 2>&1
   }
 
