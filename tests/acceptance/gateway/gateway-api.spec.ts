@@ -291,13 +291,16 @@ describe('Gateway API - Collection with Includes', () => {
     expect(data).toHaveProperty('items');
     expect(Array.isArray(data.items)).toBeTruthy();
     
-    // Each item should have _included with the requested relationships
+    // _included should be at the collection level, not in each item
+    expect(data).toHaveProperty('_included');
+    expect(data._included).toHaveProperty('taxReturns');
+    expect(Array.isArray(data._included.taxReturns)).toBeTruthy();
+    
+    // Items should NOT have _included
     if (data.items.length > 0) {
       const taxpayer = data.items[0];
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).toHaveProperty('_included');
-      expect(taxpayer._included).toHaveProperty('taxReturns');
-      expect(Array.isArray(taxpayer._included.taxReturns)).toBeTruthy();
+      expect(taxpayer).not.toHaveProperty('_included');
     }
   });
 
@@ -313,13 +316,18 @@ describe('Gateway API - Collection with Includes', () => {
     expect(data).toHaveProperty('items');
     expect(Array.isArray(data.items)).toBeTruthy();
     
-    // Each item should have _included with all requested relationships
+    // _included should be at the collection level with all requested relationships
+    expect(data).toHaveProperty('_included');
+    expect(data._included).toHaveProperty('taxReturns');
+    expect(data._included).toHaveProperty('payments');
+    expect(Array.isArray(data._included.taxReturns)).toBeTruthy();
+    expect(Array.isArray(data._included.payments)).toBeTruthy();
+    
+    // Items should NOT have _included
     if (data.items.length > 0) {
       const taxpayer = data.items[0];
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).toHaveProperty('_included');
-      expect(taxpayer._included).toHaveProperty('taxReturns');
-      expect(taxpayer._included).toHaveProperty('payments');
+      expect(taxpayer).not.toHaveProperty('_included');
     }
   });
 });
@@ -354,12 +362,17 @@ describe('Gateway API - Query String Search', () => {
     // Response has items array for collections
     expect(data).toHaveProperty('items');
     expect(Array.isArray(data.items)).toBeTruthy();
+    
+    // _included should be at collection level
+    expect(data).toHaveProperty('_included');
+    expect(data._included).toHaveProperty('taxReturns');
+    expect(data._included).toHaveProperty('payments');
+    
+    // Items should NOT have _included
     if (data.items.length > 0) {
       const taxpayer = data.items[0];
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).toHaveProperty('_included');
-      expect(taxpayer._included).toHaveProperty('taxReturns');
-      expect(taxpayer._included).toHaveProperty('payments');
+      expect(taxpayer).not.toHaveProperty('_included');
     }
   });
 
@@ -375,12 +388,17 @@ describe('Gateway API - Query String Search', () => {
     // Response has items array for collections
     expect(data).toHaveProperty('items');
     expect(Array.isArray(data.items)).toBeTruthy();
+    
+    // _included should be at collection level
+    expect(data).toHaveProperty('_included');
+    expect(data._included).toHaveProperty('taxReturns');
+    expect(data._included).toHaveProperty('payments');
+    
+    // Items should NOT have _included
     if (data.items.length > 0) {
       const taxpayer = data.items[0];
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).toHaveProperty('_included');
-      expect(taxpayer._included).toHaveProperty('taxReturns');
-      expect(taxpayer._included).toHaveProperty('payments');
+      expect(taxpayer).not.toHaveProperty('_included');
     }
   });
 });

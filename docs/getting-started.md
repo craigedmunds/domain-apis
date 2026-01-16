@@ -2,6 +2,13 @@
 
 This guide will help you get started with the Domain API POC, a multi-API architecture representing portions of the UK tax system.
 
+## Choose Your Path
+
+**Are you building or consuming APIs?**
+
+- **[API Consumer Guide](api-consumer-guide.md)** - For developers consuming the APIs (frontend, integrations, etc.)
+- **[API Producer Guide](api-producer-guide.md)** - For developers building the APIs (backend, new endpoints, etc.)
+
 ## Overview
 
 The Domain API POC demonstrates how to model complex domains across multiple RESTful APIs while maintaining:

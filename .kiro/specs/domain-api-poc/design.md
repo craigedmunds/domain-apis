@@ -789,10 +789,52 @@ The response includes an `_included` field containing the related resources:
 - Only relationships defined in `_links` can be included
 - Cross-API includes are supported (e.g., Taxpayer API can include resources from Income Tax API)
 - If a relationship doesn't exist or returns no data, the field is omitted from `_included`
-- The `_links` field is always present, even when `_included` is used
-- For collection endpoints, `_included` is at the collection level, not nested in each item
-- Each item references its included resources by ID
 - Backend APIs are unaware of the `include` parameter - aggregation is purely a gateway concern
+
+**Understanding `_links` vs `_includes`**:
+
+Both fields serve distinct purposes and are present together when includes are used:
+
+- **`_links`** (Always present):
+  - Shows what relationships are **available** for this resource
+  - Provides URLs to fetch relationships independently
+  - Enables HATEOAS - clients can discover and navigate relationships
+  - Allows fetching fresh data, pagination, or filtering
+  - Present regardless of whether `include` parameter was used
+
+- **`_includes`** (Only when included):
+  - Shows which specific resources are **currently embedded** in this response
+  - Lists IDs so clients can find them in the `_included` section
+  - Only present when the `include` parameter requested this relationship
+  - Provides the "join key" between parent and included resources
+
+**Example showing both fields**:
+```json
+{
+  "id": "TR20230002",
+  "_links": {
+    "assessments": {
+      "href": "/assessments?taxReturnId=TR20230002",
+      "type": "collection"
+    }
+  },
+  "_includes": {
+    "assessments": ["AS20220001"]
+  }
+}
+```
+
+This tells clients:
+1. **From `_links`**: "All assessments are available at this URL" (for pagination, refresh, etc.)
+2. **From `_includes`**: "Assessment AS20220001 is embedded in this response's `_included` section"
+
+**Why both are needed**:
+- **Pagination**: If there are 100 assessments but only 10 included, `_links` shows where to get more
+- **Selective inclusion**: Client might include only recent assessments, `_links` shows where to get all
+- **Refresh**: Client can fetch fresh data without re-fetching the entire parent resource
+- **Discovery**: Clients can discover relationships even without prior knowledge
+
+**For collection endpoints**, `_included` is at the collection level, not nested in each item, and each item references its included resources by ID.
 
 **Collection with Include Example**:
 
@@ -883,6 +925,154 @@ This structure:
 - Keeps the collection response flat and efficient
 - Each item has an `_includes` field with IDs referencing resources in the collection-level `_included`
 - All included resources are in a single `_included` object at the collection level
+
+#### Nested Includes with Dot Notation
+
+To support traversing deep relationship graphs, the `include` parameter supports **dot notation** for nested relationships. This allows clients to fetch related resources of included resources in a single request.
+
+**Syntax**: `relationshipName.nestedRelationshipName`
+
+**Examples**:
+- `?include=taxReturns.assessments` - Includes tax returns AND their assessments (parent is implicit)
+- `?include=taxReturns.assessments,taxReturns.allocations` - Includes tax returns with both assessments and allocations
+- `?include=taxReturns,taxReturns.assessments.payments` - Includes tax returns, assessments, and payments (all parents in path)
+- `?include=taxReturns,payments` - Includes two separate first-level relationships
+
+**Nested Include Rules**:
+1. **Implicit Parent Inclusion**: Nested includes automatically include all parent resources in the path
+   - `?include=taxReturns.assessments` includes BOTH `taxReturns` AND `assessments`
+   - Rationale: Nested resources need parent context to be meaningful
+   - To include only the parent: `?include=taxReturns`
+   - To include both explicitly: `?include=taxReturns,taxReturns.assessments` (equivalent to just `taxReturns.assessments`)
+2. **Depth Limit**: Maximum nesting depth is 5 levels (configurable) to prevent infinite loops and excessive API calls
+3. **Relationship Validation**: Each level must be a valid relationship in the parent resource's `_links` field
+4. **Deduplication**: Resources are deduplicated by type and ID across all include levels
+5. **Flat Structure**: All included resources remain in the flat `_included` object, grouped by type
+6. **Reference Tracking**: Each resource with included relationships has an `_includes` field listing IDs
+
+**Example Request**:
+```
+GET /taxpayers/TP123456?include=taxReturns.assessments
+```
+
+**Example Response**:
+```json
+{
+  "id": "TP123456",
+  "type": "taxpayer",
+  "nino": "AB123456C",
+  "name": {
+    "firstName": "John",
+    "lastName": "Smith"
+  },
+  "_links": {
+    "self": {"href": "/taxpayers/TP123456"},
+    "taxReturns": {"href": "/tax-returns?taxpayerId=TP123456", "type": "collection"}
+  },
+  "_includes": {
+    "taxReturns": ["TR20230001", "TR20230002"]
+  },
+  "_included": {
+    "taxReturns": [
+      {
+        "id": "TR20230001",
+        "type": "tax-return",
+        "taxpayerId": "TP123456",
+        "taxYear": "2023-24",
+        "_links": {
+          "self": {"href": "/tax-returns/TR20230001"},
+          "assessments": {"href": "/assessments?taxReturnId=TR20230001", "type": "collection"}
+        },
+        "_includes": {
+          "assessments": ["AS20230001"]
+        }
+      },
+      {
+        "id": "TR20230002",
+        "type": "tax-return",
+        "taxpayerId": "TP123456",
+        "taxYear": "2022-23",
+        "_links": {
+          "self": {"href": "/tax-returns/TR20230002"},
+          "assessments": {"href": "/assessments?taxReturnId=TR20230002", "type": "collection"}
+        },
+        "_includes": {
+          "assessments": ["AS20220001"]
+        }
+      }
+    ],
+    "assessments": [
+      {
+        "id": "AS20230001",
+        "type": "assessment",
+        "taxReturnId": "TR20230001",
+        "assessmentDate": "2024-01-15T10:30:00Z",
+        "taxDue": {"amount": 7500.00, "currency": "GBP"},
+        "_links": {"self": {"href": "/assessments/AS20230001"}}
+      },
+      {
+        "id": "AS20220001",
+        "type": "assessment",
+        "taxReturnId": "TR20230002",
+        "assessmentDate": "2023-01-15T10:30:00Z",
+        "taxDue": {"amount": 6500.00, "currency": "GBP"},
+        "_links": {"self": {"href": "/assessments/AS20220001"}}
+      }
+    ]
+  }
+}
+```
+
+**Gateway Implementation for Nested Includes**:
+
+The aggregation Lambda processes nested includes recursively:
+
+1. **Parse Include Tree**: Convert `taxReturns.assessments,taxReturns.allocations` into a tree structure
+2. **Fetch Primary Resource**: Get the main resource (e.g., taxpayer)
+3. **Process First Level**: Fetch `taxReturns` and add to `_included`
+4. **Process Nested Levels**: For each tax return, fetch its `assessments` and `allocations`
+5. **Deduplicate**: Merge all resources by type and ID
+6. **Add References**: Populate `_includes` fields at each level
+
+**Error Handling**:
+
+Invalid nested relationships return 400 Bad Request:
+```json
+{
+  "error": {
+    "code": "INVALID_INCLUDE_RELATIONSHIP",
+    "message": "Invalid relationship 'invalidRel' for resource type 'tax-return'",
+    "status": 400,
+    "details": {
+      "relationship": "invalidRel",
+      "parentResourceType": "tax-return",
+      "availableRelationships": ["taxpayer", "assessments", "allocations"]
+    }
+  }
+}
+```
+
+Exceeding depth limit returns 400 Bad Request:
+```json
+{
+  "error": {
+    "code": "INCLUDE_DEPTH_EXCEEDED",
+    "message": "Include depth of 6 exceeds maximum allowed depth of 5",
+    "status": 400,
+    "details": {
+      "requestedDepth": 6,
+      "maxDepth": 5
+    }
+  }
+}
+```
+
+**Performance Considerations**:
+- Each nested level requires additional API calls
+- Gateway fetches sibling relationships in parallel where possible
+- Resources are cached and deduplicated to minimize redundant fetches
+- Depth limit prevents excessive API calls and potential infinite loops
+- Monitoring tracks include depth and API call counts per request
 
 ### API Endpoints
 

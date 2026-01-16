@@ -96,6 +96,72 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     const includes = includeParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
     console.log(`Fetching included resources: ${includes.join(', ')}`);
 
+    // Check if this is a collection response
+    if (primaryData.items && Array.isArray(primaryData.items)) {
+      console.log(`Processing collection with ${primaryData.items.length} items and includes: ${includes.join(', ')}`);
+      
+      // Fetch includes for all items and aggregate at collection level
+      const allIncludedData: Record<string, any[]> = {};
+      
+      // Process each item to fetch its includes
+      await Promise.all(
+        primaryData.items.map(async (item, index) => {
+          console.log(`Processing item ${index}: ${item.id}`);
+          const includedData = await fetchIncludedResources(item, includes);
+          console.log(`Fetched included data for item ${index}:`, Object.keys(includedData));
+          
+          // Aggregate included resources at collection level
+          for (const [relationshipName, resources] of Object.entries(includedData)) {
+            if (Array.isArray(resources)) {
+              if (!allIncludedData[relationshipName]) {
+                allIncludedData[relationshipName] = [];
+              }
+              // Add resources, avoiding duplicates by ID
+              for (const resource of resources) {
+                if (resource.id && !allIncludedData[relationshipName].some(r => r.id === resource.id)) {
+                  allIncludedData[relationshipName].push(resource);
+                }
+              }
+            }
+          }
+        })
+      );
+
+      // Rewrite items (without _included in each item)
+      const rewrittenItems = primaryData.items.map(item => rewriteLinksToGateway(item));
+      
+      const rewrittenPrimaryData = rewriteLinksToGateway(primaryData);
+      delete rewrittenPrimaryData._included;
+      
+      // Rewrite links in all included resources
+      const rewrittenIncludedData: Record<string, any[]> = {};
+      for (const [relationshipName, resources] of Object.entries(allIncludedData)) {
+        if (Array.isArray(resources)) {
+          console.log(`Rewriting ${resources.length} resources for ${relationshipName}`);
+          rewrittenIncludedData[relationshipName] = resources.map(resource => 
+            rewriteLinksToGateway(resource)
+          );
+        }
+      }
+      
+      const response: any = {
+        ...rewrittenPrimaryData,
+        items: rewrittenItems,
+      };
+      
+      // Only add _included if we have included data
+      if (Object.keys(rewrittenIncludedData).length > 0) {
+        response._included = rewrittenIncludedData;
+      }
+      
+      return {
+        statusCode: 200,
+        headers: corsHeaders,
+        body: JSON.stringify(response),
+      };
+    }
+
+    // Handle single resource with includes
     const includedData = await fetchIncludedResources(primaryData, includes);
 
     // 5. Rewrite URLs in primary data and included resources, then return
