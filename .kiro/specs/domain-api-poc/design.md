@@ -25,6 +25,15 @@ Each API will have its own OpenAPI specification, but they will share common com
 
 ```mermaid
 graph TB
+    subgraph "Client Layer"
+        CLIENT[API Clients]
+    end
+    
+    subgraph "Gateway Layer (Optional)"
+        APIGW[AWS API Gateway<br/>LocalStack for local dev]
+        AGG_LAMBDA[Aggregation Lambda<br/>Handles ?include parameter]
+    end
+    
     subgraph "API Layer"
         TP[Taxpayer API<br/>v1]
         IT[Income Tax API<br/>v1]
@@ -44,6 +53,16 @@ graph TB
         DOCS[Documentation Generator]
         VIEWER[OAS Viewer/Executor]
     end
+    
+    CLIENT -->|Option 1: Direct Access| TP
+    CLIENT -->|Option 1: Direct Access| IT
+    CLIENT -->|Option 1: Direct Access| PM
+    CLIENT -->|Option 2: With Aggregation| APIGW
+    
+    APIGW --> AGG_LAMBDA
+    AGG_LAMBDA --> TP
+    AGG_LAMBDA --> IT
+    AGG_LAMBDA --> PM
     
     TP_OAS --> SHARED
     IT_OAS --> SHARED
@@ -69,10 +88,6 @@ graph TB
     IT_OAS --> VIEWER
     PM_OAS --> VIEWER
     
-    CLIENT[API Client] --> TP
-    CLIENT --> IT
-    CLIENT --> PM
-    
     VIEWER --> TP
     VIEWER --> IT
     VIEWER --> PM
@@ -80,20 +95,50 @@ graph TB
 
 ### API Boundaries
 
-**Taxpayer API** (`/api/taxpayer/v1`)
+**Taxpayer API** (`/taxpayer/v1`)
 - Manages taxpayer registration and identity
 - Resources: Taxpayer, Address, ContactDetails
 - Relationships: Links to tax returns (Income Tax API), payments (Payment API)
 
-**Income Tax API** (`/api/income-tax/v1`)
+**Income Tax API** (`/income-tax/v1`)
 - Manages income tax returns and assessments
 - Resources: TaxReturn, Assessment, TaxCalculation
 - Relationships: Links to taxpayer (Taxpayer API), payments (Payment API)
 
-**Payment API** (`/api/payment/v1`)
+**Payment API** (`/payment/v1`)
 - Manages tax payments and allocations
 - Resources: Payment, PaymentAllocation, PaymentMethod
 - Relationships: Links to taxpayer (Taxpayer API), tax returns (Income Tax API)
+
+### Gateway Layer
+
+The gateway layer provides cross-API aggregation capabilities, allowing clients to request related resources from multiple APIs in a single request using the `include` query parameter.
+
+**AWS API Gateway**:
+- REST API endpoint that proxies requests to backend APIs
+- Routes requests based on path and method
+- Integrates with Lambda for aggregation logic
+- Local development via LocalStack (emulates AWS API Gateway locally)
+- Production deployment to AWS API Gateway
+
+**Aggregation Lambda**:
+- Parses `include` query parameter from requests
+- Makes parallel requests to backend APIs
+- Merges responses into unified `_included` structure
+- Handles partial failures gracefully
+- Returns standard error responses for gateway-level issues
+- Implementation: Node.js/TypeScript for type safety and OpenAPI integration
+
+**Gateway Access Patterns**:
+- **Direct Access**: Clients call backend APIs directly, follow `_links` for traversal
+- **Gateway Access**: Clients call through API Gateway, use `include` for aggregation
+
+**LocalStack Setup**:
+- Docker-based AWS service emulation
+- Supports API Gateway, Lambda, and other AWS services
+- Enables local development without AWS account
+- Configuration via docker-compose or CLI
+- Same API Gateway configuration works in both LocalStack and AWS
 
 ### Tooling Components
 
@@ -145,6 +190,426 @@ graph LR
     PA -->|references| TR
 ```
 
+### Gateway Implementation
+
+The gateway layer implements cross-API aggregation using AWS API Gateway and Lambda functions. This section describes the implementation approach for both local development (LocalStack) and production (AWS).
+
+#### Architecture Pattern
+
+```
+Client Request with ?include
+         ↓
+   AWS API Gateway
+         ↓
+   Aggregation Lambda
+         ↓
+    ┌────┴────┬────────┐
+    ↓         ↓        ↓
+Taxpayer  Income Tax  Payment
+   API       API       API
+    ↓         ↓        ↓
+    └────┬────┴────────┘
+         ↓
+   Merged Response
+```
+
+#### AWS API Gateway Configuration
+
+The API Gateway acts as a proxy to the aggregation Lambda:
+
+```yaml
+# API Gateway REST API (OpenAPI 3.0 format)
+openapi: 3.0.3
+info:
+  title: Domain API Gateway
+  version: 1.0.0
+paths:
+  /{proxy+}:
+    x-amazon-apigateway-any-method:
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: include
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated list of relationships to include
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AggregationLambda.Arn}/invocations
+        passthroughBehavior: when_no_match
+```
+
+#### Aggregation Lambda Implementation
+
+The Lambda function handles the aggregation logic:
+
+**Key Responsibilities**:
+1. Parse incoming API Gateway event
+2. Extract `include` parameter from query string
+3. Forward request to appropriate backend API
+4. If `include` is present, fetch related resources
+5. Merge responses into unified structure
+6. Return aggregated response
+
+**Implementation Approach** (TypeScript/Node.js):
+
+```typescript
+// Lambda handler structure
+export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { path, httpMethod, queryStringParameters, body } = event;
+  const includeParam = queryStringParameters?.include;
+  
+  try {
+    // 1. Route to appropriate backend API
+    const backendUrl = routeToBackend(path);
+    
+    // 2. Fetch primary resource
+    const primaryResponse = await fetch(backendUrl, {
+      method: httpMethod,
+      body: body,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const primaryData = await primaryResponse.json();
+    
+    // 3. If no include parameter, return as-is
+    if (!includeParam) {
+      return {
+        statusCode: primaryResponse.status,
+        body: JSON.stringify(primaryData),
+        headers: { 'Content-Type': 'application/json' }
+      };
+    }
+    
+    // 4. Parse include parameter and fetch related resources
+    const includes = includeParam.split(',').map(s => s.trim());
+    const includedData = await fetchIncludedResources(primaryData, includes);
+    
+    // 5. Merge and return
+    const aggregatedResponse = {
+      ...primaryData,
+      _included: includedData
+    };
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify(aggregatedResponse),
+      headers: { 'Content-Type': 'application/json' }
+    };
+    
+  } catch (error) {
+    return {
+      statusCode: 502,
+      body: JSON.stringify({
+        error: {
+          code: 'GATEWAY_ERROR',
+          message: 'Failed to aggregate resources',
+          details: error.message
+        }
+      }),
+      headers: { 'Content-Type': 'application/json' }
+    };
+  }
+}
+
+// Helper: Route request to appropriate backend API
+function routeToBackend(path: string): string {
+  const backends = {
+    '/taxpayer/': process.env.TAXPAYER_API_URL,
+    '/income-tax/': process.env.INCOME_TAX_API_URL,
+    '/payment/': process.env.PAYMENT_API_URL
+  };
+  
+  for (const [prefix, url] of Object.entries(backends)) {
+    if (path.startsWith(prefix)) {
+      return `${url}${path}`;
+    }
+  }
+  
+  throw new Error(`No backend found for path: ${path}`);
+}
+
+// Helper: Fetch included resources based on _links
+async function fetchIncludedResources(
+  primaryData: any,
+  includes: string[]
+): Promise<Record<string, any[]>> {
+  const links = primaryData._links || {};
+  const includedData: Record<string, any[]> = {};
+  
+  // Fetch each requested relationship in parallel
+  const fetchPromises = includes.map(async (relationshipName) => {
+    const link = links[relationshipName];
+    if (!link || !link.href) {
+      return; // Skip if link doesn't exist
+    }
+    
+    try {
+      const response = await fetch(link.href);
+      if (response.ok) {
+        const data = await response.json();
+        // Handle both single resources and collections
+        includedData[relationshipName] = Array.isArray(data.items) 
+          ? data.items 
+          : [data];
+      }
+    } catch (error) {
+      console.error(`Failed to fetch ${relationshipName}:`, error);
+      // Continue with partial results
+    }
+  });
+  
+  await Promise.all(fetchPromises);
+  return includedData;
+}
+```
+
+#### LocalStack Configuration
+
+For local development, use LocalStack to emulate AWS services:
+
+**docker-compose.yml**:
+```yaml
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"  # LocalStack gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      - SERVICES=apigateway,lambda,iam,cloudformation
+      - DEBUG=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./localstack-init:/etc/localstack/init/ready.d"  # Init scripts
+  
+  taxpayer-api:
+    image: stoplight/prism:latest
+    command: mock -h 0.0.0.0 /specs/taxpayer-api.yaml
+    ports:
+      - "8081:4010"
+    volumes:
+      - ./specs/taxpayer:/specs
+  
+  income-tax-api:
+    image: stoplight/prism:latest
+    command: mock -h 0.0.0.0 /specs/income-tax-api.yaml
+    ports:
+      - "8082:4010"
+    volumes:
+      - ./specs/income-tax:/specs
+  
+  payment-api:
+    image: stoplight/prism:latest
+    command: mock -h 0.0.0.0 /specs/payment-api.yaml
+    ports:
+      - "8083:4010"
+    volumes:
+      - ./specs/payment:/specs
+```
+
+**LocalStack Initialization Script** (`tools/localstack-init.sh`):
+```bash
+#!/bin/bash
+# LocalStack initialization script for API Gateway and Lambda setup
+# This script is called by the Taskfile during gateway setup
+
+set -e
+
+echo "Waiting for LocalStack to be ready..."
+awslocal apigateway get-rest-apis || exit 1
+
+echo "Creating Lambda function..."
+cd /tmp
+zip aggregation-lambda.zip index.js
+awslocal lambda create-function \
+  --function-name aggregation-lambda \
+  --runtime nodejs18.x \
+  --role arn:aws:iam::000000000000:role/lambda-role \
+  --handler index.handler \
+  --zip-file fileb://aggregation-lambda.zip
+
+echo "Creating API Gateway..."
+API_ID=$(awslocal apigateway create-rest-api \
+  --name domain-api-gateway \
+  --query 'id' \
+  --output text)
+
+# Get root resource
+ROOT_ID=$(awslocal apigateway get-resources \
+  --rest-api-id $API_ID \
+  --query 'items[0].id' \
+  --output text)
+
+# Create proxy resource
+RESOURCE_ID=$(awslocal apigateway create-resource \
+  --rest-api-id $API_ID \
+  --parent-id $ROOT_ID \
+  --path-part '{proxy+}' \
+  --query 'id' \
+  --output text)
+
+# Create ANY method
+awslocal apigateway put-method \
+  --rest-api-id $API_ID \
+  --resource-id $RESOURCE_ID \
+  --http-method ANY \
+  --authorization-type NONE
+
+# Create Lambda integration
+awslocal apigateway put-integration \
+  --rest-api-id $API_ID \
+  --resource-id $RESOURCE_ID \
+  --http-method ANY \
+  --type AWS_PROXY \
+  --integration-http-method POST \
+  --uri arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:000000000000:function:aggregation-lambda/invocations
+
+# Deploy API
+awslocal apigateway create-deployment \
+  --rest-api-id $API_ID \
+  --stage-name dev
+
+echo "✓ API Gateway setup complete"
+echo "API Gateway URL: http://localhost:4566/restapis/$API_ID/dev/_user_request_/taxpayer/v1/taxpayers"
+```
+
+#### Taskfile Integration
+
+Common gateway operations are managed via Taskfile:
+
+**Taskfile.yaml**:
+```yaml
+version: '3'
+
+tasks:
+  gateway:start:
+    desc: Start LocalStack and backend mock servers
+    cmds:
+      - docker-compose up -d localstack taxpayer-api income-tax-api payment-api
+      - echo "Waiting for services to be ready..."
+      - sleep 5
+      - task: gateway:init
+
+  gateway:init:
+    desc: Initialize API Gateway and Lambda in LocalStack
+    cmds:
+      - chmod +x tools/localstack-init.sh
+      - docker-compose exec localstack /tools/localstack-init.sh
+
+  gateway:stop:
+    desc: Stop LocalStack and backend services
+    cmds:
+      - docker-compose down
+
+  gateway:logs:
+    desc: View gateway logs
+    cmds:
+      - docker-compose logs -f localstack
+
+  gateway:test:
+    desc: Test gateway aggregation
+    cmds:
+      - |
+        echo "Testing direct API access..."
+        curl http://localhost:8081/taxpayer/v1/taxpayers/TP123456
+        echo ""
+        echo "Testing gateway with include parameter..."
+        curl "http://localhost:4566/restapis/\${API_ID}/dev/_user_request_/taxpayer/v1/taxpayers/TP123456?include=taxReturns"
+
+  gateway:status:
+    desc: Check gateway and backend API status
+    cmds:
+      - docker-compose ps
+      - echo "Checking LocalStack API Gateway..."
+      - docker-compose exec localstack awslocal apigateway get-rest-apis
+
+  lambda:build:
+    desc: Build aggregation Lambda function
+    dir: gateway/lambda
+    cmds:
+      - npm install
+      - npm run build
+      - zip -r aggregation-lambda.zip dist/ node_modules/
+
+  lambda:deploy:
+    desc: Deploy Lambda to LocalStack
+    deps: [lambda:build]
+    cmds:
+      - docker-compose exec localstack awslocal lambda update-function-code \
+          --function-name aggregation-lambda \
+          --zip-file fileb:///tmp/aggregation-lambda.zip
+
+  lambda:logs:
+    desc: View Lambda logs
+    cmds:
+      - docker-compose exec localstack awslocal logs tail /aws/lambda/aggregation-lambda --follow
+```
+
+#### Deployment Considerations
+
+**Local Development**:
+- Use LocalStack for AWS service emulation
+- Use Prism mock servers for backend APIs
+- Lambda runs in Docker containers
+- Fast iteration without AWS costs
+
+**Production Deployment**:
+- Deploy to AWS API Gateway (REST API)
+- Deploy Lambda to AWS Lambda service
+- Backend APIs run as containers or serverless
+- Use AWS CDK or CloudFormation for infrastructure as code
+- Consider API Gateway caching for performance
+- Implement proper IAM roles and permissions
+
+**Environment Variables**:
+```bash
+# Backend API URLs (different per environment)
+TAXPAYER_API_URL=http://taxpayer-api:8081
+INCOME_TAX_API_URL=http://income-tax-api:8082
+PAYMENT_API_URL=http://payment-api:8083
+
+# LocalStack endpoint (local only)
+AWS_ENDPOINT_URL=http://localhost:4566
+```
+
+#### Error Handling in Gateway
+
+The gateway handles various error scenarios:
+
+**Backend API Unavailable**:
+```json
+{
+  "error": {
+    "code": "UPSTREAM_API_ERROR",
+    "message": "Unable to reach Income Tax API",
+    "status": 502,
+    "upstreamService": "income-tax-api"
+  }
+}
+```
+
+**Partial Include Failure**:
+- Gateway returns primary resource successfully
+- Omits failed includes from `_included`
+- Logs errors for monitoring
+- Client can retry specific relationships
+
+**Invalid Include Parameter**:
+- Gateway ignores unknown relationship names
+- Only fetches relationships present in `_links`
+- No error returned for invalid includes
+
 ## Components and Interfaces
 
 ### OpenAPI Specification Structure
@@ -158,7 +623,7 @@ info:
   version: 1.0.0
   description: {API Description}
 servers:
-  - url: http://localhost:8080/api/{domain}/v1
+  - url: http://localhost:8080/{domain}/v1
 paths:
   # API endpoints
 components:
@@ -240,19 +705,41 @@ All resources follow a consistent structure:
 
 ### Query Parameter: Include Related Resources
 
-To minimize the number of API requests, clients can use the `include` query parameter to embed related resources in the response:
+To minimize the number of API requests, clients can use the `include` query parameter to embed related resources in the response. This feature is implemented by the **Gateway Layer** (AWS API Gateway + Lambda), not by the backend APIs themselves.
+
+**Access Patterns**:
+
+1. **Direct API Access** (no gateway):
+   - Client calls backend APIs directly
+   - Client follows `_links` to traverse relationships
+   - Multiple HTTP requests required for related resources
+   - Example: `GET http://taxpayer-api:8081/taxpayer/v1/taxpayers/TP123456`
+
+2. **Gateway Access** (with aggregation):
+   - Client calls through AWS API Gateway
+   - Gateway Lambda handles `include` parameter
+   - Single HTTP request returns aggregated response
+   - Example: `GET http://api-gateway/taxpayer/v1/taxpayers/TP123456?include=taxReturns`
 
 **Single Resource with Includes**:
 ```
-GET /taxpayers/{id}?include=tax-returns,payments
+GET /taxpayer/v1/taxpayers/{id}?include=taxReturns,payments
 ```
 
 **Collection with Includes**:
 ```
-GET /taxpayers?include=tax-returns
+GET /taxpayer/v1/taxpayers?include=taxReturns
 ```
 
-When the `include` parameter is used, the response includes an `_included` field containing the related resources:
+When the `include` parameter is used, the gateway aggregation Lambda:
+1. Parses the `include` parameter
+2. Fetches the primary resource from the backend API
+3. Extracts relationship URLs from `_links`
+4. Makes parallel requests to related backend APIs
+5. Merges responses into `_included` field
+6. Returns unified response to client
+
+The response includes an `_included` field containing the related resources:
 
 ```json
 {
@@ -264,9 +751,9 @@ When the `include` parameter is used, the response includes an `_included` field
     "lastName": "Smith"
   },
   "_links": {
-    "self": {"href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"},
+    "self": {"href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456"},
     "taxReturns": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
       "type": "collection"
     }
   },
@@ -279,7 +766,7 @@ When the `include` parameter is used, the response includes an `_included` field
         "taxYear": "2023-24",
         "status": "assessed",
         "_links": {
-          "self": {"href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"}
+          "self": {"href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001"}
         }
       }
     ]
@@ -295,6 +782,7 @@ When the `include` parameter is used, the response includes an `_included` field
 - The `_links` field is always present, even when `_included` is used
 - For collection endpoints, `_included` is at the collection level, not nested in each item
 - Each item references its included resources by ID
+- Backend APIs are unaware of the `include` parameter - aggregation is purely a gateway concern
 
 **Collection with Include Example**:
 
@@ -310,9 +798,9 @@ Response:
       "nino": "AB123456C",
       "name": {"firstName": "John", "lastName": "Smith"},
       "_links": {
-        "self": {"href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"},
+        "self": {"href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456"},
         "taxReturns": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
           "type": "collection"
         }
       },
@@ -326,9 +814,9 @@ Response:
       "nino": "CD789012E",
       "name": {"firstName": "Jane", "lastName": "Doe"},
       "_links": {
-        "self": {"href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP789012"},
+        "self": {"href": "http://localhost:8080/taxpayer/v1/taxpayers/TP789012"},
         "taxReturns": {
-          "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP789012",
+          "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP789012",
           "type": "collection"
         }
       },
@@ -347,7 +835,7 @@ Response:
         "status": "assessed",
         "totalIncome": {"amount": 50000.00, "currency": "GBP"},
         "_links": {
-          "self": {"href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001"}
+          "self": {"href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230001"}
         }
       },
       {
@@ -358,7 +846,7 @@ Response:
         "status": "closed",
         "totalIncome": {"amount": 48000.00, "currency": "GBP"},
         "_links": {
-          "self": {"href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20220001"}
+          "self": {"href": "http://localhost:8080/income-tax/v1/tax-returns/TR20220001"}
         }
       },
       {
@@ -369,13 +857,13 @@ Response:
         "status": "submitted",
         "totalIncome": {"amount": 35000.00, "currency": "GBP"},
         "_links": {
-          "self": {"href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230002"}
+          "self": {"href": "http://localhost:8080/income-tax/v1/tax-returns/TR20230002"}
         }
       }
     ]
   },
   "_links": {
-    "self": {"href": "http://localhost:8080/api/taxpayer/v1/taxpayers?include=taxReturns"}
+    "self": {"href": "http://localhost:8080/taxpayer/v1/taxpayers?include=taxReturns"}
   }
 }
 ```
@@ -417,15 +905,15 @@ Relationships are represented in the `_links` object:
 {
   "_links": {
     "self": {
-      "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+      "href": "http://localhost:8080/taxpayer/v1/taxpayers/TP123456"
     },
     "taxReturns": {
-      "href": "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456",
+      "href": "http://localhost:8080/income-tax/v1/tax-returns?taxpayerId=TP123456",
       "type": "collection",
       "title": "Tax returns for this taxpayer"
     },
     "payments": {
-      "href": "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456",
+      "href": "http://localhost:8080/payment/v1/payments?taxpayerId=TP123456",
       "type": "collection",
       "title": "Payments made by this taxpayer"
     }

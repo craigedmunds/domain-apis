@@ -99,7 +99,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
   - Ensure all tests pass, ask the user if questions arise.
   - _Requirements: 8.1, 8.2_
 
-- [ ] 7. Implement include parameter support
+- [ ] 7. Implement include parameter support (Gateway Layer)
   - [x] 7.1 Add include parameter to OpenAPI specifications
     - Add `IncludeParameter` definition to shared-components.yaml
     - Reference include parameter in all GET endpoints across all three APIs
@@ -107,24 +107,43 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Add examples showing include parameter usage
     - _Requirements: 4.4, 5.3_
   
-  - [ ] 7.2 Implement include parameter in API servers
-    - Parse include query parameter (comma-separated relationship names)
-    - Fetch related resources from linked APIs
-    - Build `_included` response field with related resources
-    - Handle cross-API includes (e.g., taxpayer including tax returns from Income Tax API)
-    - Handle errors when related resources are unavailable
+  - [ ] 7.2 Set up LocalStack for local development
+    - Create docker-compose.yml with LocalStack service
+    - Configure LocalStack for API Gateway and Lambda services
+    - Add backend mock API services to docker-compose
+    - Create tools/localstack-init.sh initialization script
+    - Add Taskfile tasks for gateway management (start, stop, init, logs, status)
+    - _Requirements: 8.3_
+  
+  - [ ] 7.3 Create aggregation Lambda function
+    - Set up Lambda project structure (TypeScript/Node.js)
+    - Implement request routing to backend APIs
+    - Implement include parameter parsing
+    - Implement parallel fetching of related resources
+    - Implement response merging into _included structure
+    - Handle partial failures gracefully
+    - Add error handling for gateway-level issues
     - _Requirements: 4.4, 5.3_
   
-  - [ ]* 7.3 Write property test for include parameter
+  - [ ] 7.4 Configure API Gateway
+    - Create API Gateway OpenAPI specification (gateway-api.yaml)
+    - Configure proxy resource (/{proxy+}) to Lambda
+    - Set up Lambda integration with AWS_PROXY type
+    - Deploy API Gateway to LocalStack
+    - Test gateway routing to backend APIs
+    - _Requirements: 4.4, 5.3_
+  
+  - [ ]* 7.5 Write property test for include parameter
     - **Property 15: Include Parameter Embedding**
     - **Validates: Requirements 4.4, 5.3**
   
-  - [ ]* 7.4 Write integration tests for include parameter
-    - Test single relationship include
-    - Test multiple relationship includes
-    - Test cross-API includes
+  - [ ]* 7.6 Write integration tests for gateway aggregation
+    - Test single relationship include via gateway
+    - Test multiple relationship includes via gateway
+    - Test cross-API includes via gateway
     - Test invalid relationship names
     - Test unavailable related resources
+    - Test direct API access (without gateway) still works
     - _Requirements: 4.4, 5.3_
 
 - [ ] 8. Generate and test mock servers

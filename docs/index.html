@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domain API POC - API Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .api-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .api-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .api-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .api-card h2 {
+            color: #667eea;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .api-card .version {
+            display: inline-block;
+            background: #e0e7ff;
+            color: #667eea;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+        
+        .api-card p {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+        
+        .api-card .endpoint {
+            font-family: 'Courier New', monospace;
+            background: #f7fafc;
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin-bottom: 1rem;
+        }
+        
+        .api-card .features {
+            list-style: none;
+            margin-top: 1rem;
+        }
+        
+        .api-card .features li {
+            padding: 0.25rem 0;
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        
+        .api-card .features li:before {
+            content: "✓ ";
+            color: #48bb78;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+        
+        .info-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .info-section h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        
+        .info-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info-section li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .info-section li:last-child {
+            border-bottom: none;
+        }
+        
+        .info-section a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .info-section a:hover {
+            text-decoration: underline;
+        }
+        
+        footer {
+            text-align: center;
+            color: white;
+            margin-top: 3rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏛️ Domain API POC</h1>
+            <p class="subtitle">Multi-API Architecture for UK Tax System</p>
+        </header>
+        
+        <div class="api-grid">
+            <a href="taxpayer/index.html" class="api-card">
+                <h2>Taxpayer API</h2>
+                <span class="version">v1.0.0</span>
+                <p>Manages taxpayer identity and registration information</p>
+                <div class="endpoint">/api/taxpayer/v1</div>
+                <ul class="features">
+                    <li>Taxpayer registration</li>
+                    <li>NINO validation</li>
+                    <li>Address management</li>
+                    <li>Cross-API relationships</li>
+                </ul>
+            </a>
+            
+            <a href="income-tax/index.html" class="api-card">
+                <h2>Income Tax API</h2>
+                <span class="version">v1.0.0</span>
+                <p>Handles income tax returns, assessments, and calculations</p>
+                <div class="endpoint">/api/income-tax/v1</div>
+                <ul class="features">
+                    <li>Tax return submission</li>
+                    <li>Assessment tracking</li>
+                    <li>Tax calculations</li>
+                    <li>Payment allocations</li>
+                </ul>
+            </a>
+            
+            <a href="payment/index.html" class="api-card">
+                <h2>Payment API</h2>
+                <span class="version">v1.0.0</span>
+                <p>Manages tax payments and payment allocations</p>
+                <div class="endpoint">/api/payment/v1</div>
+                <ul class="features">
+                    <li>Payment recording</li>
+                    <li>Multiple payment methods</li>
+                    <li>Payment allocations</li>
+                    <li>Status tracking</li>
+                </ul>
+            </a>
+        </div>
+        
+        <div class="info-section">
+            <h2>📚 Additional Resources</h2>
+            <ul>
+                <li><a href="getting-started.md">Getting Started Guide</a></li>
+                <li><a href="mock-servers.md">Mock Server Setup</a></li>
+                <li><a href="../specs/shared/shared-components.yaml">Shared Components Specification</a></li>
+            </ul>
+            
+            <h2 style="margin-top: 2rem;">🔗 Key Features</h2>
+            <ul>
+                <li><strong>Domain Boundaries:</strong> Clear separation between taxpayer, income tax, and payment domains</li>
+                <li><strong>Shared Components:</strong> Reusable schemas for Address, Money, DateRange, and Links</li>
+                <li><strong>Hypermedia Navigation:</strong> Resources include links to related resources across APIs</li>
+                <li><strong>Include Parameter:</strong> Reduce API calls by embedding related resources</li>
+                <li><strong>OpenAPI-First:</strong> Specifications drive implementation, documentation, and testing</li>
+            </ul>
+        </div>
+        
+        <footer>
+            <p>Domain API POC - UK Tax System Multi-API Architecture</p>
+        </footer>
+    </div>
+</body>
+</html>
