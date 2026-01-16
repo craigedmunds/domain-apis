@@ -64,6 +64,19 @@ tasks:
       - task docs:taxpayer
       - task docs:income-tax
       - task docs:payment
+      - task docs:copy-specs
+
+  docs:copy-specs:
+    desc: Copy OpenAPI specs to docs folder for explorer
+    cmds:
+      - mkdir -p {{.DOCS_DIR}}/specs/taxpayer
+      - mkdir -p {{.DOCS_DIR}}/specs/income-tax
+      - mkdir -p {{.DOCS_DIR}}/specs/payment
+      - mkdir -p {{.DOCS_DIR}}/specs/shared
+      - cp {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml {{.DOCS_DIR}}/specs/taxpayer/
+      - cp {{.SPECS_DIR}}/income-tax/income-tax-api.yaml {{.DOCS_DIR}}/specs/income-tax/
+      - cp {{.SPECS_DIR}}/payment/payment-api.yaml {{.DOCS_DIR}}/specs/payment/
+      - cp {{.SPECS_DIR}}/shared/shared-components.yaml {{.DOCS_DIR}}/specs/shared/
 
   docs:taxpayer:
     desc: Generate Taxpayer API documentation
@@ -87,9 +100,35 @@ tasks:
   docs:serve:
     desc: Serve API documentation on http://localhost:8080
     cmds:
-      - echo "📚 Serving documentation at http://localhost:8080"
+      - echo "Serving documentation at http://localhost:8080/docs"
       - echo "Press Ctrl+C to stop the server"
-      - npx http-server {{.DOCS_DIR}} -p 8080 -o
+      - npx http-server . -p 8080 -o /docs
+
+  # Start everything - LocalStack + mock APIs
+  start:
+    desc: Start LocalStack and all backend mock servers
+    cmds:
+      - echo "Starting Domain API POC with LocalStack..."
+      - docker-compose up -d
+      - echo "Waiting for services to be ready..."
+      - sleep 5
+      - task: gateway:init
+      - echo ""
+      - echo "=== Services Started ==="
+      - echo "Documentation - http://localhost:8080"
+      - echo "Taxpayer API - http://localhost:8081"
+      - echo "Income Tax API - http://localhost:8082"
+      - echo "Payment API - http://localhost:8083"
+      - echo "API Gateway - http://localhost:4566"
+      - echo ""
+      - echo "Run 'task gateway:test' to test the APIs"
+      - echo "Run 'task stop' to stop all services"
+
+  stop:
+    desc: Stop all services
+    cmds:
+      - echo "Stopping all services..."
+      - docker-compose down
 
   # Swagger UI
   swagger:
@@ -159,6 +198,83 @@ tasks:
       - rm -rf node_modules
       - rm -rf coverage
 
+  # Gateway management tasks
+  gateway:init:
+    desc: Initialize API Gateway and Lambda in LocalStack
+    cmds:
+      - echo "Initializing API Gateway and Lambda..."
+      - docker-compose exec -T localstack /tools/localstack-init.sh
+
+  gateway:logs:
+    desc: View gateway logs
+    cmds:
+      - docker-compose logs -f localstack
+
+  gateway:logs:taxpayer:
+    desc: View Taxpayer API logs
+    cmds:
+      - docker-compose logs -f taxpayer-api
+
+  gateway:logs:income-tax:
+    desc: View Income Tax API logs
+    cmds:
+      - docker-compose logs -f income-tax-api
+
+  gateway:logs:payment:
+    desc: View Payment API logs
+    cmds:
+      - docker-compose logs -f payment-api
+
+  gateway:status:
+    desc: Check gateway and backend API status
+    cmds:
+      - echo "=== Docker Services Status ==="
+      - docker-compose ps
+      - echo ""
+      - echo "=== LocalStack API Gateway ==="
+      - docker-compose exec -T localstack awslocal apigateway get-rest-apis 2>/dev/null || echo "LocalStack not running or not initialized"
+      - echo ""
+      - echo "=== Backend API Health ==="
+      - echo "Taxpayer API (port 8081):"
+      - 'curl -s -o /dev/null -w "  Status: %{http_code}\n" http://localhost:8081 || echo "  Not accessible"'
+      - echo "Income Tax API (port 8082):"
+      - 'curl -s -o /dev/null -w "  Status: %{http_code}\n" http://localhost:8082 || echo "  Not accessible"'
+      - echo "Payment API (port 8083):"
+      - 'curl -s -o /dev/null -w "  Status: %{http_code}\n" http://localhost:8083 || echo "  Not accessible"'
+
+  gateway:test:
+    desc: Test gateway aggregation
+    cmds:
+      - echo "=== Testing Direct API Access ==="
+      - echo "Taxpayer API:"
+      - curl -s http://localhost:8081/taxpayers/TP123456 | jq . || echo "Failed"
+      - echo ""
+      - echo "Income Tax API:"
+      - curl -s "http://localhost:8082/tax-returns?taxpayerId=TP123456" | jq . || echo "Failed"
+      - echo ""
+      - echo "Payment API:"
+      - curl -s "http://localhost:8083/payments?taxpayerId=TP123456" | jq . || echo "Failed"
+      - echo ""
+      - echo "=== Testing Gateway Access ==="
+      - echo "Gateway (without include):"
+      - curl -s "http://localhost:4566/restapis/gwube6mq8f/dev/_user_request_/taxpayers/TP123456" | jq . || echo "Failed"
+      - echo ""
+      - echo "Gateway (with include parameter):"
+      - curl -s "http://localhost:4566/restapis/gwube6mq8f/dev/_user_request_/taxpayers/TP123456?include=taxReturns" | jq . || echo "Failed"
+
+  gateway:restart:
+    desc: Restart all gateway services
+    cmds:
+      - task: gateway:stop
+      - task: gateway:start
+
+  gateway:clean:
+    desc: Stop and remove all containers, networks, and volumes
+    cmds:
+      - echo "Cleaning up all gateway resources..."
+      - docker-compose down -v
+      - echo "✓ Cleanup complete"
+
   # Status check
   status:
     desc: Show project status
@@ -174,3 +290,6 @@ tasks:
       - echo ""
       - echo "=== Tests ==="
       - npm run test 2>&1 | head -20 || echo "Run 'task test' to execute tests"
+      - echo ""
+      - echo "=== Gateway Status ==="
+      - task: gateway:status

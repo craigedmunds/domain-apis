@@ -130,12 +130,15 @@ npm run test:property
 npm run test:integration
 ```
 
+**Note**: Acceptance tests are maintained in a separate project. See [Acceptance Testing Guide](docs/ACCEPTANCE_TESTING.md) for details.
+
 ## Documentation
 
 - [Getting Started Guide](docs/getting-started.md)
 - [Mock Server Setup](docs/mock-servers.md)
 - [API Architecture](docs/architecture.md)
 - [Cross-API Traversal](docs/cross-api-traversal.md)
+- [Acceptance Testing Guide](docs/ACCEPTANCE_TESTING.md)
 - [Taxpayer API Documentation](docs/taxpayer/)
 - [Income Tax API Documentation](docs/income-tax/)
 - [Payment API Documentation](docs/payment/)

@@ -27,10 +27,8 @@ info:
     email: api-support@example.gov.uk
 
 servers:
-  - url: http://localhost:8080/api/income-tax/v1
-    description: Local development server
-  - url: https://api.tax.service.gov.uk/api/income-tax/v1
-    description: Production server
+  - url: http://localhost:8082
+    description: Local mock server (Prism)
 
 security:
   - {}  # Allow unauthenticated access for POC

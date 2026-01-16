@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Explorer - Domain API POC</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.8rem;
+        }
+        
+        .header p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        
+        .nav {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .nav label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .nav select {
+            padding: 0.5rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            background: white;
+            color: #2d3748;
+            font-weight: 500;
+        }
+        
+        .nav select:hover {
+            border-color: #667eea;
+        }
+        
+        .nav select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .nav a {
+            margin-left: auto;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        
+        .nav a:hover {
+            background: #f7fafc;
+        }
+        
+        #swagger-ui {
+            max-width: 1460px;
+            margin: 0 auto;
+        }
+        
+        .info-banner {
+            background: #edf2f7;
+            border-left: 4px solid #667eea;
+            padding: 1rem 2rem;
+            margin: 1rem 2rem;
+            border-radius: 6px;
+        }
+        
+        .info-banner h3 {
+            margin: 0 0 0.5rem 0;
+            color: #2d3748;
+        }
+        
+        .info-banner p {
+            margin: 0;
+            color: #4a5568;
+        }
+        
+        .info-banner code {
+            background: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 API Explorer</h1>
+        <p>Interactive API testing for Domain API POC</p>
+    </div>
+    
+    <div class="nav">
+        <label for="api-select">Select API:</label>
+        <select id="api-select">
+            <option value="taxpayer">Taxpayer API</option>
+            <option value="income-tax">Income Tax API</option>
+            <option value="payment">Payment API</option>
+        </select>
+        <a href="index.html">← Back to Documentation</a>
+    </div>
+    
+    <div class="info-banner">
+        <h3>💡 How to use this explorer</h3>
+        <p>
+            1. Select an API from the dropdown above<br>
+            2. Expand any endpoint to see details<br>
+            3. Click "Try it out" to enable the request form<br>
+            4. Fill in parameters and click "Execute" to invoke the API<br>
+            5. Mock servers are configured in the oas file for each service, you can invoke the API directly or via the gateway
+        </p>
+    </div>
+    
+    <div id="swagger-ui"></div>
+    
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        const specs = {
+            'taxpayer': '/specs/taxpayer/taxpayer-api.yaml',
+            'income-tax': '/specs/income-tax/income-tax-api.yaml',
+            'payment': '/specs/payment/payment-api.yaml'
+        };
+        
+        let ui;
+        
+        function loadSpec(apiName) {
+            const spec = specs[apiName];
+            
+            if (ui) {
+                // Update existing UI
+                ui.specActions.updateUrl(spec);
+                ui.specActions.download(spec);
+            } else {
+                // Initialize UI
+                ui = SwaggerUIBundle({
+                    url: spec,
+                    dom_id: '#swagger-ui',
+                    deepLinking: true,
+                    presets: [
+                        SwaggerUIBundle.presets.apis,
+                        SwaggerUIStandalonePreset
+                    ],
+                    plugins: [
+                        SwaggerUIBundle.plugins.DownloadUrl
+                    ],
+                    layout: "StandaloneLayout",
+                    tryItOutEnabled: true,
+                    displayRequestDuration: true,
+                    filter: true,
+                    syntaxHighlight: {
+                        activate: true,
+                        theme: "monokai"
+                    }
+                });
+            }
+        }
+        
+        // Get API from URL parameter or default to taxpayer
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialApi = urlParams.get('api') || 'taxpayer';
+        
+        // Set the dropdown to match
+        document.getElementById('api-select').value = initialApi;
+        
+        // Load initial spec
+        loadSpec(initialApi);
+        
+        // Handle API selection
+        document.getElementById('api-select').addEventListener('change', function(e) {
+            loadSpec(e.target.value);
+            // Update URL without reload
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('api', e.target.value);
+            window.history.pushState({}, '', newUrl);
+        });
+    </script>
+</body>
+</html>

@@ -107,7 +107,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Add examples showing include parameter usage
     - _Requirements: 4.4, 5.3_
   
-  - [ ] 7.2 Set up LocalStack for local development
+  - [x] 7.2 Set up LocalStack for local development
     - Create docker-compose.yml with LocalStack service
     - Configure LocalStack for API Gateway and Lambda services
     - Add backend mock API services to docker-compose
@@ -212,6 +212,16 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Test executing requests from Swagger UI
     - Test following relationship links interactively
     - Verify responses match OAS schemas
+    - _Requirements: 7.1, 8.5_
+  
+  - [ ] 11.3 Create separate acceptance test project
+    - Create new project directory outside main repo (e.g., domain-api-acceptance-tests/)
+    - Set up Playwright with own package.json and dependencies
+    - Write acceptance tests for API explorer functionality
+    - Test spec file loading from documentation site
+    - Test API selection and switching
+    - Test "Try it out" functionality
+    - Document how to run acceptance tests
     - _Requirements: 7.1, 8.5_
 
 - [ ] 12. Implement API servers (language-specific)

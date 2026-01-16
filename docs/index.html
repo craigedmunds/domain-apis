@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="govuk-template">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Domain API POC - API Documentation</title>
     <style>
+        /* GOV.UK Design System inspired styles */
         * {
             margin: 0;
             padding: 0;
@@ -12,119 +13,250 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem;
+            font-family: "GDS Transport", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            color: #0b0c0c;
+            background-color: #f3f2f1;
+            line-height: 1.5;
         }
         
-        .container {
+        .govuk-header {
+            background-color: #0b0c0c;
+            border-bottom: 10px solid #1d70b8;
+        }
+        
+        .govuk-header__container {
             max-width: 1200px;
             margin: 0 auto;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
         }
         
-        header {
-            text-align: center;
-            color: white;
-            margin-bottom: 3rem;
+        .govuk-header__logo {
+            margin-right: 2rem;
         }
         
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
+        .govuk-header__logotype {
+            display: inline-block;
+            font-size: 1.875rem;
             font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            line-height: 1;
         }
         
-        .subtitle {
-            font-size: 1.1rem;
-            opacity: 0.9;
+        .govuk-header__logotype-crown {
+            margin-right: 0.5rem;
+            fill: currentColor;
+            vertical-align: middle;
+            width: 36px;
+            height: 32px;
+        }
+        
+        .govuk-header__service-name {
+            color: #ffffff;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        
+        .govuk-phase-banner {
+            padding: 0.625rem 0;
+            border-bottom: 1px solid #b1b4b6;
+            background-color: #ffffff;
+        }
+        
+        .govuk-phase-banner__content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .govuk-phase-banner__tag {
+            background-color: #1d70b8;
+            color: #ffffff;
+            padding: 0.25rem 0.5rem;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-right: 0.625rem;
+        }
+        
+        .govuk-phase-banner__text {
+            color: #0b0c0c;
+            font-size: 0.875rem;
+        }
+        
+        .govuk-width-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1.5rem;
+        }
+        
+        .govuk-main-wrapper {
+            padding: 2.5rem 0;
+        }
+        
+        .govuk-heading-xl {
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1.09375;
+            margin-bottom: 1.875rem;
+            color: #0b0c0c;
+        }
+        
+        .govuk-body-l {
+            font-size: 1.5rem;
+            line-height: 1.31579;
+            margin-bottom: 1.875rem;
+            color: #0b0c0c;
+        }
+        
+        .govuk-heading-m {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 1.25rem;
+            margin-top: 2.5rem;
+            color: #0b0c0c;
         }
         
         .api-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 3rem;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.875rem;
+            margin-bottom: 2.5rem;
         }
         
         .api-card {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            text-decoration: none;
-            color: inherit;
-            display: block;
+            background: #ffffff;
+            border: 1px solid #b1b4b6;
+            padding: 1.875rem;
+            position: relative;
         }
         
-        .api-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        .api-card__header {
+            margin-bottom: 1.25rem;
         }
         
-        .api-card h2 {
-            color: #667eea;
+        .api-card__title {
             font-size: 1.5rem;
-            margin-bottom: 0.5rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 0.625rem;
+            color: #0b0c0c;
         }
         
-        .api-card .version {
+        .api-card__tag {
             display: inline-block;
-            background: #e0e7ff;
-            color: #667eea;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
+            background-color: #f3f2f1;
+            color: #0b0c0c;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 700;
+            border: 1px solid #b1b4b6;
         }
         
-        .api-card p {
-            color: #666;
-            margin-bottom: 1rem;
+        .api-card__description {
+            font-size: 1.1875rem;
+            line-height: 1.31579;
+            margin-bottom: 1.25rem;
+            color: #0b0c0c;
         }
         
-        .api-card .endpoint {
-            font-family: 'Courier New', monospace;
-            background: #f7fafc;
-            padding: 0.5rem;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            color: #4a5568;
-            margin-bottom: 1rem;
+        .api-card__endpoint {
+            font-family: monospace;
+            background: #f3f2f1;
+            padding: 0.625rem;
+            font-size: 0.875rem;
+            color: #0b0c0c;
+            margin-bottom: 1.25rem;
+            border-left: 4px solid #1d70b8;
         }
         
-        .api-card .features {
+        .api-card__features {
             list-style: none;
-            margin-top: 1rem;
+            margin-bottom: 1.875rem;
         }
         
-        .api-card .features li {
-            padding: 0.25rem 0;
-            color: #718096;
-            font-size: 0.9rem;
+        .api-card__features li {
+            padding: 0.3125rem 0;
+            color: #505a5f;
+            font-size: 1rem;
         }
         
-        .api-card .features li:before {
-            content: "✓ ";
-            color: #48bb78;
+        .api-card__features li:before {
+            content: "✓";
+            color: #00703c;
             font-weight: bold;
-            margin-right: 0.5rem;
+            margin-right: 0.625rem;
+        }
+        
+        .api-card__actions {
+            display: flex;
+            gap: 0.625rem;
+            flex-wrap: wrap;
+        }
+        
+        .govuk-button {
+            font-family: "GDS Transport", Arial, sans-serif;
+            font-weight: 400;
+            font-size: 1.1875rem;
+            line-height: 1;
+            box-sizing: border-box;
+            display: inline-block;
+            position: relative;
+            width: auto;
+            margin: 0;
+            padding: 0.5rem 0.625rem 0.4375rem;
+            border: 2px solid transparent;
+            border-radius: 0;
+            color: #ffffff;
+            background-color: #00703c;
+            box-shadow: 0 2px 0 #002d18;
+            text-align: center;
+            vertical-align: top;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .govuk-button:hover {
+            background-color: #005a30;
+        }
+        
+        .govuk-button:active {
+            top: 2px;
+            box-shadow: none;
+        }
+        
+        .govuk-button--secondary {
+            background-color: #f3f2f1;
+            box-shadow: 0 2px 0 #929191;
+            color: #0b0c0c;
+        }
+        
+        .govuk-button--secondary:hover {
+            background-color: #dbdad9;
         }
         
         .info-section {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            background: #ffffff;
+            border: 1px solid #b1b4b6;
+            padding: 1.875rem;
+            margin-bottom: 2.5rem;
         }
         
-        .info-section h2 {
-            color: #667eea;
-            margin-bottom: 1rem;
+        .info-section__heading {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.25;
+            margin-bottom: 1.25rem;
+            color: #0b0c0c;
         }
         
         .info-section ul {
@@ -133,8 +265,8 @@
         }
         
         .info-section li {
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #e2e8f0;
+            padding: 0.625rem 0;
+            border-bottom: 1px solid #b1b4b6;
         }
         
         .info-section li:last-child {
@@ -142,92 +274,145 @@
         }
         
         .info-section a {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 500;
+            color: #1d70b8;
+            text-decoration: underline;
+            font-weight: 400;
         }
         
         .info-section a:hover {
-            text-decoration: underline;
+            color: #003078;
         }
         
-        footer {
+        .govuk-footer {
+            background-color: #f3f2f1;
+            border-top: 1px solid #b1b4b6;
+            padding: 1.875rem 0;
+            margin-top: 3.125rem;
+        }
+        
+        .govuk-footer__meta {
             text-align: center;
-            color: white;
-            margin-top: 3rem;
-            opacity: 0.8;
+            color: #505a5f;
+            font-size: 0.875rem;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🏛️ Domain API POC</h1>
-            <p class="subtitle">Multi-API Architecture for UK Tax System</p>
-        </header>
-        
-        <div class="api-grid">
-            <a href="taxpayer/index.html" class="api-card">
-                <h2>Taxpayer API</h2>
-                <span class="version">v1.0.0</span>
-                <p>Manages taxpayer identity and registration information</p>
-                <div class="endpoint">/api/taxpayer/v1</div>
-                <ul class="features">
-                    <li>Taxpayer registration</li>
-                    <li>NINO validation</li>
-                    <li>Address management</li>
-                    <li>Cross-API relationships</li>
-                </ul>
-            </a>
-            
-            <a href="income-tax/index.html" class="api-card">
-                <h2>Income Tax API</h2>
-                <span class="version">v1.0.0</span>
-                <p>Handles income tax returns, assessments, and calculations</p>
-                <div class="endpoint">/api/income-tax/v1</div>
-                <ul class="features">
-                    <li>Tax return submission</li>
-                    <li>Assessment tracking</li>
-                    <li>Tax calculations</li>
-                    <li>Payment allocations</li>
-                </ul>
-            </a>
-            
-            <a href="payment/index.html" class="api-card">
-                <h2>Payment API</h2>
-                <span class="version">v1.0.0</span>
-                <p>Manages tax payments and payment allocations</p>
-                <div class="endpoint">/api/payment/v1</div>
-                <ul class="features">
-                    <li>Payment recording</li>
-                    <li>Multiple payment methods</li>
-                    <li>Payment allocations</li>
-                    <li>Status tracking</li>
-                </ul>
-            </a>
+    <header class="govuk-header" role="banner">
+        <div class="govuk-header__container">
+            <div class="govuk-header__logo">
+                <span class="govuk-header__logotype">
+                    <svg class="govuk-header__logotype-crown" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 97" height="32" width="36">
+                        <path fill="currentColor" fill-rule="evenodd" d="M25 30.2c3.5 1.5 7.7-.2 9.1-3.7 1.5-3.6-.2-7.8-3.9-9.2-3.6-1.4-7.6.3-9.1 3.9-1.4 3.5.3 7.5 3.9 9zM9 39.5c3.6 1.5 7.8-.2 9.2-3.7 1.5-3.6-.2-7.8-3.9-9.1-3.6-1.5-7.6.2-9.1 3.8-1.4 3.5.3 7.5 3.8 9zM4.4 57.2c3.5 1.5 7.7-.2 9.1-3.8 1.5-3.6-.2-7.7-3.9-9.1-3.5-1.5-7.6.3-9.1 3.8-1.4 3.5.3 7.6 3.9 9.1zm38.3-21.4c3.5 1.5 7.7-.2 9.1-3.8 1.5-3.6-.2-7.7-3.9-9.1-3.6-1.5-7.6.3-9.1 3.8-1.3 3.6.4 7.7 3.9 9.1zm64.4-5.6c-3.6 1.5-7.8-.2-9.1-3.7-1.5-3.6.2-7.8 3.8-9.2 3.6-1.4 7.7.3 9.2 3.9 1.3 3.5-.4 7.5-3.9 9zm15.9 9.3c-3.6 1.5-7.7-.2-9.1-3.7-1.5-3.6.2-7.8 3.7-9.1 3.6-1.5 7.7.2 9.2 3.8 1.5 3.5-.3 7.5-3.8 9zm4.7 17.7c-3.6 1.5-7.8-.2-9.2-3.8-1.5-3.6.2-7.7 3.9-9.1 3.6-1.5 7.7.3 9.2 3.8 1.3 3.5-.4 7.6-3.9 9.1zM89.3 35.8c-3.6 1.5-7.8-.2-9.2-3.8-1.4-3.6.2-7.7 3.9-9.1 3.6-1.5 7.7.3 9.2 3.8 1.4 3.6-.3 7.7-3.9 9.1zM69.7 17.7l8.9 4.7V9.3l-8.9 2.8c-.2-.3-.5-.6-.9-.9L72.4 0H59.6l3.5 11.2c-.3.3-.6.5-.9.9l-8.8-2.8v13.1l8.8-4.7c.3.3.6.7.9.9l-5 15.4v.1c-.2.8-.4 1.6-.4 2.4 0 4.1 3.1 7.5 7 8.1h.2c.3 0 .7.1 1 .1.4 0 .7 0 1-.1h.2c4-.6 7.1-4.1 7.1-8.1 0-.8-.1-1.7-.4-2.4V34l-5.1-15.4c.4-.2.7-.6 1-.9zM66 92.8c16.9 0 32.8 1.1 47.1 3.2 4-16.9 8.9-26.7 14-33.5l-9.6-3.4c1 4.9 1.1 7.2 0 10.2-1.5-1.4-3-4.3-4.2-8.7L108.6 76c2.8-2 5-3.2 7.5-3.3-4.4 9.4-10 11.9-13.6 11.2-4.3-.8-6.3-4.6-5.6-7.9 1-4.7 5.7-5.9 8-.5 4.3-8.7-3-11.4-7.6-8.8 7.1-7.2 7.9-13.5 2.1-21.1-8 6.1-8.1 12.3-4.5 20.8-4.7-5.4-12.1-2.5-9.5 6.2 3.4-5.2 7.9-2 7.2 3.1-.6 4.3-6.4 7.8-13.5 7.2-10.3-.9-10.9-8-11.2-13.8 2.5-.5 7.1 1.8 11 7.3L80.2 60c-4.1 4.4-8 5.3-12.3 5.4 1.4-4.4 8-11.6 8-11.6H55.5s6.4 7.2 7.9 11.6c-4.2-.1-8-1-12.3-5.4l1.4 16.4c3.9-5.5 8.5-7.7 10.9-7.3-.3 5.8-.9 12.8-11.1 13.8-7.2.6-12.9-2.9-13.5-7.2-.7-5 3.8-8.3 7.1-3.1 2.7-8.7-4.6-11.6-9.4-6.2 3.7-8.5 3.6-14.7-4.6-20.8-5.8 7.6-5 13.9 2.2 21.1-4.7-2.6-11.9.1-7.7 8.8 2.3-5.5 7.1-4.2 8.1.5.7 3.3-1.3 7.1-5.7 7.9-3.5.7-9-1.8-13.5-11.2 2.5.1 4.7 1.3 7.5 3.3l-4.7-15.4c-1.2 4.4-2.7 7.2-4.3 8.7-1.1-3-.9-5.3 0-10.2l-9.5 3.4c5 6.9 9.9 16.7 14 33.5 14.8-2.1 30.8-3.2 47.7-3.2z"></path>
+                    </svg>
+                    GOV.UK
+                </span>
+            </div>
+            <span class="govuk-header__service-name">
+                Domain API POC
+            </span>
         </div>
-        
-        <div class="info-section">
-            <h2>📚 Additional Resources</h2>
-            <ul>
-                <li><a href="getting-started.md">Getting Started Guide</a></li>
-                <li><a href="mock-servers.md">Mock Server Setup</a></li>
-                <li><a href="../specs/shared/shared-components.yaml">Shared Components Specification</a></li>
-            </ul>
-            
-            <h2 style="margin-top: 2rem;">🔗 Key Features</h2>
-            <ul>
-                <li><strong>Domain Boundaries:</strong> Clear separation between taxpayer, income tax, and payment domains</li>
-                <li><strong>Shared Components:</strong> Reusable schemas for Address, Money, DateRange, and Links</li>
-                <li><strong>Hypermedia Navigation:</strong> Resources include links to related resources across APIs</li>
-                <li><strong>Include Parameter:</strong> Reduce API calls by embedding related resources</li>
-                <li><strong>OpenAPI-First:</strong> Specifications drive implementation, documentation, and testing</li>
-            </ul>
+    </header>
+    
+    <div class="govuk-phase-banner">
+        <div class="govuk-phase-banner__content">
+            <strong class="govuk-phase-banner__tag">Prototype</strong>
+            <span class="govuk-phase-banner__text">
+                This is a proof-of-concept for multi-API domain architecture
+            </span>
         </div>
-        
-        <footer>
-            <p>Domain API POC - UK Tax System Multi-API Architecture</p>
-        </footer>
     </div>
+    
+    <div class="govuk-width-container">
+        <main class="govuk-main-wrapper" role="main">
+            <h1 class="govuk-heading-xl">Domain API Documentation</h1>
+            <p class="govuk-body-l">
+                Multi-API architecture representing portions of the UK tax system. Each API represents a distinct subdomain with clear responsibilities.
+            </p>
+            
+            <div class="api-grid">
+                <div class="api-card">
+                    <div class="api-card__header">
+                        <h2 class="api-card__title">Taxpayer API</h2>
+                        <span class="api-card__tag">v1.0.0</span>
+                    </div>
+                    <p class="api-card__description">Manages taxpayer identity and registration information</p>
+                    <div class="api-card__endpoint">/api/taxpayer/v1</div>
+                    <ul class="api-card__features">
+                        <li>Taxpayer registration</li>
+                        <li>NINO validation</li>
+                        <li>Address management</li>
+                        <li>Cross-API relationships</li>
+                    </ul>
+                    <div class="api-card__actions">
+                        <a href="taxpayer/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=taxpayer" class="govuk-button">Try it out</a>
+                    </div>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-card__header">
+                        <h2 class="api-card__title">Income Tax API</h2>
+                        <span class="api-card__tag">v1.0.0</span>
+                    </div>
+                    <p class="api-card__description">Handles income tax returns, assessments, and calculations</p>
+                    <div class="api-card__endpoint">/api/income-tax/v1</div>
+                    <ul class="api-card__features">
+                        <li>Tax return submission</li>
+                        <li>Assessment tracking</li>
+                        <li>Tax calculations</li>
+                        <li>Payment allocations</li>
+                    </ul>
+                    <div class="api-card__actions">
+                        <a href="income-tax/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=income-tax" class="govuk-button">Try it out</a>
+                    </div>
+                </div>
+                
+                <div class="api-card">
+                    <div class="api-card__header">
+                        <h2 class="api-card__title">Payment API</h2>
+                        <span class="api-card__tag">v1.0.0</span>
+                    </div>
+                    <p class="api-card__description">Manages tax payments and payment allocations</p>
+                    <div class="api-card__endpoint">/api/payment/v1</div>
+                    <ul class="api-card__features">
+                        <li>Payment recording</li>
+                        <li>Multiple payment methods</li>
+                        <li>Payment allocations</li>
+                        <li>Status tracking</li>
+                    </ul>
+                    <div class="api-card__actions">
+                        <a href="payment/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=payment" class="govuk-button">Try it out</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-section">
+                <h2 class="info-section__heading">Additional resources</h2>
+                <ul>
+                    <li><a href="getting-started.md">Getting started guide</a></li>
+                    <li><a href="mock-servers.md">Mock server setup</a></li>
+                    <li><a href="../specs/shared/shared-components.yaml">Shared components specification</a></li>
+                </ul>
+                
+                <h2 class="info-section__heading">Key features</h2>
+                <ul>
+                    <li><strong>Domain boundaries:</strong> Clear separation between taxpayer, income tax, and payment domains</li>
+                    <li><strong>Shared components:</strong> Reusable schemas for Address, Money, DateRange, and Links</li>
+                    <li><strong>Hypermedia navigation:</strong> Resources include links to related resources across APIs</li>
+                    <li><strong>Include parameter:</strong> Reduce API calls by embedding related resources</li>
+                    <li><strong>OpenAPI-first:</strong> Specifications drive implementation, documentation, and testing</li>
+                </ul>
+            </div>
+        </main>
+    </div>
+    
+    <footer class="govuk-footer" role="contentinfo">
+        <div class="govuk-footer__meta">
+            <p>Domain API POC - UK Tax System Multi-API Architecture</p>
+        </div>
+    </footer>
 </body>
 </html>
