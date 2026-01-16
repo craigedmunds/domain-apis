@@ -1,0 +1,26 @@
+{
+  "id": "PM20230001",
+  "type": "payment",
+  "taxpayerId": "TP123456",
+  "amount": {
+    "amount": 7500.00,
+    "currency": "GBP"
+  },
+  "paymentDate": "2024-01-31",
+  "paymentMethod": "bank-transfer",
+  "reference": "TAX-2023-001",
+  "status": "cleared",
+  "_links": {
+    "self": "http://localhost:8080/api/payment/v1/payments/PM20230001",
+    "taxpayer": {
+      "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+      "type": "taxpayer",
+      "title": "Taxpayer who made this payment"
+    },
+    "allocations": {
+      "href": "http://localhost:8080/api/payment/v1/payments/PM20230001/allocations",
+      "type": "collection",
+      "title": "Allocations for this payment"
+    }
+  }
+}

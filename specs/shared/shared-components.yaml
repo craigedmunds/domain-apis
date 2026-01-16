@@ -1,0 +1,289 @@
+openapi: 3.0.3
+info:
+  title: Shared Components
+  version: 1.0.0
+  description: |
+    Reusable OpenAPI components shared across UK Tax Domain APIs.
+    
+    This file contains common schemas, parameters, and response definitions
+    that are referenced by multiple domain APIs (Taxpayer, Income Tax, Payment).
+    
+    Version History:
+    - 1.0.0: Initial release with Address, Money, DateRange, and Links schemas
+
+components:
+  schemas:
+    Address:
+      type: object
+      description: UK postal address with postcode validation
+      required:
+        - line1
+        - postcode
+        - country
+      properties:
+        line1:
+          type: string
+          description: First line of address
+          example: "10 Downing Street"
+          minLength: 1
+          maxLength: 100
+        line2:
+          type: string
+          description: Second line of address (optional)
+          example: "Westminster"
+          maxLength: 100
+        line3:
+          type: string
+          description: Third line of address (optional)
+          example: "London"
+          maxLength: 100
+        postcode:
+          type: string
+          description: UK postcode in standard format
+          pattern: '^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$'
+          example: "SW1A 2AA"
+        country:
+          type: string
+          description: Country code (GB or UK accepted)
+          enum:
+            - GB
+            - UK
+          example: "GB"
+      example:
+        line1: "10 Downing Street"
+        line2: "Westminster"
+        line3: "London"
+        postcode: "SW1A 2AA"
+        country: "GB"
+
+    Money:
+      type: object
+      description: Monetary amount in GBP currency
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: decimal
+          description: Monetary amount with up to 2 decimal places
+          example: 1234.56
+          minimum: 0
+        currency:
+          type: string
+          description: Currency code (GBP only for UK tax system)
+          enum:
+            - GBP
+          default: GBP
+          example: "GBP"
+      example:
+        amount: 1234.56
+        currency: "GBP"
+
+    DateRange:
+      type: object
+      description: Date range with start and end dates
+      required:
+        - startDate
+        - endDate
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: Start date in ISO 8601 format (YYYY-MM-DD)
+          example: "2023-04-06"
+        endDate:
+          type: string
+          format: date
+          description: End date in ISO 8601 format (YYYY-MM-DD)
+          example: "2024-04-05"
+      example:
+        startDate: "2023-04-06"
+        endDate: "2024-04-05"
+
+    Links:
+      type: object
+      description: |
+        Hypermedia links to related resources following a lightweight JSON API-inspired approach.
+        
+        The 'self' link is always present and points to the current resource.
+        Additional links represent relationships to other resources, which may be in the same
+        or different domain APIs.
+        
+        Each link object contains:
+        - href: The URL to the related resource (absolute for cross-API links)
+        - type: The resource type or 'collection' for lists (optional)
+        - title: Human-readable description of the relationship (optional)
+      required:
+        - self
+      properties:
+        self:
+          type: string
+          format: uri
+          description: URL to the current resource
+          example: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+      additionalProperties:
+        oneOf:
+          - type: string
+            format: uri
+            description: Simple link as a string URL
+          - type: object
+            description: Detailed link object with metadata
+            required:
+              - href
+            properties:
+              href:
+                type: string
+                format: uri
+                description: URL to the related resource
+                example: "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456"
+              type:
+                type: string
+                description: Resource type or 'collection' for lists
+                example: "collection"
+              title:
+                type: string
+                description: Human-readable description of the relationship
+                example: "Tax returns for this taxpayer"
+      example:
+        self: "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456"
+        taxReturns:
+          href: "http://localhost:8080/api/income-tax/v1/tax-returns?taxpayerId=TP123456"
+          type: "collection"
+          title: "Tax returns for this taxpayer"
+        payments:
+          href: "http://localhost:8080/api/payment/v1/payments?taxpayerId=TP123456"
+          type: "collection"
+          title: "Payments made by this taxpayer"
+
+  parameters:
+    IncludeParameter:
+      name: include
+      in: query
+      description: |
+        Comma-separated list of related resources to include in the response.
+        
+        When specified, the response will include an '_included' field containing
+        the related resources, reducing the need for multiple API requests.
+        
+        Only relationships defined in the resource's '_links' field can be included.
+        Cross-API includes are supported.
+        
+        Example: ?include=taxReturns,payments
+      required: false
+      schema:
+        type: string
+        pattern: '^[a-zA-Z][a-zA-Z0-9]*(,[a-zA-Z][a-zA-Z0-9]*)*$'
+      example: "taxReturns,payments"
+
+  responses:
+    NotFound:
+      description: The requested resource was not found
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - error
+            properties:
+              error:
+                type: object
+                required:
+                  - code
+                  - message
+                  - status
+                properties:
+                  code:
+                    type: string
+                    example: "RESOURCE_NOT_FOUND"
+                  message:
+                    type: string
+                    example: "Tax return TR20230001 not found"
+                  status:
+                    type: integer
+                    example: 404
+          example:
+            error:
+              code: "RESOURCE_NOT_FOUND"
+              message: "Tax return TR20230001 not found"
+              status: 404
+
+    BadRequest:
+      description: The request was invalid or malformed
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - error
+            properties:
+              error:
+                type: object
+                required:
+                  - code
+                  - message
+                  - status
+                properties:
+                  code:
+                    type: string
+                    example: "VALIDATION_ERROR"
+                  message:
+                    type: string
+                    example: "Invalid request data"
+                  status:
+                    type: integer
+                    example: 400
+                  details:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                          example: "nino"
+                        message:
+                          type: string
+                          example: "Must match pattern ^[A-Z]{2}[0-9]{6}[A-Z]$"
+          example:
+            error:
+              code: "VALIDATION_ERROR"
+              message: "Invalid request data"
+              status: 400
+              details:
+                - field: "nino"
+                  message: "Must match pattern ^[A-Z]{2}[0-9]{6}[A-Z]$"
+
+    BadGateway:
+      description: Unable to reach upstream API
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - error
+            properties:
+              error:
+                type: object
+                required:
+                  - code
+                  - message
+                  - status
+                properties:
+                  code:
+                    type: string
+                    example: "UPSTREAM_API_ERROR"
+                  message:
+                    type: string
+                    example: "Unable to reach Income Tax API"
+                  status:
+                    type: integer
+                    example: 502
+                  upstreamService:
+                    type: string
+                    example: "income-tax-api"
+          example:
+            error:
+              code: "UPSTREAM_API_ERROR"
+              message: "Unable to reach Income Tax API"
+              status: 502
+              upstreamService: "income-tax-api"

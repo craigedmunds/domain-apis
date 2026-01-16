@@ -6,7 +6,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
 
 ## Tasks
 
-- [ ] 1. Set up project structure and tooling
+- [x] 1. Set up project structure and tooling
   - Create directory structure for three APIs (taxpayer, income-tax, payment)
   - Create shared components directory
   - Set up OpenAPI validation tooling (e.g., openapi-generator-cli, spectral)
@@ -15,7 +15,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
   - _Requirements: 2.1, 8.1, 8.3_
 
 - [ ] 2. Create shared OpenAPI components
-  - [ ] 2.1 Create shared-components.yaml with common schemas
+  - [x] 2.1 Create shared-components.yaml with common schemas
     - Define Address schema with UK postcode validation
     - Define Money schema with GBP currency
     - Define DateRange schema
@@ -34,7 +34,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - _Requirements: 3.1_
 
 - [ ] 3. Create Taxpayer API specification
-  - [ ] 3.1 Create taxpayer-api.yaml OpenAPI specification
+  - [x] 3.1 Create taxpayer-api.yaml OpenAPI specification
     - Define API info (title, version, description)
     - Define server URL: /api/taxpayer/v1
     - Define Taxpayer schema with NINO validation
@@ -53,7 +53,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - **Validates: Requirements 4.1, 4.2, 4.3**
 
 - [ ] 4. Create Income Tax API specification
-  - [ ] 4.1 Create income-tax-api.yaml OpenAPI specification
+  - [x] 4.1 Create income-tax-api.yaml OpenAPI specification
     - Define API info (title, version, description)
     - Define server URL: /api/income-tax/v1
     - Define TaxReturn schema with tax year validation
@@ -73,7 +73,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - **Validates: Requirements 5.1, 5.2, 5.5**
 
 - [ ] 5. Create Payment API specification
-  - [ ] 5.1 Create payment-api.yaml OpenAPI specification
+  - [x] 5.1 Create payment-api.yaml OpenAPI specification
     - Define API info (title, version, description)
     - Define server URL: /api/payment/v1
     - Define Payment schema with payment method enum
@@ -92,46 +92,50 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - **Property 11: Bidirectional Relationships**
     - **Validates: Requirements 5.4**
 
-- [ ] 6. Checkpoint - Validate all OpenAPI specifications
+- [x] 6. Checkpoint - Validate all OpenAPI specifications
   - Run OpenAPI validator against all three API specs
   - Verify all $ref references resolve correctly
   - Verify all examples are valid against schemas
   - Ensure all tests pass, ask the user if questions arise.
   - _Requirements: 8.1, 8.2_
 
-- [ ] 7. Add include parameter support to specifications
-  - [ ] 7.1 Update Taxpayer API spec with include parameter
-    - Add `include` query parameter to GET /taxpayers and GET /taxpayers/{id}
-    - Document `_includes` field in resource schema (array of IDs)
-    - Document `_included` field in response schema (map of relationship name to resources)
+- [ ] 7. Implement include parameter support
+  - [x] 7.1 Add include parameter to OpenAPI specifications
+    - Add `IncludeParameter` definition to shared-components.yaml
+    - Reference include parameter in all GET endpoints across all three APIs
+    - Document `_included` field in response schemas
     - Add examples showing include parameter usage
     - _Requirements: 4.4, 5.3_
   
-  - [ ] 7.2 Update Income Tax API spec with include parameter
-    - Add `include` query parameter to relevant endpoints
-    - Document `_includes` and `_included` fields
-    - Add examples showing cross-API includes
+  - [ ] 7.2 Implement include parameter in API servers
+    - Parse include query parameter (comma-separated relationship names)
+    - Fetch related resources from linked APIs
+    - Build `_included` response field with related resources
+    - Handle cross-API includes (e.g., taxpayer including tax returns from Income Tax API)
+    - Handle errors when related resources are unavailable
     - _Requirements: 4.4, 5.3_
   
-  - [ ] 7.3 Update Payment API spec with include parameter
-    - Add `include` query parameter to relevant endpoints
-    - Document `_includes` and `_included` fields
-    - Add examples showing cross-API includes
-    - _Requirements: 4.4, 5.3_
-  
-  - [ ]* 7.4 Write property test for include parameter
+  - [ ]* 7.3 Write property test for include parameter
     - **Property 15: Include Parameter Embedding**
     - **Validates: Requirements 4.4, 5.3**
+  
+  - [ ]* 7.4 Write integration tests for include parameter
+    - Test single relationship include
+    - Test multiple relationship includes
+    - Test cross-API includes
+    - Test invalid relationship names
+    - Test unavailable related resources
+    - _Requirements: 4.4, 5.3_
 
 - [ ] 8. Generate and test mock servers
-  - [ ] 8.1 Generate mock servers from OpenAPI specs
+  - [x] 8.1 Generate mock servers from OpenAPI specs
     - Generate Taxpayer API mock server (e.g., using Prism)
     - Generate Income Tax API mock server
     - Generate Payment API mock server
     - Configure mock servers to run on different ports
     - _Requirements: 8.3, 8.4_
   
-  - [ ] 8.2 Create example data demonstrating cross-API relationships
+  - [x] 8.2 Create example data demonstrating cross-API relationships
     - Create example taxpayer with NINO and address
     - Create example tax returns linked to taxpayer
     - Create example payments linked to taxpayer and tax returns
@@ -152,28 +156,26 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Test that relationship links are resolvable
     - _Requirements: 8.3_
 
-- [ ] 9. Checkpoint - Test mock servers and cross-API traversal
+- [x] 9. Checkpoint - Test mock servers and cross-API traversal
   - Start all three mock servers
   - Test GET /taxpayers/{id} returns valid response
   - Follow taxReturns link and verify response
   - Follow payments link and verify response
-  - Test include parameter with mock servers
   - Ensure all tests pass, ask the user if questions arise.
   - _Requirements: 5.3, 8.3_
 
 - [ ] 10. Generate API documentation
-  - [ ] 10.1 Generate documentation for each API
+  - [x] 10.1 Generate documentation for each API
     - Generate Taxpayer API documentation (e.g., using Redoc)
     - Generate Income Tax API documentation
     - Generate Payment API documentation
     - Verify all endpoints, parameters, and schemas are documented
     - _Requirements: 7.1, 7.2_
   
-  - [ ] 10.2 Create getting started guide
+  - [x] 10.2 Create getting started guide
     - Document the multi-API architecture
     - Explain the relationship structure and link format
     - Provide examples of cross-API traversal
-    - Document the include parameter usage
     - _Requirements: 7.3, 7.4, 7.5_
   
   - [ ]* 10.3 Write property test for documentation completeness
@@ -181,51 +183,47 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - **Validates: Requirements 7.2**
 
 - [ ] 11. Set up OAS Viewer/Executor
-  - [ ] 11.1 Configure Swagger UI or similar tool
+  - [x] 11.1 Configure Swagger UI or similar tool
     - Set up Swagger UI to load all three API specifications
     - Configure "Try it out" functionality
     - Enable cross-API navigation through relationship links
     - _Requirements: 7.1_
   
-  - [ ] 11.2 Test interactive API exploration
+  - [x] 11.2 Test interactive API exploration
     - Test executing requests from Swagger UI
     - Test following relationship links interactively
-    - Test include parameter from UI
     - Verify responses match OAS schemas
     - _Requirements: 7.1, 8.5_
 
 - [ ] 12. Implement API servers (language-specific)
-  - [ ] 12.1 Choose implementation language and framework
+  - [x] 12.1 Choose implementation language and framework
     - Determine programming language (Python/TypeScript/Go/etc.)
     - Select web framework (FastAPI/Express/Gin/etc.)
     - Set up project structure for chosen stack
     - _Requirements: 1.1_
   
-  - [ ] 12.2 Implement Taxpayer API server
+  - [x] 12.2 Implement Taxpayer API server
     - Implement all endpoints from taxpayer-api.yaml
     - Implement relationship link generation
-    - Implement include parameter support
     - Add in-memory data storage for POC
-    - _Requirements: 1.5, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.5_
+    - _Requirements: 1.5, 4.1, 4.2, 4.3, 5.1, 5.2, 5.5_
   
   - [ ]* 12.3 Write property test for Taxpayer API implementation
     - **Property 1: Domain API Uniqueness**
     - **Property 3: API Resource Isolation**
     - **Validates: Requirements 1.2, 1.3, 1.5**
   
-  - [ ] 12.4 Implement Income Tax API server
+  - [x] 12.4 Implement Income Tax API server
     - Implement all endpoints from income-tax-api.yaml
     - Implement relationship link generation
-    - Implement include parameter support
     - Add in-memory data storage for POC
-    - _Requirements: 1.5, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.5_
+    - _Requirements: 1.5, 4.1, 4.2, 4.3, 5.1, 5.2, 5.5_
   
-  - [ ] 12.5 Implement Payment API server
+  - [x] 12.5 Implement Payment API server
     - Implement all endpoints from payment-api.yaml
     - Implement relationship link generation
-    - Implement include parameter support
     - Add in-memory data storage for POC
-    - _Requirements: 1.5, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.5_
+    - _Requirements: 1.5, 4.1, 4.2, 4.3, 5.1, 5.2, 5.5_
   
   - [ ]* 12.6 Write property test for HTTP method support
     - **Property 8: HTTP Method Support**
@@ -239,7 +237,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - _Requirements: 5.3, 5.4_
 
 - [ ] 13. Implement error handling
-  - [ ] 13.1 Add error responses to all APIs
+  - [x] 13.1 Add error responses to all APIs
     - Implement 404 Not Found responses
     - Implement 400 Bad Request responses with validation details
     - Implement 502 Bad Gateway for cross-API errors
@@ -252,11 +250,10 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Test 502 for unavailable upstream APIs
     - _Requirements: 2.3_
 
-- [ ] 14. Final checkpoint - End-to-end testing
+- [x] 14. Final checkpoint - End-to-end testing
   - Start all three API servers
   - Run full test suite (unit + property + integration)
   - Test complete cross-API traversal scenarios
-  - Test include parameter with real implementations
   - Verify all relationship links resolve correctly
   - Test OAS Viewer/Executor with real APIs
   - Ensure all tests pass, ask the user if questions arise.

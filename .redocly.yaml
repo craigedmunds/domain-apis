@@ -1,0 +1,66 @@
+apis:
+  taxpayer@v1:
+    root: specs/taxpayer/taxpayer-api.yaml
+  income-tax@v1:
+    root: specs/income-tax/income-tax-api.yaml
+  payment@v1:
+    root: specs/payment/payment-api.yaml
+
+lint:
+  extends:
+    - recommended
+  
+  rules:
+    # Ensure all operations have descriptions
+    operation-description: error
+    operation-summary: error
+    operation-operationId: error
+    operation-tags: warn
+    
+    # Ensure all parameters have descriptions
+    parameter-description: error
+    
+    # Ensure all responses have descriptions
+    response-description: error
+    
+    # Ensure proper use of $ref
+    no-unresolved-refs: error
+    no-invalid-media-type-examples: error
+    
+    # Info section requirements
+    info-contact: warn
+    info-license: off
+    info-license-url: off
+    
+    # Tag requirements
+    tag-description: warn
+    tags-alphabetical: off
+    
+    # Path requirements
+    paths-kebab-case: warn
+    path-parameters-defined: error
+    
+    # Schema requirements
+    no-enum-type-mismatch: error
+    no-example-value-and-externalValue: error
+    
+    # Security
+    no-http-verbs-in-paths: warn
+    
+theme:
+  openapi:
+    theme:
+      colors:
+        primary:
+          main: '#0066cc'
+    
+    generateCodeSamples:
+      languages:
+        - lang: curl
+        - lang: Node.js
+        - lang: Python
+        - lang: Java
+    
+    showConsole: true
+    disableSearch: false
+    hideDownloadButton: false

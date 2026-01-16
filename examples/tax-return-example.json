@@ -1,0 +1,37 @@
+{
+  "id": "TR20230001",
+  "type": "tax-return",
+  "taxpayerId": "TP123456",
+  "taxYear": "2023-24",
+  "period": {
+    "startDate": "2023-04-06",
+    "endDate": "2024-04-05"
+  },
+  "status": "assessed",
+  "totalIncome": {
+    "amount": 50000.00,
+    "currency": "GBP"
+  },
+  "taxDue": {
+    "amount": 7500.00,
+    "currency": "GBP"
+  },
+  "_links": {
+    "self": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001",
+    "taxpayer": {
+      "href": "http://localhost:8080/api/taxpayer/v1/taxpayers/TP123456",
+      "type": "taxpayer",
+      "title": "Taxpayer who filed this return"
+    },
+    "assessments": {
+      "href": "http://localhost:8080/api/income-tax/v1/tax-returns/TR20230001/assessments",
+      "type": "collection",
+      "title": "Assessments for this return"
+    },
+    "allocations": {
+      "href": "http://localhost:8080/api/payment/v1/allocations?taxReturnId=TR20230001",
+      "type": "collection",
+      "title": "Payment allocations for this return"
+    }
+  }
+}

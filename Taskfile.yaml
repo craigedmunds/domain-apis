@@ -1,0 +1,148 @@
+version: '3'
+
+vars:
+  SPECS_DIR: specs
+  DOCS_DIR: docs
+  TESTS_DIR: tests
+
+tasks:
+  # Validation tasks
+  validate:
+    desc: Validate all OpenAPI specifications
+    cmds:
+      - npx @redocly/cli lint {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml
+      - npx @redocly/cli lint {{.SPECS_DIR}}/income-tax/income-tax-api.yaml
+      - npx @redocly/cli lint {{.SPECS_DIR}}/payment/payment-api.yaml
+      - npx @redocly/cli lint {{.SPECS_DIR}}/shared/shared-components.yaml
+
+  validate:taxpayer:
+    desc: Validate Taxpayer API specification
+    cmds:
+      - npx @redocly/cli lint {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml
+
+  validate:income-tax:
+    desc: Validate Income Tax API specification
+    cmds:
+      - npx @redocly/cli lint {{.SPECS_DIR}}/income-tax/income-tax-api.yaml
+
+  validate:payment:
+    desc: Validate Payment API specification
+    cmds:
+      - npx @redocly/cli lint {{.SPECS_DIR}}/payment/payment-api.yaml
+
+  # Linting tasks
+  lint:
+    desc: Lint all OpenAPI specifications with Spectral
+    cmds:
+      - npx spectral lint {{.SPECS_DIR}}/**/*.yaml
+
+  # Mock server tasks
+  mock:
+    desc: Start all mock servers concurrently
+    cmds:
+      - npx concurrently "task mock:taxpayer" "task mock:income-tax" "task mock:payment"
+
+  mock:taxpayer:
+    desc: Start Taxpayer API mock server on port 8081
+    cmds:
+      - npx prism mock {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml -p 8081
+
+  mock:income-tax:
+    desc: Start Income Tax API mock server on port 8082
+    cmds:
+      - npx prism mock {{.SPECS_DIR}}/income-tax/income-tax-api.yaml -p 8082
+
+  mock:payment:
+    desc: Start Payment API mock server on port 8083
+    cmds:
+      - npx prism mock {{.SPECS_DIR}}/payment/payment-api.yaml -p 8083
+
+  # Documentation generation tasks
+  docs:
+    desc: Generate documentation for all APIs
+    cmds:
+      - task docs:taxpayer
+      - task docs:income-tax
+      - task docs:payment
+
+  docs:taxpayer:
+    desc: Generate Taxpayer API documentation
+    cmds:
+      - mkdir -p {{.DOCS_DIR}}/taxpayer
+      - npx @redocly/cli build-docs {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml -o {{.DOCS_DIR}}/taxpayer/index.html
+
+  docs:income-tax:
+    desc: Generate Income Tax API documentation
+    cmds:
+      - mkdir -p {{.DOCS_DIR}}/income-tax
+      - npx @redocly/cli build-docs {{.SPECS_DIR}}/income-tax/income-tax-api.yaml -o {{.DOCS_DIR}}/income-tax/index.html
+
+  docs:payment:
+    desc: Generate Payment API documentation
+    cmds:
+      - mkdir -p {{.DOCS_DIR}}/payment
+      - npx @redocly/cli build-docs {{.SPECS_DIR}}/payment/payment-api.yaml -o {{.DOCS_DIR}}/payment/index.html
+
+  # Swagger UI
+  swagger:
+    desc: Open Swagger UI with all API specifications
+    cmds:
+      - npx swagger-ui-watcher {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml {{.SPECS_DIR}}/income-tax/income-tax-api.yaml {{.SPECS_DIR}}/payment/payment-api.yaml
+
+  # Testing tasks
+  test:
+    desc: Run all tests
+    cmds:
+      - npm run test
+
+  test:unit:
+    desc: Run unit tests
+    cmds:
+      - npm run test:unit
+
+  test:property:
+    desc: Run property-based tests
+    cmds:
+      - npm run test:property
+
+  test:integration:
+    desc: Run integration tests
+    cmds:
+      - npm run test:integration
+
+  test:watch:
+    desc: Run tests in watch mode
+    cmds:
+      - npm run test:watch
+
+  # Installation
+  install:
+    desc: Install dependencies
+    cmds:
+      - npm install
+
+  # Clean tasks
+  clean:
+    desc: Clean generated files
+    cmds:
+      - rm -rf {{.DOCS_DIR}}/taxpayer
+      - rm -rf {{.DOCS_DIR}}/income-tax
+      - rm -rf {{.DOCS_DIR}}/payment
+      - rm -rf node_modules
+      - rm -rf coverage
+
+  # Status check
+  status:
+    desc: Show project status
+    cmds:
+      - echo "=== OpenAPI Specifications ==="
+      - ls -lh {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml
+      - ls -lh {{.SPECS_DIR}}/income-tax/income-tax-api.yaml
+      - ls -lh {{.SPECS_DIR}}/payment/payment-api.yaml
+      - ls -lh {{.SPECS_DIR}}/shared/shared-components.yaml
+      - echo ""
+      - echo "=== Documentation ==="
+      - ls -lh {{.DOCS_DIR}}/ 2>/dev/null || echo "No documentation generated yet"
+      - echo ""
+      - echo "=== Tests ==="
+      - npm run test 2>&1 | head -20 || echo "Run 'task test' to execute tests"
