@@ -380,7 +380,7 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Remove old IngressRoute CRD files (gateway-ingress.yaml, docs-ingress.yaml)
     - _Requirements: 10.5, 10.6, 10.7, 10.10, 10.11_
   
-  - [ ] 15.8 Create kustomization.yaml
+  - [x] 15.8 Create kustomization.yaml
     - Create kustomize/base/kustomization.yaml
     - Add all namespace resources
     - Add all deployment and service resources
@@ -437,4 +437,14 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Test docs via ingress URL
     - Run acceptance tests against ingress URL (BASE_URL=https://domain-api.lab.local.ctoaas.co)
     - _Requirements: 10.7, 10.11_
+  
+  - [x] 15.13 Fix deployment issues
+    - Add shared-components.yaml to ConfigMaps for all three API services
+    - Mount shared components at /shared/shared-components.yaml in all Prism containers
+    - Update API spec $ref paths to use /shared/shared-components.yaml
+    - Verify gateway image exists in GHCR or build and push it
+    - Verify docs image exists in GHCR or build and push it
+    - Test all pods start successfully
+    - Verify Prism containers can resolve $ref to shared components
+    - _Requirements: 10.3, 10.4, 10.9_
 

@@ -30,15 +30,18 @@ spec:
             - name: specs
               mountPath: /specs
               readOnly: true
+            - name: shared
+              mountPath: /shared
+              readOnly: true
           livenessProbe:
             httpGet:
-              path: /
+              path: /taxpayers
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /
+              path: /taxpayers
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
@@ -46,3 +49,12 @@ spec:
         - name: specs
           configMap:
             name: taxpayer-api-spec
+            items:
+              - key: taxpayer-api.yaml
+                path: taxpayer-api.yaml
+        - name: shared
+          configMap:
+            name: taxpayer-api-spec
+            items:
+              - key: shared-components.yaml
+                path: shared-components.yaml

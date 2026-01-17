@@ -88,13 +88,13 @@ This document outlines the implementation tasks for the simple-xml-response-adap
   - Register adapter with adapterRegistry on initialization
   - Add adapter detection logic in request handler
 
-- [ ] 3.3 Write unit tests for SimpleXmlResponseAdapter
+- [x] 3.3 Write unit tests for SimpleXmlResponseAdapter
   - Test transformResponse() with XML input
   - Test Content-Type header transformation
   - Test injectLinks() integration
   - Test error handling for invalid XML
 
-- [ ] 3.4 Write property-based test for adapter detection consistency
+- [x] 3.4 Write property-based test for adapter detection consistency
   **Validates: Requirements 1.1, 1.2, 2.3**
   - Generate random API paths and service configurations
   - Verify consistent adapter detection

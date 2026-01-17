@@ -439,38 +439,36 @@ tasks:
     desc: Build custom LocalStack image with Lambda
     dir: gateway
     cmds:
-      - docker build -t ghcr.io/craigedmunds/domain-api-gateway:latest .
+      - docker buildx create --use --name multiplatform-builder --driver docker-container || true
+      - docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/craigedmunds/domain-api-gateway:latest --push .
 
   k8s:build:docs:
     desc: Build custom docs image with generated documentation
     deps: [docs]
     cmds:
-      - docker build -f docs/Dockerfile -t ghcr.io/craigedmunds/domain-api-docs:latest .
+      - docker buildx create --use --name multiplatform-builder --driver docker-container || true
+      - docker buildx build --platform linux/amd64,linux/arm64 -f docs/Dockerfile -t ghcr.io/craigedmunds/domain-api-docs:latest --push .
 
   k8s:build:
     desc: Build all custom images
     deps: [k8s:build:gateway, k8s:build:docs]
 
-  k8s:push:gateway:
-    desc: Push gateway image to registry
-    deps: [k8s:build:gateway]
-    cmds:
-      - docker push ghcr.io/craigedmunds/domain-api-gateway:latest
+  # k8s:push:gateway:
+  #   desc: Push gateway image to registry (buildx pushes automatically)
+  #   deps: [k8s:build:gateway]
 
-  k8s:push:docs:
-    desc: Push docs image to registry
-    deps: [k8s:build:docs]
-    cmds:
-      - docker push ghcr.io/craigedmunds/domain-api-docs:latest
+  # k8s:push:docs:
+  #   desc: Push docs image to registry (buildx pushes automatically)
+  #   deps: [k8s:build:docs]
 
-  k8s:push:
-    desc: Push all custom images to registry
-    deps: [k8s:push:gateway, k8s:push:docs]
+  # k8s:push:
+  #   desc: Push all custom images to registry
+  #   deps: [k8s:push:gateway, k8s:push:docs]
 
   k8s:apply:
     desc: Apply Kubernetes manifests
     cmds:
-      - kubectl apply -k kustomize/base
+      - kubectl kustomize kustomize/base --enable-helm | kubectl apply -f -
 
   k8s:delete:
     desc: Delete Kubernetes resources
@@ -520,15 +518,15 @@ tasks:
     cmds:
       - kubectl logs -n domain-api -l app=docs -f
 
-  k8s:port-forward:gateway:
-    desc: Port-forward to gateway service
-    cmds:
-      - kubectl port-forward -n domain-api svc/gateway 4566:80
+  # k8s:port-forward:gateway:
+  #   desc: Port-forward to gateway service
+  #   cmds:
+  #     - kubectl port-forward -n domain-api svc/gateway 4566:80
 
-  k8s:port-forward:docs:
-    desc: Port-forward to docs service
-    cmds:
-      - kubectl port-forward -n domain-api svc/docs 8080:80
+  # k8s:port-forward:docs:
+  #   desc: Port-forward to docs service
+  #   cmds:
+  #     - kubectl port-forward -n domain-api svc/docs 8080:80
 
   k8s:test:acceptance:
     desc: Run acceptance tests against k8s deployment

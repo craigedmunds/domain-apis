@@ -70,9 +70,11 @@ export interface Adapter {
    * @param resource - The resource to inject links into
    * @param config - Service configuration containing relationship definitions
    * @param stage - Deployment stage (dev, prod, etc.) for URL construction
+   * @param apiName - The name of the current API (for self link construction)
+   * @param resourceType - The type of resource (for self link construction)
    * @returns Resource with injected _links
    */
-  injectLinks?(resource: any, config: ServiceConfig, stage: string): any;
+  injectLinks?(resource: any, config: ServiceConfig, stage: string, apiName: string, resourceType: string): any;
 }
 
 /**

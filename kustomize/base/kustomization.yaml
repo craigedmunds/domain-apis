@@ -23,14 +23,17 @@ configMapGenerator:
     namespace: domain-api-taxpayer
     files:
       - specs/taxpayer-api.yaml
+      - specs/shared-components.yaml
   - name: income-tax-api-spec
     namespace: domain-api-income-tax
     files:
       - specs/income-tax-api.yaml
+      - specs/shared-components.yaml
   - name: payment-api-spec
     namespace: domain-api-payment
     files:
       - specs/payment-api.yaml
+      - specs/shared-components.yaml
 
 images:
   - name: ghcr.io/craigedmunds/domain-api-gateway

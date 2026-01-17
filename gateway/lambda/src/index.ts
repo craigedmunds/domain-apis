@@ -1,5 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import fetch from 'node-fetch';
+import { adapterRegistry } from './adapters/registry';
+import { SimpleXmlResponseAdapter } from './adapters/simple-xml-response';
+import { loadServiceConfig } from './config/service-config';
 
 /**
  * Aggregation Lambda Handler
@@ -7,7 +10,27 @@ import fetch from 'node-fetch';
  * This Lambda function handles cross-API aggregation for the Domain API Gateway.
  * It routes requests to backend APIs and optionally fetches related resources
  * based on the `include` query parameter.
+ * 
+ * The gateway supports pluggable adapters for transforming requests and responses
+ * between different formats (e.g., XML to JSON). Adapters are registered at
+ * initialization and applied based on service configuration.
  */
+
+/**
+ * Initialize adapters
+ * Register all available adapters with the adapter registry.
+ * This is called once when the Lambda cold starts.
+ */
+function initializeAdapters(): void {
+  // Register the simple XML response adapter
+  const xmlAdapter = new SimpleXmlResponseAdapter();
+  adapterRegistry.register(xmlAdapter);
+  
+  console.log('Registered adapters:', adapterRegistry.getAll().map(a => a.name).join(', '));
+}
+
+// Initialize adapters on module load (Lambda cold start)
+initializeAdapters();
 
 interface LinkObject {
   href: string;
@@ -21,6 +44,70 @@ interface ResourceResponse {
   _links?: Record<string, LinkObject | string>;
   items?: any[];
   [key: string]: any;
+}
+
+/**
+ * AdapterContext contains information about which adapter to use for a request
+ */
+interface AdapterContext {
+  apiName: string;
+  usesAdapter: boolean;
+  adapterName?: string;
+  config?: any;
+}
+
+/**
+ * Detect which adapter (if any) should be used for a given API path
+ * 
+ * This function:
+ * 1. Extracts the API name from the path
+ * 2. Loads the service configuration for that API
+ * 3. Checks if any adapters are configured
+ * 4. Returns context about which adapter to use
+ * 
+ * @param path - The request path (e.g., "/payment/payments/PM001")
+ * @returns AdapterContext with adapter information
+ */
+function detectAdapter(path: string): AdapterContext {
+  // Extract API name from path (first segment after leading slash)
+  // Examples: "/payment/payments/PM001" -> "payment"
+  //           "/taxpayer/taxpayers/TP001" -> "taxpayer"
+  const pathSegments = path.split('/').filter(s => s.length > 0);
+  
+  if (pathSegments.length === 0) {
+    return { apiName: '', usesAdapter: false };
+  }
+  
+  const apiName = pathSegments[0];
+  
+  // Load service configuration for this API
+  const config = loadServiceConfig(apiName);
+  
+  if (!config || !config.adapters || config.adapters.length === 0) {
+    // No adapters configured for this API
+    return { apiName, usesAdapter: false };
+  }
+  
+  // For now, we only support one adapter per API
+  // In the future, we could support adapter chaining
+  const adapterName = config.adapters[0];
+  
+  // Verify the adapter is registered
+  const adapter = adapterRegistry.get(adapterName);
+  
+  if (!adapter) {
+    console.warn(`Adapter "${adapterName}" configured for API "${apiName}" but not registered`);
+    return { apiName, usesAdapter: false };
+  }
+  
+  console.log(`Detected adapter "${adapterName}" for API "${apiName}"`);
+  
+  return {
+    apiName,
+    usesAdapter: true,
+    adapterName,
+    config,
+  };
 }
 
 /**
@@ -50,11 +137,14 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 
   try {
-    // 1. Route to appropriate backend API
+    // 1. Detect which adapter (if any) to use for this API
+    const adapterContext = detectAdapter(path);
+    
+    // 2. Route to appropriate backend API
     const backendUrl = routeToBackend(path);
     console.log(`Routing ${httpMethod} ${path} to ${backendUrl}`);
 
-    // 2. Fetch primary resource from backend API
+    // 3. Fetch primary resource from backend API
     const primaryResponse = await fetch(backendUrl, {
       method: httpMethod,
       body: body || undefined,
@@ -74,9 +164,62 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       };
     }
 
-    const primaryData: ResourceResponse = await primaryResponse.json();
+    // 4. Get response body and headers
+    // Check Content-Type to determine if we need adapter transformation
+    let contentType = '';
+    let responseHeaders: Record<string, string> = {};
+    
+    // Handle both real Response objects and mocked responses
+    if (primaryResponse.headers && typeof primaryResponse.headers.get === 'function') {
+      contentType = primaryResponse.headers.get('content-type') || '';
+      primaryResponse.headers.forEach((value: string, key: string) => {
+        responseHeaders[key] = value;
+      });
+    } else if (primaryResponse.headers && typeof primaryResponse.headers === 'object') {
+      // Mock response with plain object headers
+      responseHeaders = { ...primaryResponse.headers };
+      contentType = responseHeaders['content-type'] || responseHeaders['Content-Type'] || '';
+    }
 
-    // 3. If no include parameter, rewrite URLs and return
+    // 5. Apply adapter transformation if configured and response is XML
+    let primaryData: ResourceResponse;
+    
+    if (adapterContext.usesAdapter && adapterContext.adapterName && contentType.includes('xml')) {
+      const adapter = adapterRegistry.get(adapterContext.adapterName);
+      
+      if (adapter && adapter.transformResponse) {
+        console.log(`Applying ${adapterContext.adapterName} transformResponse`);
+        
+        try {
+          // Get response as text for XML transformation
+          const responseBody = await primaryResponse.text();
+          const transformResult = adapter.transformResponse(responseBody, responseHeaders);
+          primaryData = transformResult.body;
+          responseHeaders = transformResult.headers;
+        } catch (error) {
+          console.error('Adapter transformation failed:', error);
+          return {
+            statusCode: 502,
+            headers: corsHeaders,
+            body: JSON.stringify({
+              error: {
+                code: 'TRANSFORMATION_ERROR',
+                message: 'Failed to transform backend response',
+                details: error instanceof Error ? error.message : 'Unknown error',
+              },
+            }),
+          };
+        }
+      } else {
+        // No transformResponse method, parse as JSON
+        primaryData = await primaryResponse.json();
+      }
+    } else {
+      // No adapter or not XML, parse as JSON
+      primaryData = await primaryResponse.json();
+    }
+
+    // 6. If no include parameter, rewrite URLs and return
     if (!includeParam) {
       const rewrittenData = rewriteLinksToGateway(primaryData);
       
