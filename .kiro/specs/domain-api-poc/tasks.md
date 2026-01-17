@@ -370,21 +370,21 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Create kustomize/base/docs/service.yaml (port 80 → targetPort 8080)
     - _Requirements: 10.1, 10.4, 10.9_
   
-  - [x] 15.7 Create Traefik ingress manifests
-    - Create kustomize/base/ingress/gateway-ingress.yaml
-    - Configure IngressRoute for domain-api.lab.local.ctoaas.co
-    - Add middleware to strip /restapis/domain-api/dev/_user_request_ prefix
-    - Configure TLS with letsencrypt certResolver
-    - Create kustomize/base/ingress/docs-ingress.yaml
-    - Configure IngressRoute for domain-api-docs.lab.local.ctoaas.co
-    - Configure TLS with letsencrypt certResolver
-    - _Requirements: 10.5, 10.6_
+  - [x] 15.7 Create standard ingress configuration
+    - Create kustomize/base/ingress/kustomization.yaml
+    - Configure traefik-ingress Helm chart from workspace-shared/helm
+    - Set helmGlobals.chartHome to ../../libs/workspace-shared/helm (relative to kustomize/base)
+    - Configure global values (domains.localDomainSuffix: lab.local.ctoaas.co, tls.enabled: true, tls.issuer: letsencrypt-prod)
+    - Add gateway ingress configuration (service: gateway, namespace: domain-api, accessPattern: internal, domains.name: domain-api)
+    - Add docs ingress configuration (service: docs, namespace: domain-api, accessPattern: internal, domains.name: domain-api-docs)
+    - Remove old IngressRoute CRD files (gateway-ingress.yaml, docs-ingress.yaml)
+    - _Requirements: 10.5, 10.6, 10.7, 10.10, 10.11_
   
-  - [x] 15.8 Create kustomization.yaml
+  - [ ] 15.8 Create kustomization.yaml
     - Create kustomize/base/kustomization.yaml
     - Add all namespace resources
     - Add all deployment and service resources
-    - Add ingress resources
+    - Add ingress component (ingress/)
     - Configure configMapGenerator for API specs (with namespace)
     - Configure images for gateway and docs
     - _Requirements: 10.1_

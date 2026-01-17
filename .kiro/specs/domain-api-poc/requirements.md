@@ -139,10 +139,12 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 3. THE System SHALL package the Lambda function code into the LocalStack container image (not as zip deployment)
 4. THE System SHALL deploy three separate API services (Taxpayer, Income Tax, Payment) as containerized Prism mock servers
 5. THE System SHALL deploy a documentation service serving static HTML documentation
-6. THE System SHALL provide Traefik IngressRoute resources for external access to the gateway and documentation services
+6. THE System SHALL use the standard traefik-ingress Helm chart pattern for external access to the gateway and documentation services
 7. WHEN deployed to k8s, THE System SHALL use the lab domain pattern `*.lab.local.ctoaas.co` for ingress
 8. THE System SHALL support deployment via ArgoCD Application manifests
 9. THE System SHALL provide a namespace for the domain-api deployment with appropriate labels for secret distribution
+10. THE System SHALL configure ingress resources with internal access pattern consistent with other lab services
+11. THE System SHALL use the traefik-ingress Helm chart from workspace-shared/helm
 10. THE System SHALL include health check endpoints for all containerized services
 11. THE System SHALL provide a Dockerfile that extends LocalStack base image with the Lambda function pre-loaded
 12. WHEN acceptance tests are run, THE System SHALL support testing against both docker-compose and Kubernetes deployments

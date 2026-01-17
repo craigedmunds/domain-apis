@@ -1,0 +1,79 @@
+# Default values for traefik-ingress chart
+# This chart creates Traefik ingress resources with environment-specific configuration
+
+# Array of ingress configurations - each inherits from global defaults below
+ingresses: []
+  # Example single-path configuration:
+  # - service:
+  #     name: "kargo-api"
+  #     namespace: "kargo"
+  #     port:
+  #       name: "http"
+  #   ingress:
+  #     accessPattern: "internal"
+  #     path: "/"
+  #     pathType: "Prefix"
+  #
+  # Example multi-path configuration:
+  # - service:
+  #     name: "kargo-api"  # Default service (optional when using paths array)
+  #     namespace: "kargo"
+  #   ingress:
+  #     accessPattern: "public"
+  #     paths:
+  #     - path: "/"
+  #       pathType: "Prefix"
+  #       service:
+  #         name: "kargo-api"
+  #         port:
+  #           number: 80
+  #     - path: "/webhooks"
+  #       pathType: "Prefix"
+  #       service:
+  #         name: "kargo-external-webhooks-server"
+  #         port:
+  #           number: 80
+
+# Global defaults - inherited by all ingresses in the array
+# Individual ingresses can override any of these values
+
+# Default service port configuration
+defaultServicePort:
+  name: "http"  # Default service port name
+  number: 80    # Default service port number
+
+# Default ingress configuration
+defaultIngress:
+  className: "traefik"  # Default ingress class name
+  path: "/"             # Default path
+  pathType: "Prefix"    # Default path type
+  accessPattern: "internal"  # Default access pattern: "internal" or "public"
+
+# Domain configuration
+domains:
+  # Internal domain suffix (always applied)
+  localDomainSuffix: "127.0.0.1.nip.io"  # Default for local development
+  
+  # External domain suffix (only for public access)
+  publicDomainSuffix: ""  # Only used when accessPattern is "public"
+
+# TLS configuration
+tls:
+  enabled: false  # Enable TLS termination
+  issuer: ""      # cert-manager cluster issuer (e.g., "letsencrypt-prod")
+
+# Traefik-specific configuration
+traefik:
+  # Router configuration
+  router:
+    entrypoints: "websecure"  # Traefik entrypoints
+    tls: true                 # Enable TLS on router
+    
+  # Additional annotations (merged with generated ones)
+  annotations: {}
+
+# Additional annotations to add to all ingresses
+annotations: {}
+
+# Additional labels to add to all ingresses
+labels: {}

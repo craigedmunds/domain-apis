@@ -1,0 +1,6 @@
+apiVersion: v2
+name: traefik-ingress
+description: A Helm chart for creating Traefik ingress resources with environment-specific domain patterns and TLS configuration
+type: application
+version: 0.1.0
+appVersion: "1.0"

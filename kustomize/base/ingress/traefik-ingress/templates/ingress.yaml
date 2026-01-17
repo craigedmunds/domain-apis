@@ -1,0 +1,216 @@
+{{/*
+Traefik Ingress Template
+Supports both internal-only and public (internal+external) domain patterns
+Multi-service chart with hierarchical value inheritance
+*/}}
+
+{{/*
+Helper function to merge values with hierarchical inheritance
+Individual ingress values override global defaults
+*/}}
+{{- define "traefik-ingress.mergeValues" -}}
+{{- $root := .root -}}
+{{- $ingress := .ingress -}}
+{{- $merged := dict -}}
+
+{{/* Merge service configuration */}}
+{{- $service := dict -}}
+{{- $_ := set $service "name" (required "service.name is required" $ingress.service.name) -}}
+{{- $_ := set $service "namespace" (required "service.namespace is required" $ingress.service.namespace) -}}
+{{- $port := dict -}}
+{{- $_ := set $port "name" (($ingress.service.port).name | default $root.Values.defaultServicePort.name) -}}
+{{- $_ := set $port "number" (($ingress.service.port).number | default $root.Values.defaultServicePort.number) -}}
+{{- $_ := set $service "port" $port -}}
+{{- $_ := set $merged "service" $service -}}
+
+{{/* Merge ingress configuration */}}
+{{- $ingressConfig := dict -}}
+{{- $_ := set $ingressConfig "name" (($ingress.ingress).name | default "") -}}
+{{- $_ := set $ingressConfig "className" (($ingress.ingress).className | default $root.Values.defaultIngress.className) -}}
+{{- $_ := set $ingressConfig "path" (($ingress.ingress).path | default $root.Values.defaultIngress.path) -}}
+{{- $_ := set $ingressConfig "pathType" (($ingress.ingress).pathType | default $root.Values.defaultIngress.pathType) -}}
+{{- $_ := set $ingressConfig "accessPattern" (($ingress.ingress).accessPattern | default $root.Values.defaultIngress.accessPattern) -}}
+{{- $_ := set $ingressConfig "paths" (($ingress.ingress).paths | default list) -}}
+{{- $_ := set $merged "ingress" $ingressConfig -}}
+
+{{/* Merge domain configuration */}}
+{{- $domains := dict -}}
+{{- $_ := set $domains "name" (($ingress.domains).name | default "") -}}
+{{- $_ := set $domains "localDomainSuffix" (($ingress.domains).localDomainSuffix | default $root.Values.domains.localDomainSuffix) -}}
+{{- $_ := set $domains "publicDomainSuffix" (($ingress.domains).publicDomainSuffix | default $root.Values.domains.publicDomainSuffix) -}}
+{{- $_ := set $domains "subdomain" (($ingress.domains).subdomain | default "") -}}
+{{- $_ := set $merged "domains" $domains -}}
+
+{{/* Merge TLS configuration */}}
+{{- $tlsConfig := dict -}}
+{{- $_ := set $tlsConfig "enabled" (($ingress.tls).enabled | default $root.Values.tls.enabled) -}}
+{{- $_ := set $tlsConfig "issuer" (($ingress.tls).issuer | default $root.Values.tls.issuer) -}}
+{{- $_ := set $tlsConfig "secretName" (($ingress.tls).secretName | default "") -}}
+{{- $_ := set $merged "tls" $tlsConfig -}}
+
+{{/* Merge Traefik configuration */}}
+{{- $traefikConfig := dict -}}
+{{- $router := dict -}}
+{{- $_ := set $router "entrypoints" ((($ingress.traefik).router).entrypoints | default $root.Values.traefik.router.entrypoints) -}}
+{{- $_ := set $router "tls" ((($ingress.traefik).router).tls | default $root.Values.traefik.router.tls) -}}
+{{- $_ := set $traefikConfig "router" $router -}}
+{{- $_ := set $traefikConfig "annotations" (($ingress.traefik).annotations | default $root.Values.traefik.annotations) -}}
+{{- $_ := set $merged "traefik" $traefikConfig -}}
+
+{{/* Merge additional annotations and labels */}}
+{{- $_ := set $merged "annotations" ($ingress.annotations | default $root.Values.annotations) -}}
+{{- $_ := set $merged "labels" ($ingress.labels | default $root.Values.labels) -}}
+
+{{- $merged | toYaml -}}
+{{- end -}}
+
+{{/*
+Generate path rules for an ingress
+Supports both single path (backward compatible) and multiple paths
+*/}}
+{{- define "traefik-ingress.generatePaths" -}}
+{{- $values := .values -}}
+{{- $serviceName := $values.service.name -}}
+
+{{/* Check if multiple paths are defined */}}
+{{- if $values.ingress.paths -}}
+  {{/* Multiple paths configuration */}}
+  {{- range $values.ingress.paths }}
+- path: {{ .path }}
+  pathType: {{ .pathType | default "Prefix" }}
+  backend:
+    service:
+      name: {{ .service.name }}
+      port:
+        {{- if .service.port.name }}
+        name: {{ .service.port.name }}
+        {{- else }}
+        number: {{ .service.port.number }}
+        {{- end }}
+  {{- end -}}
+{{- else -}}
+  {{/* Single path configuration (backward compatible) */}}
+- path: {{ $values.ingress.path }}
+  pathType: {{ $values.ingress.pathType }}
+  backend:
+    service:
+      name: {{ $serviceName }}
+      port:
+        {{- if $values.service.port.name }}
+        name: {{ $values.service.port.name }}
+        {{- else }}
+        number: {{ $values.service.port.number }}
+        {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Generate a single ingress resource
+*/}}
+{{- define "traefik-ingress.generateIngress" -}}
+{{- $values := fromYaml (include "traefik-ingress.mergeValues" .) -}}
+{{- $serviceName := $values.service.name -}}
+{{- $namespace := $values.service.namespace -}}
+{{- $defaultIngressName := print $serviceName "-ingress" -}}
+{{- $ingressName := $values.ingress.name | default $defaultIngressName -}}
+{{- $localDomainSuffix := required "domains.localDomainSuffix is required" $values.domains.localDomainSuffix -}}
+{{- $accessPattern := $values.ingress.accessPattern | default "internal" -}}
+
+{{/* Generate host names */}}
+{{- $baseHost := $values.domains.name | default $serviceName -}}
+{{- if $values.domains.subdomain -}}
+{{- $baseHost = printf "%s.%s" $values.domains.subdomain $serviceName -}}
+{{- end -}}
+
+{{- $internalHost := printf "%s.%s" $baseHost $localDomainSuffix -}}
+{{- $externalHost := "" -}}
+{{- if and (eq $accessPattern "public") $values.domains.publicDomainSuffix -}}
+{{- $externalHost = printf "%s.%s" $baseHost $values.domains.publicDomainSuffix -}}
+{{- end -}}
+
+{{/* Generate TLS secret name */}}
+{{- $tlsSecretName := $values.tls.secretName -}}
+{{- if and $values.tls.enabled (not $tlsSecretName) -}}
+{{- if eq $accessPattern "public" -}}
+{{- $tlsSecretName = printf "%s-%s-tls" $ingressName (replace "." "-" $values.domains.publicDomainSuffix | replace "-co" "") -}}
+{{- else -}}
+{{- $tlsSecretName = printf "%s-%s-tls" $ingressName (replace "." "-" $localDomainSuffix | replace "-co" "") -}}
+{{- end -}}
+{{- end -}}
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $ingressName }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- with $values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    # Traefik-specific annotations
+    {{- if $values.traefik.router.entrypoints }}
+    traefik.ingress.kubernetes.io/router.entrypoints: {{ $values.traefik.router.entrypoints }}
+    {{- end }}
+    {{- if $values.traefik.router.tls }}
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    {{- end }}
+    
+    # cert-manager annotations
+    {{- if and $values.tls.enabled $values.tls.issuer }}
+    cert-manager.io/cluster-issuer: {{ $values.tls.issuer }}
+    {{- end }}
+    
+    # Additional Traefik annotations
+    {{- with $values.traefik.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    
+    # Additional custom annotations
+    {{- with $values.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if $values.ingress.className }}
+  ingressClassName: {{ $values.ingress.className }}
+  {{- end }}
+  
+  {{- if $values.tls.enabled }}
+  tls:
+  - hosts:
+    - {{ $internalHost }}
+    {{- if $externalHost }}
+    - {{ $externalHost }}
+    {{- end }}
+    secretName: {{ $tlsSecretName }}
+  {{- end }}
+  
+  rules:
+  # Internal domain rule (always present)
+  - host: {{ $internalHost }}
+    http:
+      paths:
+      {{- include "traefik-ingress.generatePaths" (dict "values" $values) | nindent 6 }}
+  
+  {{- if $externalHost }}
+  # External domain rule (only for public access)
+  - host: {{ $externalHost }}
+    http:
+      paths:
+      {{- include "traefik-ingress.generatePaths" (dict "values" $values) | nindent 6 }}
+  {{- end }}
+{{- end -}}
+
+{{/*
+Main template logic - iterate over ingresses array
+*/}}
+{{- if not .Values.ingresses -}}
+{{- fail "ingresses array is required and cannot be empty" -}}
+{{- end -}}
+
+{{- range $index, $ingress := .Values.ingresses -}}
+{{- if gt $index 0 }}
+---
+{{- end }}
+{{- include "traefik-ingress.generateIngress" (dict "root" $ "ingress" $ingress) -}}
+{{- end -}}

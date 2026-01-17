@@ -16,8 +16,7 @@ resources:
   - payment-api/service.yaml
   - docs/deployment.yaml
   - docs/service.yaml
-  - ingress/gateway-ingress.yaml
-  - ingress/docs-ingress.yaml
+  - ingress/
 
 configMapGenerator:
   - name: taxpayer-api-spec
