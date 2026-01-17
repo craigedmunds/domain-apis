@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: domain-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      imagePullSecrets:
+        - name: gh-docker-registry-creds
+      containers:
+        - name: localstack
+          image: ghcr.io/craigedmunds/domain-api-gateway:latest
+          ports:
+            - containerPort: 4566
+              name: http
+          env:
+            - name: SERVICES
+              value: "apigateway,lambda,iam"
+            - name: DEBUG
+              value: "1"
+            - name: LAMBDA_EXECUTOR
+              value: "local"
+            - name: TAXPAYER_API_URL
+              value: "http://taxpayer-api.domain-api-taxpayer.svc.cluster.local"
+            - name: INCOME_TAX_API_URL
+              value: "http://income-tax-api.domain-api-income-tax.svc.cluster.local"
+            - name: PAYMENT_API_URL
+              value: "http://payment-api.domain-api-payment.svc.cluster.local"
+          livenessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 20
+            periodSeconds: 5

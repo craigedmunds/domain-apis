@@ -127,3 +127,23 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 5. WHEN acceptance tests are run, THE System SHALL validate critical user journeys against running mock servers or real API implementations
 6. THE System SHALL provide clear documentation on how to run acceptance tests
 7. THE acceptance tests SHALL pass before the POC is considered complete
+
+### Requirement 10: Kubernetes Deployment
+
+**User Story:** As a platform engineer, I want to deploy the domain API system to our Kubernetes lab environment using ArgoCD and Kustomize, so that the system runs in a production-like environment alongside other platform services.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide Kubernetes manifests using Kustomize for all components
+2. THE System SHALL deploy LocalStack container with AWS API Gateway and Lambda emulation for the gateway aggregation service
+3. THE System SHALL package the Lambda function code into the LocalStack container image (not as zip deployment)
+4. THE System SHALL deploy three separate API services (Taxpayer, Income Tax, Payment) as containerized Prism mock servers
+5. THE System SHALL deploy a documentation service serving static HTML documentation
+6. THE System SHALL provide Traefik IngressRoute resources for external access to the gateway and documentation services
+7. WHEN deployed to k8s, THE System SHALL use the lab domain pattern `*.lab.local.ctoaas.co` for ingress
+8. THE System SHALL support deployment via ArgoCD Application manifests
+9. THE System SHALL provide a namespace for the domain-api deployment with appropriate labels for secret distribution
+10. THE System SHALL include health check endpoints for all containerized services
+11. THE System SHALL provide a Dockerfile that extends LocalStack base image with the Lambda function pre-loaded
+12. WHEN acceptance tests are run, THE System SHALL support testing against both docker-compose and Kubernetes deployments
+13. THE System SHALL provide Taskfile tasks for common k8s operations (apply, status, logs, port-forward)

@@ -1822,3 +1822,829 @@ Tests will verify:
 - Examples are included and render correctly
 - Cross-API relationships are explained
 
+
+
+## Kubernetes Deployment Architecture
+
+This section describes how the domain API system is deployed to Kubernetes environments, specifically targeting the k8s-lab environment using ArgoCD and Kustomize.
+
+### Deployment Overview
+
+The k8s deployment maintains the same architecture as docker-compose but packages components for Kubernetes. Each API is deployed in its own namespace for isolation, while the gateway remains in the main `domain-api` namespace.
+
+```mermaid
+graph TB
+    subgraph "Ingress Layer"
+        TRAEFIK[Traefik Ingress]
+    end
+    
+    subgraph "domain-api Namespace"
+        subgraph "Gateway Pod"
+            LOCALSTACK[LocalStack Container<br/>with Lambda pre-loaded]
+        end
+        
+        subgraph "Docs Pod"
+            DOCS_POD[Documentation Server<br/>Static File Server]
+        end
+        
+        GW_SVC[Gateway Service]
+        DOCS_SVC[Docs Service]
+    end
+    
+    subgraph "domain-api-taxpayer Namespace"
+        TP_POD[Taxpayer API<br/>Prism Mock Server]
+        TP_SVC[Taxpayer Service]
+    end
+    
+    subgraph "domain-api-income-tax Namespace"
+        IT_POD[Income Tax API<br/>Prism Mock Server]
+        IT_SVC[Income Tax Service]
+    end
+    
+    subgraph "domain-api-payment Namespace"
+        PM_POD[Payment API<br/>Prism Mock Server]
+        PM_SVC[Payment Service]
+    end
+    
+    TRAEFIK -->|domain-api.lab.local.ctoaas.co| GW_SVC
+    TRAEFIK -->|domain-api-docs.lab.local.ctoaas.co| DOCS_SVC
+    
+    GW_SVC --> LOCALSTACK
+    DOCS_SVC --> DOCS_POD
+    
+    LOCALSTACK --> TP_SVC
+    LOCALSTACK --> IT_SVC
+    LOCALSTACK --> PM_SVC
+    
+    TP_SVC --> TP_POD
+    IT_SVC --> IT_POD
+    PM_SVC --> PM_POD
+```
+
+### Custom LocalStack Image
+
+Instead of deploying Lambda functions as zips at runtime, we build a custom LocalStack image with the Lambda function pre-loaded. We use `LAMBDA_EXECUTOR=local` to run Lambda code directly in the LocalStack process, eliminating the need for Docker socket access.
+
+**Dockerfile** (`gateway/Dockerfile`):
+```dockerfile
+FROM localstack/localstack:latest
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    nodejs \
+    npm \
+    zip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Lambda function source
+COPY lambda /opt/lambda
+WORKDIR /opt/lambda
+
+# Build Lambda function
+RUN npm install && \
+    npm run build && \
+    zip -r /opt/aggregation-lambda.zip dist/ node_modules/
+
+# Copy initialization script
+COPY init-scripts/deploy-lambda.sh /etc/localstack/init/ready.d/
+RUN chmod +x /etc/localstack/init/ready.d/deploy-lambda.sh
+
+# Set environment variables
+ENV LAMBDA_EXECUTOR=local
+ENV SERVICES=apigateway,lambda,iam
+ENV DEBUG=1
+
+WORKDIR /opt/code/localstack
+```
+
+**Lambda Deployment Script** (`gateway/init-scripts/deploy-lambda.sh`):
+```bash
+#!/bin/bash
+# This script runs when LocalStack is ready and deploys the pre-built Lambda
+
+set -e
+
+echo "Deploying aggregation Lambda..."
+
+# Create Lambda function from pre-built zip
+awslocal lambda create-function \
+  --function-name aggregation-lambda \
+  --runtime nodejs18.x \
+  --role arn:aws:iam::000000000000:role/lambda-role \
+  --handler index.handler \
+  --zip-file fileb:///opt/aggregation-lambda.zip
+
+# Create API Gateway
+CUSTOM_API_ID="domain-api"
+
+awslocal apigateway create-rest-api \
+  --name domain-api-gateway \
+  --rest-api-id $CUSTOM_API_ID
+
+# Get root resource
+ROOT_ID=$(awslocal apigateway get-resources \
+  --rest-api-id $CUSTOM_API_ID \
+  --query 'items[0].id' \
+  --output text)
+
+# Create proxy resource
+RESOURCE_ID=$(awslocal apigateway create-resource \
+  --rest-api-id $CUSTOM_API_ID \
+  --parent-id $ROOT_ID \
+  --path-part '{proxy+}' \
+  --query 'id' \
+  --output text)
+
+# Create ANY method
+awslocal apigateway put-method \
+  --rest-api-id $CUSTOM_API_ID \
+  --resource-id $RESOURCE_ID \
+  --http-method ANY \
+  --authorization-type NONE
+
+# Create Lambda integration
+awslocal apigateway put-integration \
+  --rest-api-id $CUSTOM_API_ID \
+  --resource-id $RESOURCE_ID \
+  --http-method ANY \
+  --type AWS_PROXY \
+  --integration-http-method POST \
+  --uri arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:000000000000:function:aggregation-lambda/invocations
+
+# Deploy API
+awslocal apigateway create-deployment \
+  --rest-api-id $CUSTOM_API_ID \
+  --stage-name dev
+
+echo "✓ Gateway and Lambda deployed successfully"
+echo "Gateway available at: http://localhost:4566/restapis/$CUSTOM_API_ID/dev/_user_request_"
+```
+
+### Kubernetes Manifests Structure
+
+**Directory Structure**:
+```
+domain-apis/
+├── kustomize/
+│   ├── base/
+│   │   ├── kustomization.yaml
+│   │   ├── gateway/
+│   │   │   ├── namespace.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   ├── service.yaml
+│   │   │   └── configmap.yaml
+│   │   ├── taxpayer-api/
+│   │   │   ├── namespace.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   ├── income-tax-api/
+│   │   │   ├── namespace.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   ├── payment-api/
+│   │   │   ├── namespace.yaml
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   ├── docs/
+│   │   │   ├── deployment.yaml
+│   │   │   └── service.yaml
+│   │   └── ingress/
+│   │       ├── gateway-ingress.yaml
+│   │       └── docs-ingress.yaml
+│   └── overlays/
+│       └── lab/
+│           ├── kustomization.yaml
+│           └── ingress-patch.yaml
+├── gateway/
+│   ├── Dockerfile
+│   ├── lambda/
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   └── init-scripts/
+│       └── deploy-lambda.sh
+└── docs/
+    └── Dockerfile
+
+# ArgoCD Application manifest is added to k8s-lab repo:
+k8s-lab/
+└── other-seeds/
+    └── domain-api.yaml
+```
+
+### Namespace Configuration
+
+**kustomize/base/gateway/namespace.yaml**:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: domain-api
+  labels:
+    name: domain-api
+    secrets/gh-docker-registry: "true"  # For pulling custom images from GHCR
+```
+
+**kustomize/base/taxpayer-api/namespace.yaml**:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: domain-api-taxpayer
+  labels:
+    name: domain-api-taxpayer
+```
+
+**kustomize/base/income-tax-api/namespace.yaml**:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: domain-api-income-tax
+  labels:
+    name: domain-api-income-tax
+```
+
+**kustomize/base/payment-api/namespace.yaml**:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: domain-api-payment
+  labels:
+    name: domain-api-payment
+```
+
+### Gateway Deployment
+
+**kustomize/base/gateway/deployment.yaml**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: domain-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      imagePullSecrets:
+        - name: gh-docker-registry-creds
+      containers:
+        - name: localstack
+          image: ghcr.io/your-org/domain-api-gateway:latest
+          ports:
+            - containerPort: 4566
+              name: http
+          env:
+            - name: SERVICES
+              value: "apigateway,lambda,iam"
+            - name: DEBUG
+              value: "1"
+            - name: LAMBDA_EXECUTOR
+              value: "local"
+            - name: TAXPAYER_API_URL
+              value: "http://taxpayer-api.domain-api-taxpayer.svc.cluster.local"
+            - name: INCOME_TAX_API_URL
+              value: "http://income-tax-api.domain-api-income-tax.svc.cluster.local"
+            - name: PAYMENT_API_URL
+              value: "http://payment-api.domain-api-payment.svc.cluster.local"
+          livenessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /_localstack/health
+              port: 4566
+            initialDelaySeconds: 20
+            periodSeconds: 5
+```
+
+**kustomize/base/gateway/service.yaml**:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: domain-api
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 4566
+  type: ClusterIP
+```
+
+### API Service Deployments
+
+**kustomize/base/taxpayer-api/deployment.yaml**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxpayer-api
+  namespace: domain-api-taxpayer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: taxpayer-api
+  template:
+    metadata:
+      labels:
+        app: taxpayer-api
+    spec:
+      containers:
+        - name: prism
+          image: stoplight/prism:latest
+          args:
+            - mock
+            - -h
+            - "0.0.0.0"
+            - -p
+            - "80"
+            - /specs/taxpayer-api.yaml
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: specs
+              mountPath: /specs
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: specs
+          configMap:
+            name: taxpayer-api-spec
+```
+
+**kustomize/base/taxpayer-api/service.yaml**:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: taxpayer-api
+  namespace: domain-api-taxpayer
+spec:
+  selector:
+    app: taxpayer-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+```
+
+Similar deployments and services for `income-tax-api` (in `domain-api-income-tax` namespace) and `payment-api` (in `domain-api-payment` namespace).
+
+### Documentation Service
+
+Instead of using ConfigMaps (which have size limits), we build a custom image with the generated documentation and OpenAPI specs baked in.
+
+**docs/Dockerfile**:
+```dockerfile
+FROM halverneus/static-file-server:latest
+
+# Copy generated documentation to /web (root)
+COPY docs /web
+
+# Copy OpenAPI specs to /web/specs
+COPY specs /web/specs
+
+# Set environment variables
+ENV FOLDER=/web
+ENV PORT=8080
+ENV SHOW_LISTING=true
+
+EXPOSE 8080
+```
+
+**kustomize/base/docs/deployment.yaml**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs
+  namespace: domain-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docs
+  template:
+    metadata:
+      labels:
+        app: docs
+    spec:
+      imagePullSecrets:
+        - name: gh-docker-registry-creds
+      containers:
+        - name: static-server
+          image: ghcr.io/your-org/domain-api-docs:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+```
+
+**kustomize/base/docs/service.yaml**:
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: docs
+  namespace: domain-api
+spec:
+  selector:
+    app: docs
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+```
+
+### Traefik Ingress Configuration
+
+**kustomize/base/ingress/gateway-ingress.yaml**:
+```yaml
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: domain-api-gateway
+  namespace: domain-api
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`domain-api.lab.local.ctoaas.co`)
+      kind: Rule
+      services:
+        - name: gateway
+          port: 80
+      middlewares:
+        - name: gateway-stripprefix
+  tls:
+    certResolver: letsencrypt
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: gateway-stripprefix
+  namespace: domain-api
+spec:
+  stripPrefix:
+    prefixes:
+      - /restapis/domain-api/dev/_user_request_
+```
+
+**kustomize/base/ingress/docs-ingress.yaml**:
+```yaml
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: domain-api-docs
+  namespace: domain-api
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`domain-api-docs.lab.local.ctoaas.co`)
+      kind: Rule
+      services:
+        - name: docs
+          port: 80
+  tls:
+    certResolver: letsencrypt
+```
+
+### Kustomization
+
+**kustomize/base/kustomization.yaml**:
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - gateway/namespace.yaml
+  - gateway/deployment.yaml
+  - gateway/service.yaml
+  - taxpayer-api/namespace.yaml
+  - taxpayer-api/deployment.yaml
+  - taxpayer-api/service.yaml
+  - income-tax-api/namespace.yaml
+  - income-tax-api/deployment.yaml
+  - income-tax-api/service.yaml
+  - payment-api/namespace.yaml
+  - payment-api/deployment.yaml
+  - payment-api/service.yaml
+  - docs/deployment.yaml
+  - docs/service.yaml
+  - ingress/gateway-ingress.yaml
+  - ingress/docs-ingress.yaml
+
+configMapGenerator:
+  - name: taxpayer-api-spec
+    namespace: domain-api-taxpayer
+    files:
+      - taxpayer-api.yaml=../../specs/taxpayer/taxpayer-api.yaml
+  - name: income-tax-api-spec
+    namespace: domain-api-income-tax
+    files:
+      - income-tax-api.yaml=../../specs/income-tax/income-tax-api.yaml
+  - name: payment-api-spec
+    namespace: domain-api-payment
+    files:
+      - payment-api.yaml=../../specs/payment/payment-api.yaml
+
+images:
+  - name: ghcr.io/your-org/domain-api-gateway
+    newTag: latest
+  - name: ghcr.io/your-org/domain-api-docs
+    newTag: latest
+```
+
+### ArgoCD Application
+
+The ArgoCD Application manifest is added to the k8s-lab repository's `other-seeds/` directory, not in the domain-apis repo itself. This follows the pattern where k8s-lab manages ArgoCD Applications for external repositories.
+
+**k8s-lab/other-seeds/domain-api.yaml**:
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: domain-api
+  namespace: argocd
+  labels:
+    repo: domain-apis
+    component: api
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/domain-apis
+    targetRevision: main
+    path: kustomize/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: domain-api
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+```
+
+### Environment-Agnostic Acceptance Testing
+
+Acceptance tests are designed to work against any deployment by accepting a base URL:
+
+**tests/acceptance/playwright.config.ts**:
+```typescript
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  use: {
+    baseURL: process.env.BASE_URL || 'http://localhost:4566/restapis/domain-api/dev/_user_request_',
+  },
+  // ... other config
+});
+```
+
+**Running tests against different environments**:
+```bash
+# Against docker-compose
+BASE_URL=http://localhost:4566/restapis/domain-api/dev/_user_request_ npm run test:acceptance
+
+# Against k8s (via port-forward)
+kubectl port-forward -n domain-api svc/gateway 4566:4566
+BASE_URL=http://localhost:4566/restapis/domain-api/dev/_user_request_ npm run test:acceptance
+
+# Against k8s (via ingress)
+BASE_URL=https://domain-api.lab.local.ctoaas.co npm run test:acceptance
+```
+
+### Taskfile Integration
+
+**Taskfile.yaml** (k8s tasks):
+```yaml
+version: '3'
+
+tasks:
+  k8s:build:gateway:
+    desc: Build custom LocalStack image with Lambda
+    dir: gateway
+    cmds:
+      - docker build -t ghcr.io/your-org/domain-api-gateway:latest .
+
+  k8s:build:docs:
+    desc: Build custom docs image with generated documentation
+    cmds:
+      - npm run docs  # Generate documentation first
+      - docker build -f docs/Dockerfile -t ghcr.io/your-org/domain-api-docs:latest .
+
+  k8s:build:
+    desc: Build all custom images
+    deps: [k8s:build:gateway, k8s:build:docs]
+
+  k8s:push:gateway:
+    desc: Push gateway image to registry
+    deps: [k8s:build:gateway]
+    cmds:
+      - docker push ghcr.io/your-org/domain-api-gateway:latest
+
+  k8s:push:docs:
+    desc: Push docs image to registry
+    deps: [k8s:build:docs]
+    cmds:
+      - docker push ghcr.io/your-org/domain-api-docs:latest
+
+  k8s:push:
+    desc: Push all custom images to registry
+    deps: [k8s:push:gateway, k8s:push:docs]
+
+  k8s:apply:
+    desc: Apply Kubernetes manifests
+    cmds:
+      - kubectl apply -k kustomize/base
+
+  k8s:delete:
+    desc: Delete Kubernetes resources
+    cmds:
+      - kubectl delete -k kustomize/base
+
+  k8s:status:
+    desc: Check domain-api deployment status
+    cmds:
+      - kubectl get all -n domain-api
+      - kubectl get ingressroute -n domain-api
+
+  k8s:logs:gateway:
+    desc: View gateway logs
+    cmds:
+      - kubectl logs -n domain-api -l app=gateway -f
+
+  k8s:logs:taxpayer:
+    desc: View taxpayer API logs
+    cmds:
+      - kubectl logs -n domain-api -l app=taxpayer-api -f
+
+  k8s:port-forward:gateway:
+    desc: Port-forward to gateway service
+    cmds:
+      - kubectl port-forward -n domain-api svc/gateway 4566:80
+
+  k8s:port-forward:docs:
+    desc: Port-forward to docs service
+    cmds:
+      - kubectl port-forward -n domain-api svc/docs 8080:80
+
+  k8s:test:acceptance:
+    desc: Run acceptance tests against k8s deployment
+    cmds:
+      - kubectl port-forward -n domain-api svc/gateway 4566:80 &
+      - sleep 3
+      - BASE_URL=http://localhost:4566/restapis/domain-api/dev/_user_request_ npm run test:acceptance
+      - pkill -f "kubectl port-forward"
+
+  k8s:restart:gateway:
+    desc: Restart gateway deployment
+    cmds:
+      - kubectl rollout restart -n domain-api deployment/gateway
+
+  k8s:describe:gateway:
+    desc: Describe gateway deployment
+    cmds:
+      - kubectl describe -n domain-api deployment/gateway
+      - kubectl describe -n domain-api pod -l app=gateway
+```
+
+### Deployment Workflow
+
+**Local Development** (docker-compose):
+1. `docker-compose up` - Start all services
+2. `task gateway:init` - Initialize LocalStack
+3. `npm run test:acceptance` - Run tests
+
+**Kubernetes Deployment**:
+1. `task k8s:build` - Build gateway and docs images
+2. `task k8s:push` - Push to GHCR
+3. `task k8s:apply` - Deploy to k8s
+4. `task k8s:status` - Verify deployment
+5. `task k8s:test:acceptance` - Run acceptance tests
+
+**ArgoCD Deployment**:
+1. Push changes to git
+2. ArgoCD automatically syncs
+3. Monitor via ArgoCD UI or `kubectl`
+
+### Key Design Decisions
+
+**Why custom LocalStack image?**
+- Eliminates runtime Lambda deployment complexity
+- Faster pod startup (Lambda already loaded)
+- Immutable infrastructure (Lambda version tied to image)
+- Easier rollback (just change image tag)
+
+**Why build custom docs image instead of ConfigMaps?**
+- ConfigMaps have 1MB size limit (docs can easily exceed this)
+- Baking docs into image is more efficient (no volume mounts)
+- Immutable deployments (docs version tied to image tag)
+- Faster pod startup (no ConfigMap sync delays)
+- Better for CI/CD (build docs once, deploy anywhere)
+
+**Why use LAMBDA_EXECUTOR=local instead of docker?**
+- Eliminates need for Docker socket access in pods
+- Simpler security model (no privileged containers)
+- Faster Lambda execution (no container startup overhead)
+- Sufficient for development/testing workloads
+- Reduces resource requirements
+
+**Why port 80 for all services?**
+- Kubernetes convention for HTTP services
+- Simplifies service-to-service communication
+- Standard port for ingress controllers
+- Cleaner URLs (no port numbers needed)
+- Easier to remember and configure
+
+**Why separate namespaces for each API?**
+- Better resource isolation and security boundaries
+- Independent RBAC policies per API
+- Clearer ownership and responsibility
+- Easier to replace mock servers with real implementations
+- Follows microservices best practices
+- Prevents accidental cross-API dependencies
+
+**Why keep LocalStack instead of native k8s services?**
+- Maintains parity with docker-compose development environment
+- Preserves AWS API Gateway + Lambda architecture
+- No code changes to Lambda function
+- Same aggregation logic in all environments
+
+**Why separate API pods?**
+- Independent scaling of each API
+- Clearer resource boundaries
+- Easier to replace mock servers with real implementations
+- Follows microservices patterns
+
+**Why Traefik IngressRoute?**
+- Consistent with k8s-lab platform standards
+- Automatic TLS via LetsEncrypt
+- Middleware support for path rewriting
+- Native k8s integration
+
+### Health Checks and Monitoring
+
+All services include:
+- **Liveness probes**: Restart unhealthy containers
+- **Readiness probes**: Remove from service endpoints when not ready
+- **Resource limits**: Prevent resource exhaustion
+- **Labels**: Enable monitoring and log aggregation
+
+### Security Considerations
+
+- **Image pull secrets**: Use central secret store for GHCR access
+- **Network policies**: Restrict traffic between pods (future enhancement)
+- **TLS termination**: At Traefik ingress layer
+- **No privileged containers**: Except LocalStack (needs Docker socket)
+
+### Future Enhancements
+
+- **Replace mock servers**: Deploy real API implementations
+- **Add persistence**: For LocalStack state across restarts
+- **Horizontal scaling**: Scale API pods based on load
+- **Service mesh**: Add Istio/Linkerd for advanced traffic management
+- **Observability**: Add Prometheus metrics and distributed tracing

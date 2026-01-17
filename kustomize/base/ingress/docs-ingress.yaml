@@ -1,0 +1,16 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: domain-api-docs
+  namespace: domain-api
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`domain-api-docs.lab.local.ctoaas.co`)
+      kind: Rule
+      services:
+        - name: docs
+          port: 80
+  tls:
+    certResolver: letsencrypt

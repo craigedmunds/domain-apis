@@ -433,3 +433,153 @@ tasks:
       - echo ""
       - echo "=== Gateway Status ==="
       - task: gateway:status
+
+  # Kubernetes deployment tasks
+  k8s:build:gateway:
+    desc: Build custom LocalStack image with Lambda
+    dir: gateway
+    cmds:
+      - docker build -t ghcr.io/craigedmunds/domain-api-gateway:latest .
+
+  k8s:build:docs:
+    desc: Build custom docs image with generated documentation
+    deps: [docs]
+    cmds:
+      - docker build -f docs/Dockerfile -t ghcr.io/craigedmunds/domain-api-docs:latest .
+
+  k8s:build:
+    desc: Build all custom images
+    deps: [k8s:build:gateway, k8s:build:docs]
+
+  k8s:push:gateway:
+    desc: Push gateway image to registry
+    deps: [k8s:build:gateway]
+    cmds:
+      - docker push ghcr.io/craigedmunds/domain-api-gateway:latest
+
+  k8s:push:docs:
+    desc: Push docs image to registry
+    deps: [k8s:build:docs]
+    cmds:
+      - docker push ghcr.io/craigedmunds/domain-api-docs:latest
+
+  k8s:push:
+    desc: Push all custom images to registry
+    deps: [k8s:push:gateway, k8s:push:docs]
+
+  k8s:apply:
+    desc: Apply Kubernetes manifests
+    cmds:
+      - kubectl apply -k kustomize/base
+
+  k8s:delete:
+    desc: Delete Kubernetes resources
+    cmds:
+      - kubectl delete -k kustomize/base
+
+  k8s:status:
+    desc: Check domain-api deployment status
+    cmds:
+      - echo "=== Domain API Namespace ==="
+      - kubectl get all -n domain-api
+      - echo ""
+      - echo "=== Taxpayer API Namespace ==="
+      - kubectl get all -n domain-api-taxpayer
+      - echo ""
+      - echo "=== Income Tax API Namespace ==="
+      - kubectl get all -n domain-api-income-tax
+      - echo ""
+      - echo "=== Payment API Namespace ==="
+      - kubectl get all -n domain-api-payment
+      - echo ""
+      - echo "=== Ingress Routes ==="
+      - kubectl get ingressroute -n domain-api
+
+  k8s:logs:gateway:
+    desc: View gateway logs
+    cmds:
+      - kubectl logs -n domain-api -l app=gateway -f
+
+  k8s:logs:taxpayer:
+    desc: View taxpayer API logs
+    cmds:
+      - kubectl logs -n domain-api-taxpayer -l app=taxpayer-api -f
+
+  k8s:logs:income-tax:
+    desc: View income tax API logs
+    cmds:
+      - kubectl logs -n domain-api-income-tax -l app=income-tax-api -f
+
+  k8s:logs:payment:
+    desc: View payment API logs
+    cmds:
+      - kubectl logs -n domain-api-payment -l app=payment-api -f
+
+  k8s:logs:docs:
+    desc: View docs logs
+    cmds:
+      - kubectl logs -n domain-api -l app=docs -f
+
+  k8s:port-forward:gateway:
+    desc: Port-forward to gateway service
+    cmds:
+      - kubectl port-forward -n domain-api svc/gateway 4566:80
+
+  k8s:port-forward:docs:
+    desc: Port-forward to docs service
+    cmds:
+      - kubectl port-forward -n domain-api svc/docs 8080:80
+
+  k8s:test:acceptance:
+    desc: Run acceptance tests against k8s deployment
+    cmds:
+      - |
+        echo "Starting port-forward to gateway..."
+        kubectl port-forward -n domain-api svc/gateway 4566:80 &
+        PF_PID=$!
+        sleep 3
+        echo "Running acceptance tests..."
+        BASE_URL=http://localhost:4566/restapis/domain-api/dev/_user_request_ npm run test:acceptance || true
+        echo "Stopping port-forward..."
+        kill $PF_PID 2>/dev/null || true
+
+  k8s:restart:gateway:
+    desc: Restart gateway deployment
+    cmds:
+      - kubectl rollout restart -n domain-api deployment/gateway
+
+  k8s:restart:docs:
+    desc: Restart docs deployment
+    cmds:
+      - kubectl rollout restart -n domain-api deployment/docs
+
+  k8s:restart:taxpayer:
+    desc: Restart taxpayer API deployment
+    cmds:
+      - kubectl rollout restart -n domain-api-taxpayer deployment/taxpayer-api
+
+  k8s:restart:income-tax:
+    desc: Restart income tax API deployment
+    cmds:
+      - kubectl rollout restart -n domain-api-income-tax deployment/income-tax-api
+
+  k8s:restart:payment:
+    desc: Restart payment API deployment
+    cmds:
+      - kubectl rollout restart -n domain-api-payment deployment/payment-api
+
+  k8s:describe:gateway:
+    desc: Describe gateway deployment
+    cmds:
+      - kubectl describe -n domain-api deployment/gateway
+      - echo ""
+      - echo "=== Gateway Pods ==="
+      - kubectl describe -n domain-api pod -l app=gateway
+
+  k8s:describe:docs:
+    desc: Describe docs deployment
+    cmds:
+      - kubectl describe -n domain-api deployment/docs
+      - echo ""
+      - echo "=== Docs Pods ==="
+      - kubectl describe -n domain-api pod -l app=docs

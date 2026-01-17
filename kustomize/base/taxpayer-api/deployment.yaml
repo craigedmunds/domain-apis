@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxpayer-api
+  namespace: domain-api-taxpayer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: taxpayer-api
+  template:
+    metadata:
+      labels:
+        app: taxpayer-api
+    spec:
+      containers:
+        - name: prism
+          image: stoplight/prism:latest
+          args:
+            - mock
+            - -h
+            - "0.0.0.0"
+            - -p
+            - "80"
+            - /specs/taxpayer-api.yaml
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: specs
+              mountPath: /specs
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: specs
+          configMap:
+            name: taxpayer-api-spec
