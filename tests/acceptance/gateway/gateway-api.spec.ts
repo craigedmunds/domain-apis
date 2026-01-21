@@ -424,3 +424,198 @@ describe('Gateway API - CORS Support', () => {
     expect(response.headers.get('access-control-allow-headers')).toBeDefined();
   });
 });
+
+describe('Gateway API - Content Negotiation', () => {
+  describe('Aggregated Mode (Default)', () => {
+    test('should return application/vnd.domain+json when no Accept header is provided', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('id', 'TP123456');
+      expect(data).toHaveProperty('_links');
+    });
+
+    test('should return application/vnd.domain+json when Accept: application/vnd.domain+json', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
+        headers: { 'Accept': 'application/vnd.domain+json' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('id', 'TP123456');
+    });
+
+    test('should process include parameter in aggregated mode', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`);
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('_included');
+      expect(data._included).toHaveProperty('taxReturns');
+    });
+  });
+
+  describe('Simple REST Mode', () => {
+    test('should return application/json when Accept: application/json', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(response.headers.get('content-type')).not.toContain('vnd.domain');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('id', 'TP123456');
+      expect(data).toHaveProperty('_links');
+    });
+
+    test('should ignore include parameter in simple REST mode', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('application/json');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('id', 'TP123456');
+      expect(data._included).toBeUndefined();
+    });
+
+    test('should rewrite URLs in simple REST mode', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      const data = await response.json();
+      
+      expect(data).toHaveProperty('_links');
+      if (data._links.self) {
+        const selfHref = typeof data._links.self === 'string' 
+          ? data._links.self 
+          : data._links.self.href;
+        
+        // Links should be path-only, starting with /dev/
+        expect(selfHref).toMatch(/^\/dev\//);
+      }
+    });
+  });
+
+  describe('Pass-Through Mode', () => {
+    test('should return raw backend response when Accept: application/vnd.raw', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
+        headers: { 'Accept': 'application/vnd.raw' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      
+      // Content-Type should be from backend (typically application/json)
+      const contentType = response.headers.get('content-type');
+      expect(contentType).toBeDefined();
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('id', 'TP123456');
+      expect(data).toHaveProperty('_links');
+      
+      // URLs should NOT be rewritten in pass-through mode
+      if (data._links.self) {
+        const selfHref = typeof data._links.self === 'string' 
+          ? data._links.self 
+          : data._links.self.href;
+        
+        // Links should be path-only WITHOUT /dev/ prefix (raw backend format)
+        expect(selfHref).not.toMatch(/^\/dev\//);
+        expect(selfHref).toMatch(/^\/taxpayers\//);
+      }
+    });
+
+    test('should ignore include parameter in pass-through mode', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`, {
+        headers: { 'Accept': 'application/vnd.raw' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('id', 'TP123456');
+      expect(data._included).toBeUndefined();
+    });
+
+    test('should preserve backend Content-Type in pass-through mode', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
+        headers: { 'Accept': 'application/vnd.raw' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      
+      // Content-Type should be from backend, not transformed
+      const contentType = response.headers.get('content-type');
+      expect(contentType).toBeDefined();
+      expect(contentType).not.toContain('vnd.domain');
+    });
+  });
+
+  describe('Content Negotiation with Collections', () => {
+    test('should support aggregated mode on collections', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns`);
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('items');
+      expect(data).toHaveProperty('_included');
+    });
+
+    test('should support simple REST mode on collections', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      expect(response.headers.get('content-type')).toContain('application/json');
+      expect(response.headers.get('content-type')).not.toContain('vnd.domain');
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('items');
+      expect(data._included).toBeUndefined();
+    });
+
+    test('should support pass-through mode on collections', async () => {
+      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers`, {
+        headers: { 'Accept': 'application/vnd.raw' }
+      });
+      
+      expect(response.ok).toBeTruthy();
+      
+      const data = await response.json();
+      expect(data).toHaveProperty('items');
+      expect(data._included).toBeUndefined();
+      
+      // URLs should NOT be rewritten
+      if (data.items.length > 0 && data.items[0]._links?.self) {
+        const selfHref = typeof data.items[0]._links.self === 'string' 
+          ? data.items[0]._links.self 
+          : data.items[0]._links.self.href;
+        
+        expect(selfHref).not.toMatch(/^\/dev\//);
+      }
+    });
+  });
+});

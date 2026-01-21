@@ -2,13 +2,13 @@ openapi: 3.0.3
 info:
   title: Payment API
   version: 1.0.0
-  description: |
+  description: |-
     The Payment API manages tax payments and payment allocations within the UK tax system.
-    
+
     This API provides endpoints for recording payments, retrieving payment details, and managing
     payment allocations to tax returns. It supports various payment methods and tracks payment
     status throughout the payment lifecycle.
-    
+
     ## Key Features
     - Payment recording and tracking
     - Multiple payment methods (bank transfer, debit card, cheque)
@@ -16,44 +16,43 @@ info:
     - Payment status management (pending, cleared, failed, refunded)
     - Cross-API relationships to Taxpayer and Income Tax APIs
     - Support for including related resources via the `include` parameter
-    
+
     ## Relationships
     Payment resources include links to:
     - **Taxpayer** (Taxpayer API): The taxpayer who made the payment
     - **Allocations** (Payment API): How the payment is allocated to tax returns
-    
+
     PaymentAllocation resources include links to:
     - **Payment** (Payment API): The payment being allocated
     - **Tax Return** (Income Tax API): The tax return receiving the allocation
-    
+
     ## Version History
     - 1.0.0: Initial release with core payment management functionality
+
+
+    **Note:** This API is accessed through the API Gateway, which provides content negotiation and cross-API aggregation features. See the Accept header and include parameter documentation for details.
   contact:
     name: UK Tax Domain API Team
     email: api-support@example.gov.uk
-
 servers:
-  - url: http://localhost:8083
-    description: Local mock server (Prism)
   - url: http://domain-api.execute-api.localhost.localstack.cloud:4566/dev
-    description: Local gateway (LocalStack API Gateway with custom domain)
-
+    description: API Gateway (LocalStack development)
+  - url: https://domain-api.lab.local.ctoaas.co
+    description: API Gateway (Production)
 security:
-  - {}  # Allow unauthenticated access for POC
-
+  - {}
 tags:
   - name: payments
     description: Tax payment recording and management
   - name: allocations
     description: Payment allocation to tax returns
-
 paths:
   /payments:
     get:
       summary: List payments
       description: |
         Retrieve a list of all payments in the system.
-        
+
         Supports filtering by taxpayer and including related resources
         from other APIs using the `include` parameter.
       operationId: listPayments
@@ -66,8 +65,8 @@ paths:
           required: false
           schema:
             type: string
-            pattern: '^TP[0-9]{6}$'
-          example: "TP123456"
+            pattern: ^TP[0-9]{6}$
+          example: TP123456
         - name: status
           in: query
           description: Filter by payment status
@@ -79,13 +78,144 @@ paths:
               - cleared
               - failed
               - refunded
-          example: "cleared"
-        - $ref: '../shared/shared-components.yaml#/components/parameters/IncludeParameter'
+          example: cleared
+        - $ref: ../shared/shared-components.yaml#/components/parameters/IncludeParameter
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+            enum:
+              - application/vnd.domain+json
+              - application/json
+              - application/vnd.raw
+            default: application/vnd.domain+json
+          description: |
+            Content negotiation header to select gateway mode:
+            - `application/vnd.domain+json` (default): Aggregated mode with includes
+            - `application/json`: Simple REST mode without aggregation
+            - `application/vnd.raw`: Pass-through mode, raw backend response
+        - name: include
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Comma-separated list of relationships to include in the response.
+            Only processed in aggregated mode (Accept: application/vnd.domain+json).
+            Ignored in simple REST and pass-through modes.
+          example: taxReturns,payments
       responses:
         '200':
           description: List of payments retrieved successfully
           content:
+            application/vnd.domain+json:
+              description: Aggregated response with optional _included section
+              schema:
+                type: object
+                required:
+                  - items
+                  - _links
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  _included:
+                    $ref: '#/components/schemas/_IncludedSection'
+                  _links:
+                    type: object
+                    required:
+                      - self
+                    properties:
+                      self:
+                        type: string
+                        format: uri
+              examples:
+                withoutIncludes:
+                  summary: List of payments without includes
+                  value:
+                    items:
+                      - id: PM20230001
+                        type: payment
+                        taxpayerId: TP123456
+                        amount:
+                          amount: 7500
+                          currency: GBP
+                        paymentDate: '2024-01-31'
+                        paymentMethod: bank-transfer
+                        reference: TAX-2023-001
+                        status: cleared
+                        _links:
+                          self: /payments/PM20230001
+                          taxpayer:
+                            href: /taxpayers/TP123456
+                            type: taxpayer
+                            title: Taxpayer who made this payment
+                          allocations:
+                            href: /payments/PM20230001/allocations
+                            type: collection
+                            title: Allocations for this payment
+                      - id: PM20230002
+                        type: payment
+                        taxpayerId: TP789012
+                        amount:
+                          amount: 3200
+                          currency: GBP
+                        paymentDate: '2024-02-15'
+                        paymentMethod: debit-card
+                        reference: TAX-2023-002
+                        status: cleared
+                        _links:
+                          self: /payments/PM20230002
+                          taxpayer:
+                            href: /taxpayers/TP789012
+                            type: taxpayer
+                            title: Taxpayer who made this payment
+                          allocations:
+                            href: /payments/PM20230002/allocations
+                            type: collection
+                            title: Allocations for this payment
+                    _links:
+                      self: /payments
+                withIncludes:
+                  summary: List of payments with included taxpayers
+                  value:
+                    items:
+                      - id: PM20230001
+                        type: payment
+                        taxpayerId: TP123456
+                        amount:
+                          amount: 7500
+                          currency: GBP
+                        paymentDate: '2024-01-31'
+                        paymentMethod: bank-transfer
+                        reference: TAX-2023-001
+                        status: cleared
+                        _links:
+                          self: /payments/PM20230001
+                          taxpayer:
+                            href: /taxpayers/TP123456
+                            type: taxpayer
+                            title: Taxpayer who made this payment
+                          allocations:
+                            href: /payments/PM20230001/allocations
+                            type: collection
+                            title: Allocations for this payment
+                    _included:
+                      taxpayer:
+                        - id: TP123456
+                          type: taxpayer
+                          nino: AB123456C
+                          name:
+                            firstName: John
+                            lastName: Smith
+                          _links:
+                            self: /taxpayers/TP123456
+                    _links:
+                      self: /payments?include=taxpayer
             application/json:
+              description: Simple REST response without aggregation
               schema:
                 type: object
                 required:
@@ -118,92 +248,203 @@ paths:
                   summary: List of payments without includes
                   value:
                     items:
-                      - id: "PM20230001"
-                        type: "payment"
-                        taxpayerId: "TP123456"
+                      - id: PM20230001
+                        type: payment
+                        taxpayerId: TP123456
                         amount:
-                          amount: 7500.00
-                          currency: "GBP"
-                        paymentDate: "2024-01-31"
-                        paymentMethod: "bank-transfer"
-                        reference: "TAX-2023-001"
-                        status: "cleared"
+                          amount: 7500
+                          currency: GBP
+                        paymentDate: '2024-01-31'
+                        paymentMethod: bank-transfer
+                        reference: TAX-2023-001
+                        status: cleared
                         _links:
-                          self: "/payments/PM20230001"
+                          self: /payments/PM20230001
                           taxpayer:
-                            href: "/taxpayers/TP123456"
-                            type: "taxpayer"
-                            title: "Taxpayer who made this payment"
+                            href: /taxpayers/TP123456
+                            type: taxpayer
+                            title: Taxpayer who made this payment
                           allocations:
-                            href: "/payments/PM20230001/allocations"
-                            type: "collection"
-                            title: "Allocations for this payment"
-                      - id: "PM20230002"
-                        type: "payment"
-                        taxpayerId: "TP789012"
+                            href: /payments/PM20230001/allocations
+                            type: collection
+                            title: Allocations for this payment
+                      - id: PM20230002
+                        type: payment
+                        taxpayerId: TP789012
                         amount:
-                          amount: 3200.00
-                          currency: "GBP"
-                        paymentDate: "2024-02-15"
-                        paymentMethod: "debit-card"
-                        reference: "TAX-2023-002"
-                        status: "cleared"
+                          amount: 3200
+                          currency: GBP
+                        paymentDate: '2024-02-15'
+                        paymentMethod: debit-card
+                        reference: TAX-2023-002
+                        status: cleared
                         _links:
-                          self: "/payments/PM20230002"
+                          self: /payments/PM20230002
                           taxpayer:
-                            href: "/taxpayers/TP789012"
-                            type: "taxpayer"
-                            title: "Taxpayer who made this payment"
+                            href: /taxpayers/TP789012
+                            type: taxpayer
+                            title: Taxpayer who made this payment
                           allocations:
-                            href: "/payments/PM20230002/allocations"
-                            type: "collection"
-                            title: "Allocations for this payment"
+                            href: /payments/PM20230002/allocations
+                            type: collection
+                            title: Allocations for this payment
                     _links:
-                      self: "/payments"
+                      self: /payments
                 withIncludes:
                   summary: List of payments with included taxpayers
                   value:
                     items:
-                      - id: "PM20230001"
-                        type: "payment"
-                        taxpayerId: "TP123456"
+                      - id: PM20230001
+                        type: payment
+                        taxpayerId: TP123456
                         amount:
-                          amount: 7500.00
-                          currency: "GBP"
-                        paymentDate: "2024-01-31"
-                        paymentMethod: "bank-transfer"
-                        reference: "TAX-2023-001"
-                        status: "cleared"
+                          amount: 7500
+                          currency: GBP
+                        paymentDate: '2024-01-31'
+                        paymentMethod: bank-transfer
+                        reference: TAX-2023-001
+                        status: cleared
                         _links:
-                          self: "/payments/PM20230001"
+                          self: /payments/PM20230001
                           taxpayer:
-                            href: "/taxpayers/TP123456"
-                            type: "taxpayer"
-                            title: "Taxpayer who made this payment"
+                            href: /taxpayers/TP123456
+                            type: taxpayer
+                            title: Taxpayer who made this payment
                           allocations:
-                            href: "/payments/PM20230001/allocations"
-                            type: "collection"
-                            title: "Allocations for this payment"
+                            href: /payments/PM20230001/allocations
+                            type: collection
+                            title: Allocations for this payment
                     _included:
                       taxpayer:
-                        - id: "TP123456"
-                          type: "taxpayer"
-                          nino: "AB123456C"
+                        - id: TP123456
+                          type: taxpayer
+                          nino: AB123456C
                           name:
-                            firstName: "John"
-                            lastName: "Smith"
+                            firstName: John
+                            lastName: Smith
                           _links:
-                            self: "/taxpayers/TP123456"
+                            self: /taxpayers/TP123456
                     _links:
-                      self: "/payments?include=taxpayer"
+                      self: /payments?include=taxpayer
+            application/vnd.raw:
+              description: Raw backend response without transformation
+              schema:
+                type: object
+                required:
+                  - items
+                  - _links
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+                  _included:
+                    type: object
+                    description: |
+                      Related resources included in the response when the `include` parameter is used.
+                      Each property is a relationship name containing an array of related resources.
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                  _links:
+                    type: object
+                    required:
+                      - self
+                    properties:
+                      self:
+                        type: string
+                        format: uri
+              examples:
+                withoutIncludes:
+                  summary: List of payments without includes
+                  value:
+                    items:
+                      - id: PM20230001
+                        type: payment
+                        taxpayerId: TP123456
+                        amount:
+                          amount: 7500
+                          currency: GBP
+                        paymentDate: '2024-01-31'
+                        paymentMethod: bank-transfer
+                        reference: TAX-2023-001
+                        status: cleared
+                        _links:
+                          self: /payments/PM20230001
+                          taxpayer:
+                            href: /taxpayers/TP123456
+                            type: taxpayer
+                            title: Taxpayer who made this payment
+                          allocations:
+                            href: /payments/PM20230001/allocations
+                            type: collection
+                            title: Allocations for this payment
+                      - id: PM20230002
+                        type: payment
+                        taxpayerId: TP789012
+                        amount:
+                          amount: 3200
+                          currency: GBP
+                        paymentDate: '2024-02-15'
+                        paymentMethod: debit-card
+                        reference: TAX-2023-002
+                        status: cleared
+                        _links:
+                          self: /payments/PM20230002
+                          taxpayer:
+                            href: /taxpayers/TP789012
+                            type: taxpayer
+                            title: Taxpayer who made this payment
+                          allocations:
+                            href: /payments/PM20230002/allocations
+                            type: collection
+                            title: Allocations for this payment
+                    _links:
+                      self: /payments
+                withIncludes:
+                  summary: List of payments with included taxpayers
+                  value:
+                    items:
+                      - id: PM20230001
+                        type: payment
+                        taxpayerId: TP123456
+                        amount:
+                          amount: 7500
+                          currency: GBP
+                        paymentDate: '2024-01-31'
+                        paymentMethod: bank-transfer
+                        reference: TAX-2023-001
+                        status: cleared
+                        _links:
+                          self: /payments/PM20230001
+                          taxpayer:
+                            href: /taxpayers/TP123456
+                            type: taxpayer
+                            title: Taxpayer who made this payment
+                          allocations:
+                            href: /payments/PM20230001/allocations
+                            type: collection
+                            title: Allocations for this payment
+                    _included:
+                      taxpayer:
+                        - id: TP123456
+                          type: taxpayer
+                          nino: AB123456C
+                          name:
+                            firstName: John
+                            lastName: Smith
+                          _links:
+                            self: /taxpayers/TP123456
+                    _links:
+                      self: /payments?include=taxpayer
         '400':
-          $ref: '../shared/shared-components.yaml#/components/responses/BadRequest'
-
+          $ref: ../shared/shared-components.yaml#/components/responses/BadRequest
     post:
       summary: Record a new payment
       description: |
         Record a new tax payment in the system.
-        
+
         Requires taxpayer ID, payment amount, date, and method.
         The payment can later be allocated to specific tax returns.
       operationId: createPayment
@@ -219,23 +460,23 @@ paths:
               bankTransfer:
                 summary: Bank transfer payment
                 value:
-                  taxpayerId: "TP123456"
+                  taxpayerId: TP123456
                   amount:
-                    amount: 7500.00
-                    currency: "GBP"
-                  paymentDate: "2024-01-31"
-                  paymentMethod: "bank-transfer"
-                  reference: "TAX-2023-001"
+                    amount: 7500
+                    currency: GBP
+                  paymentDate: '2024-01-31'
+                  paymentMethod: bank-transfer
+                  reference: TAX-2023-001
               debitCard:
                 summary: Debit card payment
                 value:
-                  taxpayerId: "TP789012"
+                  taxpayerId: TP789012
                   amount:
-                    amount: 3200.00
-                    currency: "GBP"
-                  paymentDate: "2024-02-15"
-                  paymentMethod: "debit-card"
-                  reference: "TAX-2023-002"
+                    amount: 3200
+                    currency: GBP
+                  paymentDate: '2024-02-15'
+                  paymentMethod: debit-card
+                  reference: TAX-2023-002
       responses:
         '201':
           description: Payment recorded successfully
@@ -245,35 +486,34 @@ paths:
               schema:
                 type: string
                 format: uri
-              example: "/payments/PM20230001"
+              example: /payments/PM20230001
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
               example:
-                id: "PM20230001"
-                type: "payment"
-                taxpayerId: "TP123456"
+                id: PM20230001
+                type: payment
+                taxpayerId: TP123456
                 amount:
-                  amount: 7500.00
-                  currency: "GBP"
-                paymentDate: "2024-01-31"
-                paymentMethod: "bank-transfer"
-                reference: "TAX-2023-001"
-                status: "pending"
+                  amount: 7500
+                  currency: GBP
+                paymentDate: '2024-01-31'
+                paymentMethod: bank-transfer
+                reference: TAX-2023-001
+                status: pending
                 _links:
-                  self: "/payments/PM20230001"
+                  self: /payments/PM20230001
                   taxpayer:
-                    href: "/taxpayers/TP123456"
-                    type: "taxpayer"
-                    title: "Taxpayer who made this payment"
+                    href: /taxpayers/TP123456
+                    type: taxpayer
+                    title: Taxpayer who made this payment
                   allocations:
-                    href: "/payments/PM20230001/allocations"
-                    type: "collection"
-                    title: "Allocations for this payment"
+                    href: /payments/PM20230001/allocations
+                    type: collection
+                    title: Allocations for this payment
         '400':
-          $ref: '../shared/shared-components.yaml#/components/responses/BadRequest'
-
+          $ref: ../shared/shared-components.yaml#/components/responses/BadRequest
   /payments/{id}:
     parameters:
       - name: id
@@ -282,109 +522,305 @@ paths:
         required: true
         schema:
           type: string
-          pattern: '^PM[0-9]{8}$'
-        example: "PM20230001"
-
+          pattern: ^PM[0-9]{8}$
+        example: PM20230001
     get:
       summary: Get payment details
       description: |
         Retrieve detailed information about a specific payment.
-        
+
         Supports including related resources from other APIs using the `include` parameter.
       operationId: getPayment
       tags:
         - payments
       parameters:
-        - $ref: '../shared/shared-components.yaml#/components/parameters/IncludeParameter'
+        - $ref: ../shared/shared-components.yaml#/components/parameters/IncludeParameter
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+            enum:
+              - application/vnd.domain+json
+              - application/json
+              - application/vnd.raw
+            default: application/vnd.domain+json
+          description: |
+            Content negotiation header to select gateway mode:
+            - `application/vnd.domain+json` (default): Aggregated mode with includes
+            - `application/json`: Simple REST mode without aggregation
+            - `application/vnd.raw`: Pass-through mode, raw backend response
+        - name: include
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Comma-separated list of relationships to include in the response.
+            Only processed in aggregated mode (Accept: application/vnd.domain+json).
+            Ignored in simple REST and pass-through modes.
+          example: taxReturns,payments
       responses:
         '200':
           description: Payment details retrieved successfully
           content:
-            application/json:
+            application/vnd.domain+json:
+              description: Aggregated response with optional _included section
               schema:
                 $ref: '#/components/schemas/PaymentWithIncludes'
               examples:
                 withoutIncludes:
                   summary: Payment without includes
                   value:
-                    id: "PM20230001"
-                    type: "payment"
-                    taxpayerId: "TP123456"
+                    id: PM20230001
+                    type: payment
+                    taxpayerId: TP123456
                     amount:
-                      amount: 7500.00
-                      currency: "GBP"
-                    paymentDate: "2024-01-31"
-                    paymentMethod: "bank-transfer"
-                    reference: "TAX-2023-001"
-                    status: "cleared"
+                      amount: 7500
+                      currency: GBP
+                    paymentDate: '2024-01-31'
+                    paymentMethod: bank-transfer
+                    reference: TAX-2023-001
+                    status: cleared
                     _links:
-                      self: "/payments/PM20230001"
+                      self: /payments/PM20230001
                       taxpayer:
-                        href: "/taxpayers/TP123456"
-                        type: "taxpayer"
-                        title: "Taxpayer who made this payment"
+                        href: /taxpayers/TP123456
+                        type: taxpayer
+                        title: Taxpayer who made this payment
                       allocations:
-                        href: "/payments/PM20230001/allocations"
-                        type: "collection"
-                        title: "Allocations for this payment"
+                        href: /payments/PM20230001/allocations
+                        type: collection
+                        title: Allocations for this payment
                 withIncludes:
                   summary: Payment with included taxpayer and allocations
                   value:
-                    id: "PM20230001"
-                    type: "payment"
-                    taxpayerId: "TP123456"
+                    id: PM20230001
+                    type: payment
+                    taxpayerId: TP123456
                     amount:
-                      amount: 7500.00
-                      currency: "GBP"
-                    paymentDate: "2024-01-31"
-                    paymentMethod: "bank-transfer"
-                    reference: "TAX-2023-001"
-                    status: "cleared"
+                      amount: 7500
+                      currency: GBP
+                    paymentDate: '2024-01-31'
+                    paymentMethod: bank-transfer
+                    reference: TAX-2023-001
+                    status: cleared
                     _links:
-                      self: "/payments/PM20230001"
+                      self: /payments/PM20230001
                       taxpayer:
-                        href: "/taxpayers/TP123456"
-                        type: "taxpayer"
-                        title: "Taxpayer who made this payment"
+                        href: /taxpayers/TP123456
+                        type: taxpayer
+                        title: Taxpayer who made this payment
                       allocations:
-                        href: "/payments/PM20230001/allocations"
-                        type: "collection"
-                        title: "Allocations for this payment"
+                        href: /payments/PM20230001/allocations
+                        type: collection
+                        title: Allocations for this payment
                     _includes:
-                      taxpayer: ["TP123456"]
-                      allocations: ["PA20230001"]
+                      taxpayer:
+                        - TP123456
+                      allocations:
+                        - PA20230001
                     _included:
                       taxpayer:
-                        - id: "TP123456"
-                          type: "taxpayer"
-                          nino: "AB123456C"
+                        - id: TP123456
+                          type: taxpayer
+                          nino: AB123456C
                           name:
-                            firstName: "John"
-                            lastName: "Smith"
+                            firstName: John
+                            lastName: Smith
                           _links:
-                            self: "/taxpayers/TP123456"
+                            self: /taxpayers/TP123456
                       allocations:
-                        - id: "PA20230001"
-                          type: "payment-allocation"
-                          paymentId: "PM20230001"
-                          taxReturnId: "TR20230001"
+                        - id: PA20230001
+                          type: payment-allocation
+                          paymentId: PM20230001
+                          taxReturnId: TR20230001
                           amount:
-                            amount: 7500.00
-                            currency: "GBP"
-                          allocationDate: "2024-02-01T10:30:00Z"
+                            amount: 7500
+                            currency: GBP
+                          allocationDate: '2024-02-01T10:30:00Z'
                           _links:
-                            self: "/allocations/PA20230001"
+                            self: /allocations/PA20230001
                             payment:
-                              href: "/payments/PM20230001"
-                              type: "payment"
-                              title: "Payment for this allocation"
+                              href: /payments/PM20230001
+                              type: payment
+                              title: Payment for this allocation
                             taxReturn:
-                              href: "/tax-returns/TR20230001"
-                              type: "tax-return"
-                              title: "Tax return receiving this allocation"
+                              href: /tax-returns/TR20230001
+                              type: tax-return
+                              title: Tax return receiving this allocation
+            application/json:
+              description: Simple REST response without aggregation
+              schema:
+                $ref: '#/components/schemas/PaymentWithIncludes'
+              examples:
+                withoutIncludes:
+                  summary: Payment without includes
+                  value:
+                    id: PM20230001
+                    type: payment
+                    taxpayerId: TP123456
+                    amount:
+                      amount: 7500
+                      currency: GBP
+                    paymentDate: '2024-01-31'
+                    paymentMethod: bank-transfer
+                    reference: TAX-2023-001
+                    status: cleared
+                    _links:
+                      self: /payments/PM20230001
+                      taxpayer:
+                        href: /taxpayers/TP123456
+                        type: taxpayer
+                        title: Taxpayer who made this payment
+                      allocations:
+                        href: /payments/PM20230001/allocations
+                        type: collection
+                        title: Allocations for this payment
+                withIncludes:
+                  summary: Payment with included taxpayer and allocations
+                  value:
+                    id: PM20230001
+                    type: payment
+                    taxpayerId: TP123456
+                    amount:
+                      amount: 7500
+                      currency: GBP
+                    paymentDate: '2024-01-31'
+                    paymentMethod: bank-transfer
+                    reference: TAX-2023-001
+                    status: cleared
+                    _links:
+                      self: /payments/PM20230001
+                      taxpayer:
+                        href: /taxpayers/TP123456
+                        type: taxpayer
+                        title: Taxpayer who made this payment
+                      allocations:
+                        href: /payments/PM20230001/allocations
+                        type: collection
+                        title: Allocations for this payment
+                    _includes:
+                      taxpayer:
+                        - TP123456
+                      allocations:
+                        - PA20230001
+                    _included:
+                      taxpayer:
+                        - id: TP123456
+                          type: taxpayer
+                          nino: AB123456C
+                          name:
+                            firstName: John
+                            lastName: Smith
+                          _links:
+                            self: /taxpayers/TP123456
+                      allocations:
+                        - id: PA20230001
+                          type: payment-allocation
+                          paymentId: PM20230001
+                          taxReturnId: TR20230001
+                          amount:
+                            amount: 7500
+                            currency: GBP
+                          allocationDate: '2024-02-01T10:30:00Z'
+                          _links:
+                            self: /allocations/PA20230001
+                            payment:
+                              href: /payments/PM20230001
+                              type: payment
+                              title: Payment for this allocation
+                            taxReturn:
+                              href: /tax-returns/TR20230001
+                              type: tax-return
+                              title: Tax return receiving this allocation
+            application/vnd.raw:
+              description: Raw backend response without transformation
+              schema:
+                $ref: '#/components/schemas/PaymentWithIncludes'
+              examples:
+                withoutIncludes:
+                  summary: Payment without includes
+                  value:
+                    id: PM20230001
+                    type: payment
+                    taxpayerId: TP123456
+                    amount:
+                      amount: 7500
+                      currency: GBP
+                    paymentDate: '2024-01-31'
+                    paymentMethod: bank-transfer
+                    reference: TAX-2023-001
+                    status: cleared
+                    _links:
+                      self: /payments/PM20230001
+                      taxpayer:
+                        href: /taxpayers/TP123456
+                        type: taxpayer
+                        title: Taxpayer who made this payment
+                      allocations:
+                        href: /payments/PM20230001/allocations
+                        type: collection
+                        title: Allocations for this payment
+                withIncludes:
+                  summary: Payment with included taxpayer and allocations
+                  value:
+                    id: PM20230001
+                    type: payment
+                    taxpayerId: TP123456
+                    amount:
+                      amount: 7500
+                      currency: GBP
+                    paymentDate: '2024-01-31'
+                    paymentMethod: bank-transfer
+                    reference: TAX-2023-001
+                    status: cleared
+                    _links:
+                      self: /payments/PM20230001
+                      taxpayer:
+                        href: /taxpayers/TP123456
+                        type: taxpayer
+                        title: Taxpayer who made this payment
+                      allocations:
+                        href: /payments/PM20230001/allocations
+                        type: collection
+                        title: Allocations for this payment
+                    _includes:
+                      taxpayer:
+                        - TP123456
+                      allocations:
+                        - PA20230001
+                    _included:
+                      taxpayer:
+                        - id: TP123456
+                          type: taxpayer
+                          nino: AB123456C
+                          name:
+                            firstName: John
+                            lastName: Smith
+                          _links:
+                            self: /taxpayers/TP123456
+                      allocations:
+                        - id: PA20230001
+                          type: payment-allocation
+                          paymentId: PM20230001
+                          taxReturnId: TR20230001
+                          amount:
+                            amount: 7500
+                            currency: GBP
+                          allocationDate: '2024-02-01T10:30:00Z'
+                          _links:
+                            self: /allocations/PA20230001
+                            payment:
+                              href: /payments/PM20230001
+                              type: payment
+                              title: Payment for this allocation
+                            taxReturn:
+                              href: /tax-returns/TR20230001
+                              type: tax-return
+                              title: Tax return receiving this allocation
         '404':
-          $ref: '../shared/shared-components.yaml#/components/responses/NotFound'
-
+          $ref: ../shared/shared-components.yaml#/components/responses/NotFound
   /payments/{id}/allocations:
     parameters:
       - name: id
@@ -393,14 +829,13 @@ paths:
         required: true
         schema:
           type: string
-          pattern: '^PM[0-9]{8}$'
-        example: "PM20230001"
-
+          pattern: ^PM[0-9]{8}$
+        example: PM20230001
     get:
       summary: Get payment allocations
       description: |
         Retrieve all allocations for a specific payment.
-        
+
         Shows how the payment has been allocated to different tax returns.
       operationId: getPaymentAllocations
       tags:
@@ -409,7 +844,8 @@ paths:
         '200':
           description: Payment allocations retrieved successfully
           content:
-            application/json:
+            application/vnd.domain+json:
+              description: Aggregated response with optional _included section
               schema:
                 type: object
                 required:
@@ -428,37 +864,72 @@ paths:
                       self:
                         type: string
                         format: uri
-              example:
-                items:
-                  - id: "PA20230001"
-                    type: "payment-allocation"
-                    paymentId: "PM20230001"
-                    taxReturnId: "TR20230001"
-                    amount:
-                      amount: 7500.00
-                      currency: "GBP"
-                    allocationDate: "2024-02-01T10:30:00Z"
-                    _links:
-                      self: "/allocations/PA20230001"
-                      payment:
-                        href: "/payments/PM20230001"
-                        type: "payment"
-                        title: "Payment for this allocation"
-                      taxReturn:
-                        href: "/tax-returns/TR20230001"
-                        type: "tax-return"
-                        title: "Tax return receiving this allocation"
-                _links:
-                  self: "/payments/PM20230001/allocations"
+                  _included:
+                    $ref: '#/components/schemas/_IncludedSection'
+            application/json:
+              description: Simple REST response without aggregation
+              schema:
+                type: object
+                required:
+                  - items
+                  - _links
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentAllocation'
+                  _links:
+                    type: object
+                    required:
+                      - self
+                    properties:
+                      self:
+                        type: string
+                        format: uri
+            application/vnd.raw:
+              description: Raw backend response without transformation
+              schema:
+                type: object
+                required:
+                  - items
+                  - _links
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentAllocation'
+                  _links:
+                    type: object
+                    required:
+                      - self
+                    properties:
+                      self:
+                        type: string
+                        format: uri
         '404':
-          $ref: '../shared/shared-components.yaml#/components/responses/NotFound'
-
+          $ref: ../shared/shared-components.yaml#/components/responses/NotFound
+      parameters:
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+            enum:
+              - application/vnd.domain+json
+              - application/json
+              - application/vnd.raw
+            default: application/vnd.domain+json
+          description: |
+            Content negotiation header to select gateway mode:
+            - `application/vnd.domain+json` (default): Aggregated mode with includes
+            - `application/json`: Simple REST mode without aggregation
+            - `application/vnd.raw`: Pass-through mode, raw backend response
   /allocations:
     post:
       summary: Create a payment allocation
       description: |
         Allocate a payment (or part of a payment) to a specific tax return.
-        
+
         This creates a link between a payment and a tax return, showing how
         the payment is applied to satisfy tax liabilities.
       operationId: createAllocation
@@ -474,19 +945,19 @@ paths:
               fullAllocation:
                 summary: Full payment allocation
                 value:
-                  paymentId: "PM20230001"
-                  taxReturnId: "TR20230001"
+                  paymentId: PM20230001
+                  taxReturnId: TR20230001
                   amount:
-                    amount: 7500.00
-                    currency: "GBP"
+                    amount: 7500
+                    currency: GBP
               partialAllocation:
                 summary: Partial payment allocation
                 value:
-                  paymentId: "PM20230002"
-                  taxReturnId: "TR20230002"
+                  paymentId: PM20230002
+                  taxReturnId: TR20230002
                   amount:
-                    amount: 1500.00
-                    currency: "GBP"
+                    amount: 1500
+                    currency: GBP
       responses:
         '201':
           description: Payment allocation created successfully
@@ -496,32 +967,32 @@ paths:
               schema:
                 type: string
                 format: uri
-              example: "/allocations/PA20230001"
+              example: /allocations/PA20230001
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentAllocation'
               example:
-                id: "PA20230001"
-                type: "payment-allocation"
-                paymentId: "PM20230001"
-                taxReturnId: "TR20230001"
+                id: PA20230001
+                type: payment-allocation
+                paymentId: PM20230001
+                taxReturnId: TR20230001
                 amount:
-                  amount: 7500.00
-                  currency: "GBP"
-                allocationDate: "2024-02-01T10:30:00Z"
+                  amount: 7500
+                  currency: GBP
+                allocationDate: '2024-02-01T10:30:00Z'
                 _links:
-                  self: "/allocations/PA20230001"
+                  self: /allocations/PA20230001
                   payment:
-                    href: "/payments/PM20230001"
-                    type: "payment"
-                    title: "Payment for this allocation"
+                    href: /payments/PM20230001
+                    type: payment
+                    title: Payment for this allocation
                   taxReturn:
-                    href: "/tax-returns/TR20230001"
-                    type: "tax-return"
-                    title: "Tax return receiving this allocation"
+                    href: /tax-returns/TR20230001
+                    type: tax-return
+                    title: Tax return receiving this allocation
         '400':
-          $ref: '../shared/shared-components.yaml#/components/responses/BadRequest'
+          $ref: ../shared/shared-components.yaml#/components/responses/BadRequest
         '404':
           description: Payment or tax return not found
           content:
@@ -546,10 +1017,9 @@ paths:
                         type: integer
               example:
                 error:
-                  code: "RESOURCE_NOT_FOUND"
-                  message: "Payment PM20230001 or tax return TR20230001 not found"
+                  code: RESOURCE_NOT_FOUND
+                  message: Payment PM20230001 or tax return TR20230001 not found
                   status: 404
-
 components:
   securitySchemes:
     BearerAuth:
@@ -558,15 +1028,14 @@ components:
       bearerFormat: JWT
       description: |
         JWT bearer token authentication (not implemented in POC).
-        
-        In production, all endpoints would require authentication.
 
+        In production, all endpoints would require authentication.
   schemas:
     Payment:
       type: object
       description: |
         A tax payment made by a taxpayer.
-        
+
         Records payment details including amount, date, method, and status.
         Includes hypermedia links to related resources in other domain APIs.
       required:
@@ -581,27 +1050,27 @@ components:
       properties:
         id:
           type: string
-          pattern: '^PM[0-9]{8}$'
+          pattern: ^PM[0-9]{8}$
           description: Unique payment identifier
-          example: "PM20230001"
+          example: PM20230001
         type:
           type: string
           enum:
             - payment
           description: Resource type identifier
-          example: "payment"
+          example: payment
         taxpayerId:
           type: string
-          pattern: '^TP[0-9]{6}$'
+          pattern: ^TP[0-9]{6}$
           description: ID of the taxpayer who made the payment
-          example: "TP123456"
+          example: TP123456
         amount:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          $ref: ../shared/shared-components.yaml#/components/schemas/Money
         paymentDate:
           type: string
           format: date
           description: Date the payment was made in ISO 8601 format (YYYY-MM-DD)
-          example: "2024-01-31"
+          example: '2024-01-31'
         paymentMethod:
           type: string
           enum:
@@ -609,11 +1078,11 @@ components:
             - debit-card
             - cheque
           description: Method used to make the payment
-          example: "bank-transfer"
+          example: bank-transfer
         reference:
           type: string
           description: Payment reference or transaction ID
-          example: "TAX-2023-001"
+          example: TAX-2023-001
           maxLength: 100
         status:
           type: string
@@ -623,14 +1092,14 @@ components:
             - failed
             - refunded
           description: Current status of the payment
-          example: "cleared"
+          example: cleared
         _links:
           allOf:
-            - $ref: '../shared/shared-components.yaml#/components/schemas/Links'
+            - $ref: ../shared/shared-components.yaml#/components/schemas/Links
             - type: object
               description: |
                 Hypermedia links to related resources.
-                
+
                 Includes links to:
                 - self: This payment resource
                 - taxpayer: The taxpayer who made this payment (Taxpayer API)
@@ -645,15 +1114,15 @@ components:
                       type: string
                       format: uri
                       description: URL to the taxpayer resource
-                      example: "/taxpayers/TP123456"
+                      example: /taxpayers/TP123456
                     type:
                       type: string
                       enum:
                         - taxpayer
-                      example: "taxpayer"
+                      example: taxpayer
                     title:
                       type: string
-                      example: "Taxpayer who made this payment"
+                      example: Taxpayer who made this payment
                 allocations:
                   type: object
                   required:
@@ -663,16 +1132,15 @@ components:
                       type: string
                       format: uri
                       description: URL to the payment's allocations
-                      example: "/payments/PM20230001/allocations"
+                      example: /payments/PM20230001/allocations
                     type:
                       type: string
                       enum:
                         - collection
-                      example: "collection"
+                      example: collection
                     title:
                       type: string
-                      example: "Allocations for this payment"
-
+                      example: Allocations for this payment
     PaymentWithIncludes:
       allOf:
         - $ref: '#/components/schemas/Payment'
@@ -689,14 +1157,16 @@ components:
                   type: array
                   items:
                     type: string
-                    pattern: '^TP[0-9]{6}$'
-                  example: ["TP123456"]
+                    pattern: ^TP[0-9]{6}$
+                  example:
+                    - TP123456
                 allocations:
                   type: array
                   items:
                     type: string
-                    pattern: '^PA[0-9]{8}$'
-                  example: ["PA20230001"]
+                    pattern: ^PA[0-9]{8}$
+                  example:
+                    - PA20230001
             _included:
               type: object
               description: |
@@ -715,7 +1185,6 @@ components:
                   items:
                     type: object
                     description: PaymentAllocation resource
-
     PaymentCreate:
       type: object
       description: Request body for recording a new payment
@@ -727,16 +1196,16 @@ components:
       properties:
         taxpayerId:
           type: string
-          pattern: '^TP[0-9]{6}$'
+          pattern: ^TP[0-9]{6}$
           description: ID of the taxpayer making the payment
-          example: "TP123456"
+          example: TP123456
         amount:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          $ref: ../shared/shared-components.yaml#/components/schemas/Money
         paymentDate:
           type: string
           format: date
           description: Date the payment was made
-          example: "2024-01-31"
+          example: '2024-01-31'
         paymentMethod:
           type: string
           enum:
@@ -744,18 +1213,17 @@ components:
             - debit-card
             - cheque
           description: Method used to make the payment
-          example: "bank-transfer"
+          example: bank-transfer
         reference:
           type: string
           description: Payment reference or transaction ID (optional)
-          example: "TAX-2023-001"
+          example: TAX-2023-001
           maxLength: 100
-
     PaymentAllocation:
       type: object
       description: |
         An allocation of a payment to a specific tax return.
-        
+
         Links a payment (or part of a payment) to a tax return, showing how
         the payment is applied to satisfy tax liabilities.
       required:
@@ -769,39 +1237,39 @@ components:
       properties:
         id:
           type: string
-          pattern: '^PA[0-9]{8}$'
+          pattern: ^PA[0-9]{8}$
           description: Unique payment allocation identifier
-          example: "PA20230001"
+          example: PA20230001
         type:
           type: string
           enum:
             - payment-allocation
           description: Resource type identifier
-          example: "payment-allocation"
+          example: payment-allocation
         paymentId:
           type: string
-          pattern: '^PM[0-9]{8}$'
+          pattern: ^PM[0-9]{8}$
           description: ID of the payment being allocated
-          example: "PM20230001"
+          example: PM20230001
         taxReturnId:
           type: string
-          pattern: '^TR[0-9]{8}$'
+          pattern: ^TR[0-9]{8}$
           description: ID of the tax return receiving the allocation
-          example: "TR20230001"
+          example: TR20230001
         amount:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          $ref: ../shared/shared-components.yaml#/components/schemas/Money
         allocationDate:
           type: string
           format: date-time
           description: Date and time the allocation was created in ISO 8601 format
-          example: "2024-02-01T10:30:00Z"
+          example: '2024-02-01T10:30:00Z'
         _links:
           allOf:
-            - $ref: '../shared/shared-components.yaml#/components/schemas/Links'
+            - $ref: ../shared/shared-components.yaml#/components/schemas/Links
             - type: object
               description: |
                 Hypermedia links to related resources.
-                
+
                 Includes links to:
                 - self: This allocation resource
                 - payment: The payment being allocated (Payment API)
@@ -816,15 +1284,15 @@ components:
                       type: string
                       format: uri
                       description: URL to the payment resource
-                      example: "/payments/PM20230001"
+                      example: /payments/PM20230001
                     type:
                       type: string
                       enum:
                         - payment
-                      example: "payment"
+                      example: payment
                     title:
                       type: string
-                      example: "Payment for this allocation"
+                      example: Payment for this allocation
                 taxReturn:
                   type: object
                   required:
@@ -834,16 +1302,15 @@ components:
                       type: string
                       format: uri
                       description: URL to the tax return resource
-                      example: "/tax-returns/TR20230001"
+                      example: /tax-returns/TR20230001
                     type:
                       type: string
                       enum:
                         - tax-return
-                      example: "tax-return"
+                      example: tax-return
                     title:
                       type: string
-                      example: "Tax return receiving this allocation"
-
+                      example: Tax return receiving this allocation
     PaymentAllocationCreate:
       type: object
       description: Request body for creating a payment allocation
@@ -854,13 +1321,22 @@ components:
       properties:
         paymentId:
           type: string
-          pattern: '^PM[0-9]{8}$'
+          pattern: ^PM[0-9]{8}$
           description: ID of the payment to allocate
-          example: "PM20230001"
+          example: PM20230001
         taxReturnId:
           type: string
-          pattern: '^TR[0-9]{8}$'
+          pattern: ^TR[0-9]{8}$
           description: ID of the tax return to allocate to
-          example: "TR20230001"
+          example: TR20230001
         amount:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          $ref: ../shared/shared-components.yaml#/components/schemas/Money
+    _IncludedSection:
+      type: object
+      description: |
+        Included related resources fetched from other APIs.
+        Only present when using aggregated mode with include parameter.
+      additionalProperties:
+        type: array
+        items:
+          type: object

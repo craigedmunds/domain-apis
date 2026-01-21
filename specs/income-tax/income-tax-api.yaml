@@ -27,10 +27,12 @@ info:
     email: api-support@example.gov.uk
 
 servers:
-  - url: http://localhost:8082
-    description: Local mock server (Prism)
-  - url: http://domain-api.execute-api.localhost.localstack.cloud:4566/dev
-    description: Local gateway (LocalStack API Gateway with custom domain)
+  - url: http://localhost:4566
+    description: "Gateway API (aggregated with includes) - Default"
+  - url: http://localhost:4566
+    description: "Gateway API (simple REST, use Accept: application/json)"
+  - url: http://localhost:4566
+    description: "Gateway API (pass-through, use Accept: application/vnd.raw)"
 
 security:
   - {}  # Allow unauthenticated access for POC

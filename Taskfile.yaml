@@ -61,40 +61,45 @@ tasks:
   docs:
     desc: Generate documentation for all APIs
     cmds:
-      - task docs:taxpayer
-      - task docs:income-tax
-      - task docs:payment
-      - task docs:copy-specs
+      - task: docs:merge-gateway-overlay
+      - task: docs:taxpayer
+      - task: docs:income-tax
+      - task: docs:payment
+      - task: docs:copy-specs
+
+  docs:merge-gateway-overlay:
+    desc: Merge backend specs with gateway overlay for user-facing documentation
+    cmds:
+      - echo "Merging gateway overlay with backend specs..."
+      - node tools/merge-gateway-overlay.js {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml {{.DOCS_DIR}}/specs/taxpayer/taxpayer-api.yaml
+      - node tools/merge-gateway-overlay.js {{.SPECS_DIR}}/income-tax/income-tax-api.yaml {{.DOCS_DIR}}/specs/income-tax/income-tax-api.yaml
+      - node tools/merge-gateway-overlay.js {{.SPECS_DIR}}/payment/payment-api.yaml {{.DOCS_DIR}}/specs/payment/payment-api.yaml
+      - echo "✓ Gateway-enhanced specs created"
 
   docs:copy-specs:
-    desc: Copy OpenAPI specs to docs folder for explorer
+    desc: Copy shared components to docs folder
     cmds:
-      - mkdir -p {{.DOCS_DIR}}/specs/taxpayer
-      - mkdir -p {{.DOCS_DIR}}/specs/income-tax
-      - mkdir -p {{.DOCS_DIR}}/specs/payment
       - mkdir -p {{.DOCS_DIR}}/specs/shared
-      - cp {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml {{.DOCS_DIR}}/specs/taxpayer/
-      - cp {{.SPECS_DIR}}/income-tax/income-tax-api.yaml {{.DOCS_DIR}}/specs/income-tax/
-      - cp {{.SPECS_DIR}}/payment/payment-api.yaml {{.DOCS_DIR}}/specs/payment/
       - cp {{.SPECS_DIR}}/shared/shared-components.yaml {{.DOCS_DIR}}/specs/shared/
+      - cp gateway/gateway-api.yaml {{.DOCS_DIR}}/specs/gateway-api.yaml
 
   docs:taxpayer:
-    desc: Generate Taxpayer API documentation
+    desc: Generate Taxpayer API documentation from gateway-enhanced spec
     cmds:
       - mkdir -p {{.DOCS_DIR}}/taxpayer
-      - npx @redocly/cli build-docs {{.SPECS_DIR}}/taxpayer/taxpayer-api.yaml -o {{.DOCS_DIR}}/taxpayer/index.html
+      - npx @redocly/cli build-docs {{.DOCS_DIR}}/specs/taxpayer/taxpayer-api.yaml -o {{.DOCS_DIR}}/taxpayer/index.html
 
   docs:income-tax:
-    desc: Generate Income Tax API documentation
+    desc: Generate Income Tax API documentation from gateway-enhanced spec
     cmds:
       - mkdir -p {{.DOCS_DIR}}/income-tax
-      - npx @redocly/cli build-docs {{.SPECS_DIR}}/income-tax/income-tax-api.yaml -o {{.DOCS_DIR}}/income-tax/index.html
+      - npx @redocly/cli build-docs {{.DOCS_DIR}}/specs/income-tax/income-tax-api.yaml -o {{.DOCS_DIR}}/income-tax/index.html
 
   docs:payment:
-    desc: Generate Payment API documentation
+    desc: Generate Payment API documentation from gateway-enhanced spec
     cmds:
       - mkdir -p {{.DOCS_DIR}}/payment
-      - npx @redocly/cli build-docs {{.SPECS_DIR}}/payment/payment-api.yaml -o {{.DOCS_DIR}}/payment/index.html
+      - npx @redocly/cli build-docs {{.DOCS_DIR}}/specs/payment/payment-api.yaml -o {{.DOCS_DIR}}/specs/payment/index.html
 
   # Documentation server
   docs:serve:

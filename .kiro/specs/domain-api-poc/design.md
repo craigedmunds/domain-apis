@@ -4,12 +4,33 @@
 
 This design describes a proof-of-concept implementation for a multi-API domain architecture representing portions of the UK tax system. The system demonstrates how to model complex domains across multiple RESTful APIs while maintaining clear boundaries, shared components, and cross-API resource traversal capabilities.
 
-The POC will implement three separate Domain APIs:
-1. **Taxpayer API**: Manages taxpayer identity and registration information
-2. **Income Tax API**: Handles income tax returns, assessments, and calculations
-3. **Payment API**: Manages tax payments and payment allocations
+**Critical Design Decision: API Maturity Levels**
 
-Each API will have its own OpenAPI specification, but they will share common components (e.g., Address, Money, Date types) through reusable specification fragments. Resources will include lightweight relationship links inspired by JSON API, allowing clients to traverse between related resources across API boundaries.
+To demonstrate real-world integration challenges, the POC implements three backend APIs with different maturity levels, showcasing how the gateway can normalize legacy systems into a consistent external interface:
+
+1. **Taxpayer API (High Maturity)**: Modern JSON-based API that natively provides hypermedia links
+   - Returns JSON responses with `_links` field
+   - Implements the target architecture natively
+   - No gateway transformation needed beyond aggregation
+
+2. **Income Tax API (Medium Maturity)**: JSON-based API without native hypermedia support
+   - Returns JSON responses but without `_links` field
+   - Gateway injects links based on configuration
+   - Demonstrates link injection for APIs that can't be modified
+
+3. **Payment API (Low Maturity)**: Legacy XML-based API
+   - Returns XML responses
+   - Gateway transforms XML to JSON and injects links
+   - Demonstrates full transformation for legacy systems
+
+This maturity spectrum reflects the reality of enterprise estates where modern and legacy systems must coexist and be presented consistently to consumers.
+
+The POC will implement three separate Domain APIs:
+1. **Taxpayer API**: Manages taxpayer identity and registration information (High Maturity - JSON with links)
+2. **Income Tax API**: Handles income tax returns, assessments, and calculations (Medium Maturity - JSON without links)
+3. **Payment API**: Manages tax payments and payment allocations (Low Maturity - XML)
+
+Each API will have its own OpenAPI specification, but they will share common components (e.g., Address, Money, Date types) through reusable specification fragments. The gateway layer ensures all APIs present a consistent interface to clients with hypermedia navigation capabilities, regardless of backend maturity.
 
 ### Key Design Principles
 
@@ -18,6 +39,7 @@ Each API will have its own OpenAPI specification, but they will share common com
 - **Shared Vocabulary**: Common types are defined once and reused via OpenAPI $ref
 - **Hypermedia Navigation**: Resources include links to related resources, enabling discovery
 - **Simplicity**: Lightweight JSON structure without full JSON API compliance overhead
+- **Legacy Integration**: Gateway normalizes varying backend maturity levels into consistent external interface
 
 ## Architecture
 
@@ -95,20 +117,29 @@ graph TB
 
 ### API Boundaries
 
-**Taxpayer API** (`/taxpayer/v1`)
+**Taxpayer API** (`/taxpayers`) - **High Maturity**
+- **Maturity Level**: Modern JSON API with native hypermedia support
+- **Response Format**: JSON with `_links` field
+- **Gateway Role**: Minimal - only handles aggregation via `include` parameter
 - Manages taxpayer registration and identity
 - Resources: Taxpayer, Address, ContactDetails
 - Relationships: Links to tax returns (Income Tax API), payments (Payment API)
 
-**Income Tax API** (`/income-tax/v1`)
-- Manages income tax returns and assessments
+**Income Tax API** (`/tax-returns`) - **Medium Maturity**
+- **Maturity Level**: JSON API without native hypermedia support
+- **Response Format**: JSON without `_links` field
+- **Gateway Role**: Injects `_links` based on configuration, handles aggregation
+- Handles income tax returns and assessments
 - Resources: TaxReturn, Assessment, TaxCalculation
-- Relationships: Links to taxpayer (Taxpayer API), payments (Payment API)
+- Relationships: Links to taxpayer (Taxpayer API), payments (Payment API) - injected by gateway
 
-**Payment API** (`/payment/v1`)
+**Payment API** (`/payments`) - **Low Maturity**
+- **Maturity Level**: Legacy XML-based API
+- **Response Format**: XML
+- **Gateway Role**: Transforms XML to JSON, injects `_links` based on configuration, handles aggregation
 - Manages tax payments and allocations
 - Resources: Payment, PaymentAllocation, PaymentMethod
-- Relationships: Links to taxpayer (Taxpayer API), tax returns (Income Tax API)
+- Relationships: Links to taxpayer (Taxpayer API), tax returns (Income Tax API) - injected by gateway
 
 ### Gateway Layer
 
@@ -494,6 +525,179 @@ echo "  curl http://$CUSTOM_API_ID.execute-api.localhost.localstack.cloud:4566/t
 
 **Note on LocalStack Custom Domains**: LocalStack supports custom API IDs and provides a special domain format `{api-id}.execute-api.localhost.localstack.cloud:4566` that maps to the API Gateway. This provides cleaner URLs without requiring the full `/restapis/{id}/dev/_user_request_` path. The custom domain format works with LocalStack's DNS resolution and is the recommended approach for local development.
 
+#### Content Negotiation: Pass-Through vs Aggregated Modes
+
+The gateway supports three distinct operational modes, selected via the `Accept` header:
+
+**1. Aggregated Mode (Default)**:
+- **Trigger**: No `Accept` header, or `Accept: application/vnd.domain+json` (future: `Accept: application/vnd.domain+xml` for XML aggregation)
+- **Behavior**: 
+  - Processes `include` parameter for cross-API aggregation
+  - Adds `_included` section when includes are requested
+  - Returns `application/vnd.domain+json` (or requested format in future extensions)
+- **Use Case**: Clients want the enhanced gateway features (includes)
+- **Media Type**: `application/vnd.domain+json` indicates the enriched response structure with aggregation support
+- **Note**: No URL rewriting needed since gateway is at root path (/)
+
+**2. Simple REST Mode**:
+- **Trigger**: `Accept: application/json` header
+- **Behavior**:
+  - Proxies request to backend API
+  - Ignores `include` parameter (not processed)
+  - No `_included` section added
+  - Returns `application/json`
+- **Use Case**: Clients want standard REST JSON responses without aggregation overhead
+- **Media Type**: `application/json` indicates standard REST JSON response
+
+**3. Pass-Through Mode**:
+- **Trigger**: `Accept: application/vnd.raw` header
+- **Behavior**:
+  - Proxies request directly to backend API without modification
+  - Returns response exactly as received from backend (no transformation)
+  - Preserves backend's `Content-Type` header (typically `application/json`)
+  - Ignores `include` parameter (not processed)
+- **Use Case**: Clients want direct access to backend API behavior, testing, or when aggregation is not needed
+- **Media Type**: `application/vnd.raw` indicates raw backend response
+
+**Implementation in Lambda**:
+
+```typescript
+export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { path, httpMethod, queryStringParameters, body, headers } = event;
+  const acceptHeader = headers['Accept'] || headers['accept'] || '';
+  const isPassThrough = acceptHeader.includes('application/vnd.raw');
+  const isSimpleRest = acceptHeader.includes('application/json');
+  
+  try {
+    // Route to appropriate backend API
+    const backendUrl = routeToBackend(path);
+    
+    // Fetch from backend
+    const backendResponse = await fetch(backendUrl, {
+      method: httpMethod,
+      body: body,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    // Pass-through mode: return backend response as-is
+    if (isPassThrough) {
+      const backendData = await backendResponse.text();
+      return {
+        statusCode: backendResponse.status,
+        body: backendData,
+        headers: {
+          'Content-Type': backendResponse.headers.get('Content-Type') || 'application/json'
+        }
+      };
+    }
+    
+    const primaryData = await backendResponse.json();
+    
+    // Simple REST mode: no transformation, just return
+    if (isSimpleRest) {
+      return {
+        statusCode: backendResponse.status,
+        body: JSON.stringify(primaryData),
+        headers: { 'Content-Type': 'application/json' }
+      };
+    }
+    
+    // Aggregated mode: process includes
+    // Triggered by no Accept header or Accept: application/vnd.domain+json
+    // Future: Accept: application/vnd.domain+xml for XML aggregation
+    const includeParam = queryStringParameters?.include;
+    
+    if (!includeParam) {
+      // No includes requested
+      return {
+        statusCode: backendResponse.status,
+        body: JSON.stringify(primaryData),
+        headers: { 'Content-Type': 'application/vnd.domain+json' }
+      };
+    }
+    
+    // Process includes and merge
+    const includes = includeParam.split(',').map(s => s.trim());
+    const includedData = await fetchIncludedResources(primaryData, includes);
+    
+    const aggregatedResponse = {
+      ...primaryData,
+      _included: includedData
+    };
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify(aggregatedResponse),
+      headers: { 'Content-Type': 'application/vnd.domain+json' }
+    };
+    
+  } catch (error) {
+    return {
+      statusCode: 502,
+      body: JSON.stringify({
+        error: {
+          code: 'GATEWAY_ERROR',
+          message: 'Failed to process request',
+          details: error.message
+        }
+      }),
+      headers: { 'Content-Type': 'application/json' }
+    };
+  }
+}
+```
+
+**OpenAPI Specification Integration**:
+
+Each API specification includes three server entries to document all modes:
+
+```yaml
+servers:
+  - url: https://domain-api.lab.local.ctoaas.co
+    description: "Gateway API (aggregated with includes) - Default"
+  - url: https://domain-api.lab.local.ctoaas.co
+    description: "Gateway API (simple REST, use Accept: application/json)"
+  - url: https://domain-api.lab.local.ctoaas.co
+    description: "Gateway API (pass-through, use Accept: application/vnd.raw)"
+```
+
+**Swagger UI Integration**:
+
+Swagger UI can be configured with a request interceptor to automatically set the `Accept` header based on the selected server:
+
+```javascript
+SwaggerUIBundle({
+  // ... other config
+  requestInterceptor: (request) => {
+    // Check which server is selected
+    const selectedServer = SwaggerUIBundle.getConfigs().url;
+    if (selectedServer && selectedServer.description.includes('pass-through')) {
+      request.headers['Accept'] = 'application/vnd.raw';
+    } else if (selectedServer && selectedServer.description.includes('simple REST')) {
+      request.headers['Accept'] = 'application/json';
+    } else {
+      // Default to aggregated mode
+      request.headers['Accept'] = 'application/vnd.domain+json';
+    }
+    return request;
+  }
+});
+```
+
+**Benefits of This Approach**:
+- Single ingress/gateway endpoint for all modes
+- No path-based routing complexity
+- No URL rewriting needed (gateway at root path)
+- Standard HTTP content negotiation pattern
+- Three clear modes for different use cases:
+  - **Aggregated**: Full gateway features with includes
+  - **Simple REST**: Standard JSON without aggregation overhead
+  - **Pass-through**: Direct backend access for testing
+- Easy to test all modes from documentation site
+- Backend APIs remain unaware of gateway modes
+- Clear separation of concerns (gateway handles mode switching)
+- Simplified implementation without URL manipulation
+
 #### Taskfile Integration
 
 Common gateway operations are managed via Taskfile:
@@ -709,6 +913,42 @@ All resources follow a consistent structure:
       "type": "resource-type",
       "title": "Human readable description"
     }
+  }
+}
+```
+
+#### Design Decision: Response Structure
+
+**Decision**: Use a flat JSON structure without root-level "data" wrapper, with attributes at the top level and hypermedia links in a `_links` field.
+
+**Rationale**:
+- **Simplicity**: Clients can access resource attributes directly without unwrapping
+- **JSON API Inspiration**: Borrows the `_links` pattern from JSON API for hypermedia navigation
+- **Not Full JSON API**: Avoids the complexity of full JSON API compliance (no required "data" wrapper, no "relationships" object)
+- **Developer Experience**: Simpler response structure is easier to work with in client code
+
+**Alternative Considered**: Full JSON API compliance with "data" wrapper and "relationships" object
+- **Rejected**: Too complex for this POC, adds unnecessary nesting
+
+**Implementation**:
+- Resource attributes appear at top level of JSON object
+- `_links` field contains hypermedia links to related resources
+- `_included` field (when using gateway aggregation) contains embedded related resources
+- `type` field identifies the resource type (borrowed from JSON API)
+
+**Example**:
+```json
+{
+  "id": "TP123456",
+  "type": "taxpayer",
+  "nino": "AB123456C",
+  "name": {
+    "firstName": "John",
+    "lastName": "Smith"
+  },
+  "_links": {
+    "self": {"href": "/taxpayers/TP123456"},
+    "taxReturns": {"href": "/tax-returns?taxpayerId=TP123456"}
   }
 }
 ```

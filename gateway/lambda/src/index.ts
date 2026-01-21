@@ -119,12 +119,20 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   const { path, httpMethod, queryStringParameters, body, headers } = event;
   const includeParam = queryStringParameters?.include;
 
+  // Detect content negotiation mode based on Accept header
+  const acceptHeader = headers['Accept'] || headers['accept'] || '';
+  const isPassThrough = acceptHeader.includes('application/vnd.raw');
+  const isSimpleRest = acceptHeader.includes('application/json');
+  const isAggregated = !isPassThrough && !isSimpleRest; // Default mode
+
+  console.log(`Content negotiation mode: ${isPassThrough ? 'pass-through' : isSimpleRest ? 'simple-rest' : 'aggregated'}`);
+
   // CORS headers for browser compatibility
   const corsHeaders = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
   };
 
   // Handle OPTIONS preflight requests
@@ -181,6 +189,23 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       contentType = responseHeaders['content-type'] || responseHeaders['Content-Type'] || '';
     }
 
+    // === PASS-THROUGH MODE ===
+    // Return backend response exactly as-is without any transformation
+    if (isPassThrough) {
+      console.log('Pass-through mode: returning raw backend response');
+      const backendData = await primaryResponse.text();
+      return {
+        statusCode: primaryResponse.status,
+        body: backendData,
+        headers: {
+          'Content-Type': contentType || 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+        },
+      };
+    }
+
     // 5. Apply adapter transformation if configured and response is XML
     let primaryData: ResourceResponse;
     
@@ -219,6 +244,33 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       primaryData = await primaryResponse.json();
     }
 
+    // === SIMPLE REST MODE ===
+    // Return JSON without aggregation, ignore include parameter
+    if (isSimpleRest) {
+      console.log('Simple REST mode: returning JSON without aggregation');
+      const rewrittenData = rewriteLinksToGateway(primaryData);
+      
+      // Also rewrite links in items array if present
+      if (rewrittenData.items && Array.isArray(rewrittenData.items)) {
+        rewrittenData.items = rewrittenData.items.map(item => rewriteLinksToGateway(item));
+      }
+      
+      return {
+        statusCode: primaryResponse.status,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+        },
+        body: JSON.stringify(rewrittenData),
+      };
+    }
+
+    // === AGGREGATED MODE (Default) ===
+    // Process includes and return with application/vnd.domain+json
+    console.log('Aggregated mode: processing includes');
+
     // 6. If no include parameter, rewrite URLs and return
     if (!includeParam) {
       const rewrittenData = rewriteLinksToGateway(primaryData);
@@ -230,12 +282,17 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       
       return {
         statusCode: primaryResponse.status,
-        headers: corsHeaders,
+        headers: {
+          'Content-Type': 'application/vnd.domain+json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+        },
         body: JSON.stringify(rewrittenData),
       };
     }
 
-    // 4. Parse include parameter and fetch related resources (using backend URLs)
+    // 7. Parse include parameter and fetch related resources (using backend URLs)
     const includes = includeParam.split(',').map(s => s.trim()).filter(s => s.length > 0);
     console.log(`Fetching included resources: ${includes.join(', ')}`);
 
@@ -299,7 +356,12 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       
       return {
         statusCode: 200,
-        headers: corsHeaders,
+        headers: {
+          'Content-Type': 'application/vnd.domain+json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+        },
         body: JSON.stringify(response),
       };
     }
@@ -307,7 +369,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Handle single resource with includes
     const includedData = await fetchIncludedResources(primaryData, includes);
 
-    // 5. Rewrite URLs in primary data and included resources, then return
+    // 8. Rewrite URLs in primary data and included resources, then return
     const rewrittenPrimaryData = rewriteLinksToGateway(primaryData);
     
     // Also rewrite links in items array if present
@@ -332,7 +394,12 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     return {
       statusCode: 200,
-      headers: corsHeaders,
+      headers: {
+        'Content-Type': 'application/vnd.domain+json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
+      },
       body: JSON.stringify(aggregatedResponse),
     };
 

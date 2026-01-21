@@ -21,6 +21,9 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+          env:
+            - name: GATEWAY_HOST
+              value: "domain-api.lab.local.ctoaas.co"
           livenessProbe:
             httpGet:
               path: /

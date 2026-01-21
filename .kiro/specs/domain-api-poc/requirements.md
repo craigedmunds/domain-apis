@@ -15,6 +15,9 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 - **Relationship**: A link between resources that may span across different APIs
 - **Cross_API_Traversal**: The ability to navigate from a resource in one API to related resources in another API via URLs
 - **JSON_API_Lite**: A lightweight approach inspired by JSON API specification without full compliance
+- **API_Maturity**: The level of capability a backend API provides, ranging from modern JSON APIs with hypermedia links to legacy XML-based systems
+- **Legacy_API**: An existing backend API that does not conform to the target architecture but must be integrated
+- **Link_Injection**: The process of adding hypermedia links to responses from backend APIs that do not provide them natively
 
 ## Requirements
 
@@ -26,9 +29,8 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 
 1. THE System SHALL provide between 2 and 3 separate Domain_APIs
 2. WHEN defining the domain model, THE System SHALL assign each subdomain to exactly one Domain_API
-3. THE System SHALL ensure each Domain_API has a distinct base URL path
-4. THE System SHALL maintain independent versioning for each Domain_API
-5. WHEN a client accesses a Domain_API, THE System SHALL serve only resources belonging to that API's subdomain
+3. THE System SHALL maintain independent versioning for each Domain_API
+4. THE System SHALL organize resources by domain with clear boundaries
 
 ### Requirement 2: OpenAPI Specification Management
 
@@ -54,17 +56,16 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 4. THE System SHALL ensure Shared_Fragments are independently versioned
 5. WHEN a Shared_Fragment is updated, THE System SHALL validate that all referencing APIs remain compatible
 
-### Requirement 4: Lightweight JSON API-Inspired Structure
+### Requirement 4: Resource Relationship Navigation
 
-**User Story:** As an API consumer, I want resources to include relationship links without requiring full JSON API compliance, so that I can navigate between related resources while keeping the response structure simple.
+**User Story:** As an API consumer, I want resources to include relationship links, so that I can navigate between related resources without consulting external documentation.
 
 #### Acceptance Criteria
 
-1. THE System SHALL NOT wrap resource data in a root-level "data" object
-2. WHEN returning a Resource, THE System SHALL include the resource attributes at the top level of the response
-3. THE System SHALL include a "_links" or similar field within each Resource to represent relationships
-4. WHEN a Resource has relationships, THE System SHALL include URLs to related resources in the links field
-5. THE System SHALL support standard HTTP methods (GET, POST, PUT, PATCH, DELETE) for resource operations
+1. WHEN returning a Resource, THE System SHALL include relationship links within the response
+2. WHEN a Resource has relationships, THE System SHALL include URLs to related resources
+3. THE System SHALL support standard HTTP methods (GET, POST, PUT, PATCH, DELETE) for resource operations
+4. WHEN a client follows a relationship link, THE System SHALL return the related resource
 
 ### Requirement 5: Cross-API Resource Traversal
 
@@ -92,7 +93,7 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 
 ### Requirement 7: API Documentation and Discoverability
 
-**User Story:** As an API consumer, I want comprehensive documentation for each API, so that I can understand how to use the APIs and navigate between them.
+**User Story:** As an API consumer, I want comprehensive documentation with interactive capabilities, so that I can understand how to use the APIs, test them interactively, and choose the response format that suits my needs.
 
 #### Acceptance Criteria
 
@@ -101,8 +102,25 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 3. THE System SHALL provide examples showing cross-API traversal patterns
 4. THE System SHALL document the relationship structure and link format
 5. THE System SHALL include a getting started guide explaining the multi-API architecture
+6. THE System SHALL provide interactive "Try It" functionality in documentation allowing users to execute API requests
+7. WHEN using "Try It" functionality, THE System SHALL support content negotiation allowing users to select different response formats
+8. THE System SHALL document available content types and their behavior differences
 
-### Requirement 8: Development and Testing Support
+### Requirement 8: Legacy API Integration
+
+**User Story:** As a platform architect, I want to integrate existing legacy APIs into the domain API architecture, so that we can present a consistent external interface regardless of backend API maturity levels.
+
+#### Acceptance Criteria
+
+1. THE System SHALL support integration of backend APIs with varying levels of maturity
+2. WHEN a backend API provides hypermedia links natively, THE System SHALL use those links directly
+3. WHEN a backend API does not provide hypermedia links, THE System SHALL inject links based on configuration
+4. WHEN a backend API returns XML responses, THE System SHALL transform them to JSON for client consumption
+5. THE System SHALL present a consistent response structure to clients regardless of backend API format or maturity
+6. THE System SHALL maintain relationship traversal capabilities across APIs of different maturity levels
+7. WHEN configuration defines relationships for legacy APIs, THE System SHALL validate that target resources are accessible
+
+### Requirement 9: Development and Testing Support
 
 **User Story:** As a developer, I want tooling to validate and test the API specifications, so that I can ensure the APIs are correctly defined and functional.
 
@@ -114,7 +132,7 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 4. THE System SHALL include example data that demonstrates cross-API relationships
 5. THE System SHALL validate that all relationship URLs are correctly formed and resolvable
 
-### Requirement 9: Acceptance Testing
+### Requirement 10: Acceptance Testing
 
 **User Story:** As a developer, I want automated acceptance tests that validate critical user journeys, so that I can ensure the system meets requirements before considering work complete.
 
@@ -128,7 +146,7 @@ The system will consist of 2-3 separate RESTful APIs, each representing a distin
 6. THE System SHALL provide clear documentation on how to run acceptance tests
 7. THE acceptance tests SHALL pass before the POC is considered complete
 
-### Requirement 10: Kubernetes Deployment
+### Requirement 11: Kubernetes Deployment
 
 **User Story:** As a platform engineer, I want to deploy the domain API system to our Kubernetes lab environment using ArgoCD and Kustomize, so that the system runs in a production-like environment alongside other platform services.
 

@@ -1,0 +1,72 @@
+# Gateway Overlay
+# This overlay adds gateway-specific features to backend API specs
+# It's merged with backend specs to create user-facing documentation
+
+# Server configuration for gateway access
+servers:
+  - url: http://domain-api.execute-api.localhost.localstack.cloud:4566/dev
+    description: API Gateway (LocalStack development)
+  - url: https://domain-api.lab.local.ctoaas.co
+    description: API Gateway (Production)
+
+# Gateway-specific parameters that apply to all GET operations
+x-gateway-parameters:
+  accept-header:
+    name: Accept
+    in: header
+    required: false
+    schema:
+      type: string
+      enum:
+        - application/vnd.domain+json
+        - application/json
+        - application/vnd.raw
+      default: application/vnd.domain+json
+    description: |
+      Content negotiation header to select gateway mode:
+      - `application/vnd.domain+json` (default): Aggregated mode with includes
+      - `application/json`: Simple REST mode without aggregation
+      - `application/vnd.raw`: Pass-through mode, raw backend response
+  
+  include-parameter:
+    name: include
+    in: query
+    required: false
+    schema:
+      type: string
+    description: |
+      Comma-separated list of relationships to include in the response.
+      Only processed in aggregated mode (Accept: application/vnd.domain+json).
+      Ignored in simple REST and pass-through modes.
+    example: taxReturns,payments
+
+# Content type definitions for gateway responses
+x-gateway-content-types:
+  aggregated:
+    media-type: application/vnd.domain+json
+    description: Aggregated response with optional _included section
+    adds-included: true
+  
+  simple-rest:
+    media-type: application/json
+    description: Simple REST response without aggregation
+    adds-included: false
+  
+  pass-through:
+    media-type: application/vnd.raw
+    description: Raw backend response without transformation
+    adds-included: false
+    no-url-rewriting: true
+
+# Schema extension for aggregated responses
+components:
+  schemas:
+    IncludedSection:
+      type: object
+      description: |
+        Included related resources fetched from other APIs.
+        Only present when using aggregated mode with include parameter.
+      additionalProperties:
+        type: array
+        items:
+          type: object

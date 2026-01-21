@@ -124,19 +124,26 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Implement include parameter parsing
     - Implement parallel fetching of related resources
     - Implement response merging into _included structure
-    - Implement URL rewriting in _links to point through gateway
-    - Rewrite backend API URLs (localhost:8081/8082/8083) to gateway URL
     - Add CORS headers to Lambda responses for browser compatibility
     - Handle partial failures gracefully
     - Add error handling for gateway-level issues
+    - Note: No URL rewriting needed since gateway is at root path
     - _Requirements: 4.4, 5.3_
   
-  - [ ] 7.4 Configure API Gateway
+  - [x] 7.4 Configure API Gateway and implement content negotiation
     - Create API Gateway OpenAPI specification (gateway-api.yaml)
     - Configure proxy resource (/{proxy+}) to Lambda
     - Set up Lambda integration with AWS_PROXY type
-    - Deploy API Gateway to LocalStack
+    - Deploy API Gateway to LocalStack at root path (/)
+    - Implement Accept header detection in Lambda function
+    - Implement three content negotiation modes:
+      - **Aggregated mode** (default, no Accept header or `Accept: application/vnd.domain+json`): process includes, return `application/vnd.domain+json`
+      - **Simple REST mode** (`Accept: application/json`): no includes, return `application/json`
+      - **Pass-through mode** (`Accept: application/vnd.raw`): no transformation, return backend response as-is
     - Test gateway routing to backend APIs
+    - Test all three content negotiation modes
+    - Verify correct Content-Type headers for each mode
+    - Note: No URL rewriting needed since gateway is at root path
     - _Requirements: 4.4, 5.3_
   
   - [ ]* 7.5 Write property test for include parameter
@@ -150,8 +157,8 @@ This implementation plan creates a proof-of-concept for a multi-API domain archi
     - Test API invocation with multiple include parameters
     - Test cross-API resource traversal via includes
     - Test error handling for invalid includes
-    - Test URL rewriting in _links field
-    - Test that _links always point through gateway
+    - Test all three content negotiation modes (aggregated, simple REST, pass-through)
+    - Verify correct Content-Type headers for each mode
     - _Requirements: 4.4, 5.3, 9.1, 9.5, 9.7_
 
 - [ ] 8. Generate and test mock servers
