@@ -101,7 +101,7 @@ paths:
                     properties:
                       self:
                         type: string
-                        format: uri
+                        format: uri-reference
               examples:
                 withoutIncludes:
                   summary: List of taxpayers without includes
@@ -267,7 +267,7 @@ paths:
               description: URL of the newly created taxpayer
               schema:
                 type: string
-                format: uri
+                format: uri-reference
               example: "/taxpayers/TP123456"
           content:
             application/json:
@@ -648,7 +648,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the taxpayer's tax returns
                       example: "/tax-returns?taxpayerId=TP123456"
                     type:
@@ -666,7 +666,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the taxpayer's payments
                       example: "/payments?taxpayerId=TP123456"
                     type:

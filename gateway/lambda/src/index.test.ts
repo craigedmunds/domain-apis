@@ -41,7 +41,7 @@ describe('Aggregation Lambda Handler', () => {
       expect(result.headers).toMatchObject({
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Accept',
       });
       expect(result.body).toBe('');
     });
@@ -57,7 +57,7 @@ describe('Aggregation Lambda Handler', () => {
       const result = await handler(event);
 
       expect(result.headers).toMatchObject({
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/vnd.domain+json',
         'Access-Control-Allow-Origin': '*',
       });
     });

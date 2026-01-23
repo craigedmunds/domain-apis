@@ -30,16 +30,18 @@ function log(message, color = 'reset') {
 function findYamlFiles(dir) {
   const files = [];
   const entries = fs.readdirSync(dir, { withFileTypes: true });
-  
+
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...findYamlFiles(fullPath));
-    } else if (entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml'))) {
+    } else if (entry.isFile() && entry.name.endsWith('-api.yaml')) {
+      // Only validate files that are actual API specifications (ending in -api.yaml)
+      // Skip component files like shared-components.yaml which aren't standalone specs
       files.push(fullPath);
     }
   }
-  
+
   return files;
 }
 

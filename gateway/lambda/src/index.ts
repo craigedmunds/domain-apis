@@ -601,7 +601,8 @@ function addStagePrefix(url: string, stage: string): string {
     // If it's a full URL, this is a backend API bug - log and try to extract path
     try {
       const urlObj = new URL(url);
-      url = urlObj.pathname;
+      // Preserve both pathname and query string
+      url = urlObj.pathname + urlObj.search;
     } catch (error) {
       // If we can't parse it, return as-is and let it fail visibly
       return url;

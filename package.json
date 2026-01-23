@@ -9,7 +9,7 @@
     "validate:income-tax": "openapi-validator specs/income-tax/income-tax-api.yaml",
     "validate:payment": "openapi-validator specs/payment/payment-api.yaml",
     "validate:shared": "openapi-validator specs/shared/shared-components.yaml",
-    "lint": "spectral lint specs/**/*.yaml",
+    "lint": "spectral lint specs/**/*-api.yaml",
     "lint:taxpayer": "spectral lint specs/taxpayer/taxpayer-api.yaml",
     "lint:income-tax": "spectral lint specs/income-tax/income-tax-api.yaml",
     "lint:payment": "spectral lint specs/payment/payment-api.yaml",
