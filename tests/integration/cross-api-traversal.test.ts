@@ -68,7 +68,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get a taxpayer
       const taxpayerResponse = await fetch(`${taxpayerServer.baseUrl}/taxpayers/TP123456`);
       expect(taxpayerResponse.status).toBe(200);
-      const taxpayer = await taxpayerResponse.json();
+      const taxpayer: any = await taxpayerResponse.json();
 
       // Step 2: Extract taxReturns link
       const taxReturnsHref = getHref(taxpayer._links?.taxReturns);
@@ -81,13 +81,13 @@ describe('Cross-API Traversal Integration Tests', () => {
       expect(taxReturnsResponse.status).toBe(200);
 
       // Step 4: Verify response structure
-      const taxReturns = await taxReturnsResponse.json();
+      const taxReturns: any = await taxReturnsResponse.json();
       expect(taxReturns).toHaveProperty('items');
       expect(Array.isArray(taxReturns.items)).toBe(true);
 
       // Step 5: If items exist, verify they have back-links to taxpayer
       if (taxReturns.items.length > 0) {
-        const taxReturn = taxReturns.items[0];
+        const taxReturn: any = taxReturns.items[0];
         expect(taxReturn._links?.taxpayer).toBeDefined();
         const taxpayerBackLink = getHref(taxReturn._links.taxpayer);
         expect(taxpayerBackLink).toContain('/taxpayers/');
@@ -100,7 +100,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get a taxpayer
       const taxpayerResponse = await fetch(`${taxpayerServer.baseUrl}/taxpayers/TP123456`);
       expect(taxpayerResponse.status).toBe(200);
-      const taxpayer = await taxpayerResponse.json();
+      const taxpayer: any = await taxpayerResponse.json();
 
       // Step 2: Extract payments link
       const paymentsHref = getHref(taxpayer._links?.payments);
@@ -113,13 +113,13 @@ describe('Cross-API Traversal Integration Tests', () => {
       expect(paymentsResponse.status).toBe(200);
 
       // Step 4: Verify response structure
-      const payments = await paymentsResponse.json();
+      const payments: any = await paymentsResponse.json();
       expect(payments).toHaveProperty('items');
       expect(Array.isArray(payments.items)).toBe(true);
 
       // Step 5: If items exist, verify they have back-links to taxpayer
       if (payments.items.length > 0) {
-        const payment = payments.items[0];
+        const payment: any = payments.items[0];
         expect(payment._links?.taxpayer).toBeDefined();
         const taxpayerBackLink = getHref(payment._links.taxpayer);
         expect(taxpayerBackLink).toContain('/taxpayers/');
@@ -132,7 +132,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get a tax return
       const taxReturnResponse = await fetch(`${incomeTaxServer.baseUrl}/tax-returns/TR20230001`);
       expect(taxReturnResponse.status).toBe(200);
-      const taxReturn = await taxReturnResponse.json();
+      const taxReturn: any = await taxReturnResponse.json();
 
       // Step 2: Extract taxpayer link
       const taxpayerHref = getHref(taxReturn._links?.taxpayer);
@@ -145,7 +145,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       expect(taxpayerResponse.status).toBe(200);
 
       // Step 4: Verify response structure
-      const taxpayer = await taxpayerResponse.json();
+      const taxpayer: any = await taxpayerResponse.json();
       expect(taxpayer).toHaveProperty('id');
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
       expect(taxpayer).toHaveProperty('nino');
@@ -158,7 +158,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get a tax return
       const taxReturnResponse = await fetch(`${incomeTaxServer.baseUrl}/tax-returns/TR20230001`);
       expect(taxReturnResponse.status).toBe(200);
-      const taxReturn = await taxReturnResponse.json();
+      const taxReturn: any = await taxReturnResponse.json();
 
       // Step 2: Extract allocations link (if present)
       const allocationsHref = getHref(taxReturn._links?.allocations);
@@ -182,7 +182,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get a payment
       const paymentResponse = await fetch(`${paymentServer.baseUrl}/payments/PM20230001`);
       expect(paymentResponse.status).toBe(200);
-      const payment = await paymentResponse.json();
+      const payment: any = await paymentResponse.json();
 
       // Step 2: Extract taxpayer link
       const taxpayerHref = getHref(payment._links?.taxpayer);
@@ -195,7 +195,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       expect(taxpayerResponse.status).toBe(200);
 
       // Step 4: Verify response structure
-      const taxpayer = await taxpayerResponse.json();
+      const taxpayer: any = await taxpayerResponse.json();
       expect(taxpayer).toHaveProperty('id');
       expect(taxpayer).toHaveProperty('type', 'taxpayer');
       expect(taxpayer).toHaveProperty('_links');
@@ -209,7 +209,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get taxpayer
       const taxpayer1Response = await fetch(`${taxpayerServer.baseUrl}/taxpayers/${taxpayerId}`);
       expect(taxpayer1Response.status).toBe(200);
-      const taxpayer1 = await taxpayer1Response.json();
+      const taxpayer1: any = await taxpayer1Response.json();
 
       // Step 2: Follow taxReturns link
       const taxReturnsHref = getHref(taxpayer1._links?.taxReturns);
@@ -221,7 +221,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       const taxReturnsUrl = resolveLink(taxReturnsHref);
       const taxReturnsResponse = await fetch(taxReturnsUrl);
       expect(taxReturnsResponse.status).toBe(200);
-      const taxReturns = await taxReturnsResponse.json();
+      const taxReturns: any = await taxReturnsResponse.json();
 
       if (taxReturns.items.length === 0) {
         // Skip if no tax returns
@@ -229,14 +229,14 @@ describe('Cross-API Traversal Integration Tests', () => {
       }
 
       // Step 3: Get first tax return and follow taxpayer link back
-      const taxReturn = taxReturns.items[0];
+      const taxReturn: any = taxReturns.items[0];
       const taxpayerBackHref = getHref(taxReturn._links?.taxpayer);
       expect(taxpayerBackHref).toBeTruthy();
 
       const taxpayer2Url = resolveLink(taxpayerBackHref!);
       const taxpayer2Response = await fetch(taxpayer2Url);
       expect(taxpayer2Response.status).toBe(200);
-      const taxpayer2 = await taxpayer2Response.json();
+      const taxpayer2: any = await taxpayer2Response.json();
 
       // Step 4: Verify same taxpayer (or at least consistent data structure)
       expect(taxpayer2).toHaveProperty('id');
@@ -249,7 +249,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       // Step 1: Get taxpayer
       const taxpayer1Response = await fetch(`${taxpayerServer.baseUrl}/taxpayers/${taxpayerId}`);
       expect(taxpayer1Response.status).toBe(200);
-      const taxpayer1 = await taxpayer1Response.json();
+      const taxpayer1: any = await taxpayer1Response.json();
 
       // Step 2: Follow payments link
       const paymentsHref = getHref(taxpayer1._links?.payments);
@@ -261,7 +261,7 @@ describe('Cross-API Traversal Integration Tests', () => {
       const paymentsUrl = resolveLink(paymentsHref);
       const paymentsResponse = await fetch(paymentsUrl);
       expect(paymentsResponse.status).toBe(200);
-      const payments = await paymentsResponse.json();
+      const payments: any = await paymentsResponse.json();
 
       if (payments.items.length === 0) {
         // Skip if no payments
@@ -269,14 +269,14 @@ describe('Cross-API Traversal Integration Tests', () => {
       }
 
       // Step 3: Get first payment and follow taxpayer link back
-      const payment = payments.items[0];
+      const payment: any = payments.items[0];
       const taxpayerBackHref = getHref(payment._links?.taxpayer);
       expect(taxpayerBackHref).toBeTruthy();
 
       const taxpayer2Url = resolveLink(taxpayerBackHref!);
       const taxpayer2Response = await fetch(taxpayer2Url);
       expect(taxpayer2Response.status).toBe(200);
-      const taxpayer2 = await taxpayer2Response.json();
+      const taxpayer2: any = await taxpayer2Response.json();
 
       // Step 4: Verify same taxpayer (or at least consistent data structure)
       expect(taxpayer2).toHaveProperty('id');

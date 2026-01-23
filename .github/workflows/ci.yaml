@@ -59,7 +59,7 @@ jobs:
         run: npm ci
 
       - name: Run unit tests
-        run: npm run test:unit -- --ci --runInBand --testTimeout=60000
+        run: npm run test:unit -- --ci --runInBand --testTimeout=60000 --forceExit
 
   property-tests:
     name: Property Tests
@@ -77,7 +77,7 @@ jobs:
         run: npm ci
 
       - name: Run property tests
-        run: npm run test:property -- --ci
+        run: npm run test:property -- --ci --forceExit
 
   integration-tests:
     name: Integration Tests
@@ -95,7 +95,7 @@ jobs:
         run: npm ci
 
       - name: Run integration tests
-        run: npm run test:integration -- --ci --runInBand --testTimeout=120000
+        run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
 
   gateway-lambda-tests:
     name: Gateway Lambda Tests
@@ -117,4 +117,4 @@ jobs:
         run: npm ci
 
       - name: Run Lambda unit tests
-        run: npm test -- --ci
+        run: npm test -- --ci --forceExit
