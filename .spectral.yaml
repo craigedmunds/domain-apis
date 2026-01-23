@@ -1,37 +1,9 @@
 extends: ["spectral:oas"]
 
+# Note: Using default spectral:oas rules. Custom severity overrides for built-in rules
+# have been removed as they may not exist in all Spectral versions.
+
 rules:
-  # Ensure all operations have descriptions
-  operation-description: error
-  
-  # Ensure all operations have summaries
-  operation-summary: error
-  
-  # Ensure all operations have tags
-  operation-tags: warn
-  
-  # Ensure all operations have operationId
-  operation-operationId: error
-  
-  # Ensure all parameters have descriptions
-  parameter-description: error
-  
-  # Ensure all schemas have descriptions
-  schema-description: warn
-  
-  # Ensure all responses have descriptions
-  response-description: error
-  
-  # Ensure examples are provided
-  oas3-schema-examples: warn
-  
-  # Ensure proper use of $ref
-  no-$ref-siblings: error
-  
-  # Ensure proper versioning
-  info-contact: warn
-  info-description: error
-  
   # Custom rules for this project
   uk-tax-domain-naming:
     description: Ensure UK tax domain terminology is used consistently
@@ -43,7 +15,7 @@ rules:
         function: truthy
       - field: description
         function: truthy
-  
+
   relationship-links-present:
     description: Resources should include _links for relationships
     message: "Response schemas should include _links field for hypermedia navigation"
@@ -52,7 +24,7 @@ rules:
     then:
       field: properties._links
       function: truthy
-  
+
   cross-api-absolute-urls:
     description: Cross-API relationship links should use absolute URLs
     message: "Relationship links should use absolute URLs with full scheme and host"

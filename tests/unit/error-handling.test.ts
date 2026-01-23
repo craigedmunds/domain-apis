@@ -332,9 +332,9 @@ describe('Error Handling Unit Tests', () => {
         // 2. RFC 7807 Problem Details: { type, title, detail }
         // 3. Direct error fields: { code, message }
         // 4. Validation error format: { code: "VALIDATION_ERROR", ... }
-        const hasNestedFormat = error.error && (error.error.code || error.error.message);
-        const hasProblemDetails = error.type || error.title || error.detail;
-        const hasDirectFormat = error.code || error.message;
+        const hasNestedFormat = !!(error.error && (error.error.code || error.error.message));
+        const hasProblemDetails = !!(error.type || error.title || error.detail);
+        const hasDirectFormat = !!(error.code || error.message);
 
         expect(hasNestedFormat || hasProblemDetails || hasDirectFormat).toBe(true);
       }
