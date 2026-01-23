@@ -114,7 +114,7 @@ paths:
                     properties:
                       self:
                         type: string
-                        format: uri
+                        format: uri-reference
               examples:
                 withoutIncludes:
                   summary: List of payments without includes
@@ -246,7 +246,7 @@ paths:
               description: URL of the newly created payment
               schema:
                 type: string
-                format: uri
+                format: uri-reference
               example: "/payments/PM20230001"
           content:
             application/json:
@@ -429,7 +429,7 @@ paths:
                     properties:
                       self:
                         type: string
-                        format: uri
+                        format: uri-reference
               example:
                 items:
                   - id: "PA20230001"
@@ -497,7 +497,7 @@ paths:
               description: URL of the newly created allocation
               schema:
                 type: string
-                format: uri
+                format: uri-reference
               example: "/allocations/PA20230001"
           content:
             application/json:
@@ -645,7 +645,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the taxpayer resource
                       example: "/taxpayers/TP123456"
                     type:
@@ -663,7 +663,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the payment's allocations
                       example: "/payments/PM20230001/allocations"
                     type:
@@ -816,7 +816,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the payment resource
                       example: "/payments/PM20230001"
                     type:
@@ -834,7 +834,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the tax return resource
                       example: "/tax-returns/TR20230001"
                     type:

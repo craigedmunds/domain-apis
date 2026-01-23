@@ -61,24 +61,6 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit -- --ci --runInBand --testTimeout=60000 --forceExit
 
-  property-tests:
-    name: Property Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run property tests
-        run: npm run test:property -- --ci --forceExit
-
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest

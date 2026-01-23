@@ -116,7 +116,7 @@ paths:
                     properties:
                       self:
                         type: string
-                        format: uri
+                        format: uri-reference
               examples:
                 withoutIncludes:
                   summary: List of tax returns without includes
@@ -253,7 +253,7 @@ paths:
               description: URL of the newly created tax return
               schema:
                 type: string
-                format: uri
+                format: uri-reference
               example: "/tax-returns/TR20230001"
           content:
             application/json:
@@ -464,7 +464,7 @@ paths:
                     properties:
                       self:
                         type: string
-                        format: uri
+                        format: uri-reference
               example:
                 items:
                   - id: "AS20230001"
@@ -627,7 +627,8 @@ components:
             For example, "2023-24" represents the period from 6 April 2023 to 5 April 2024.
           example: "2023-24"
         period:
-          $ref: '../shared/shared-components.yaml#/components/schemas/DateRange'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/DateRange'
           description: |
             The actual date range covered by this tax return.
             Typically aligns with the tax year (6 April to 5 April).
@@ -646,10 +647,12 @@ components:
             - closed: Return is finalized and all tax has been paid
           example: "assessed"
         totalIncome:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/Money'
           description: Total income reported for the tax year
         taxDue:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/Money'
           description: Total tax due based on the return (may be updated by assessment)
         _links:
           allOf:
@@ -671,7 +674,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the taxpayer who filed this return
                       example: "/taxpayers/TP123456"
                     type:
@@ -689,7 +692,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to assessments for this return
                       example: "/tax-returns/TR20230001/assessments"
                     type:
@@ -707,7 +710,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to payment allocations for this return
                       example: "/allocations?taxReturnId=TR20230001"
                     type:
@@ -793,13 +796,16 @@ components:
           description: UK tax year in format YYYY-YY
           example: "2023-24"
         period:
-          $ref: '../shared/shared-components.yaml#/components/schemas/DateRange'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/DateRange'
           description: Date range covered by this return (optional, defaults to tax year dates)
         totalIncome:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/Money'
           description: Total income for the tax year
         taxDue:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/Money'
           description: Calculated tax due (optional, can be calculated by system)
 
     Assessment:
@@ -839,7 +845,8 @@ components:
           description: Date and time when the assessment was issued
           example: "2024-01-15T10:30:00Z"
         taxDue:
-          $ref: '../shared/shared-components.yaml#/components/schemas/Money'
+          allOf:
+            - $ref: '../shared/shared-components.yaml#/components/schemas/Money'
           description: Total tax due according to this assessment
         dueDate:
           type: string
@@ -864,7 +871,7 @@ components:
                   properties:
                     href:
                       type: string
-                      format: uri
+                      format: uri-reference
                       description: URL to the tax return for this assessment
                       example: "/tax-returns/TR20230001"
                     type:
