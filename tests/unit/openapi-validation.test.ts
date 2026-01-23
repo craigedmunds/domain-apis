@@ -89,9 +89,9 @@ describe('OpenAPI Specification Validation', () => {
       expect(links.type).toBe('object');
       expect(links.required).toContain('self');
       
-      // Check self link
+      // Check self link - uses uri-reference format per RFC 3986 for relative/absolute URIs
       expect(links.properties.self).toBeDefined();
-      expect(links.properties.self.format).toBe('uri');
+      expect(links.properties.self.format).toBe('uri-reference');
       
       // Check additional properties support
       expect(links.additionalProperties).toBeDefined();

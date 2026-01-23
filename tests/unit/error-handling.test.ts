@@ -326,12 +326,17 @@ describe('Error Handling Unit Tests', () => {
       if (response.status >= 400) {
         const error = await response.json() as any;
 
-        // Prism generates error responses with these structures
-        // We check for either standard error format or Prism's format
-        const hasStandardFormat = error.error && (error.error.code || error.error.message);
-        const hasPrismFormat = error.type || error.title || error.detail;
+        // Prism generates error responses with various structures depending on the error type
+        // We check for any of these common error formats:
+        // 1. Nested error object: { error: { code, message } }
+        // 2. RFC 7807 Problem Details: { type, title, detail }
+        // 3. Direct error fields: { code, message }
+        // 4. Validation error format: { code: "VALIDATION_ERROR", ... }
+        const hasNestedFormat = error.error && (error.error.code || error.error.message);
+        const hasProblemDetails = error.type || error.title || error.detail;
+        const hasDirectFormat = error.code || error.message;
 
-        expect(hasStandardFormat || hasPrismFormat).toBe(true);
+        expect(hasNestedFormat || hasProblemDetails || hasDirectFormat).toBe(true);
       }
     });
 
