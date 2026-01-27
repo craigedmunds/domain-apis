@@ -335,7 +335,8 @@ describe('Error Handling Unit Tests', () => {
       if (response.status >= 400) {
         const contentType = response.headers.get('content-type');
         expect(contentType).toBeTruthy();
-        expect(contentType).toContain('json');
+        // Excise returns XML, others return JSON
+        expect(contentType).toMatch(/json|xml/);
       }
     });
   });

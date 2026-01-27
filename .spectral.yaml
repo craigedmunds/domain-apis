@@ -4,6 +4,9 @@ extends: ["spectral:oas"]
 # have been removed as they may not exist in all Spectral versions.
 
 rules:
+  # Disable example validation for XML content - XML examples are string literals
+  # which is valid per OpenAPI spec but Spectral expects objects
+  oas3-valid-media-example: off
   # Custom rules for this project
   uk-tax-domain-naming:
     description: Ensure UK tax domain terminology is used consistently
