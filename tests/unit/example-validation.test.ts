@@ -26,6 +26,7 @@ describe('Example Validation', () => {
       expect(result.errors).toHaveLength(0);
     });
 
+    // Note: Excise API returns XML (legacy system simulation)
     it('should have examples for GET /excise/vpd/registrations/{vpdApprovalNumber}', () => {
       const operation = spec.paths['/excise/vpd/registrations/{vpdApprovalNumber}']?.get;
       expect(operation).toBeDefined();
@@ -33,7 +34,7 @@ describe('Example Validation', () => {
       const response200 = operation.responses['200'];
       expect(response200).toBeDefined();
 
-      const content = response200.content?.['application/json'];
+      const content = response200.content?.['application/xml'];
       expect(content).toBeDefined();
       expect(content.examples || content.example).toBeDefined();
     });
@@ -45,7 +46,7 @@ describe('Example Validation', () => {
       const response200 = operation.responses['200'];
       expect(response200).toBeDefined();
 
-      const content = response200.content?.['application/json'];
+      const content = response200.content?.['application/xml'];
       expect(content).toBeDefined();
       expect(content.examples || content.example).toBeDefined();
     });
@@ -54,7 +55,7 @@ describe('Example Validation', () => {
       const operation = spec.paths['/excise/vpd/validate-and-calculate']?.post;
       expect(operation).toBeDefined();
 
-      // Check request body examples
+      // Check request body examples (still JSON for request)
       const requestBody = operation.requestBody;
       expect(requestBody).toBeDefined();
 
@@ -62,11 +63,11 @@ describe('Example Validation', () => {
       expect(requestContent).toBeDefined();
       expect(requestContent.examples || requestContent.example).toBeDefined();
 
-      // Check response examples
+      // Check response examples (XML for response)
       const response200 = operation.responses['200'];
       expect(response200).toBeDefined();
 
-      const responseContent = response200.content?.['application/json'];
+      const responseContent = response200.content?.['application/xml'];
       expect(responseContent).toBeDefined();
       expect(responseContent.examples || responseContent.example).toBeDefined();
     });

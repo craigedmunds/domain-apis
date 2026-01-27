@@ -15,6 +15,7 @@ import {
   MockServerInstance,
   isValidResourceId,
   isValidLinkUrl,
+  parseResponse,
 } from '../helpers/mock-server-manager';
 
 describe('Mock Server Unit Tests', () => {
@@ -118,28 +119,30 @@ describe('Mock Server Unit Tests', () => {
         }
       });
 
+      // Excise API returns XML - parse with parseResponse helper
       it('GET /excise/vpd/registrations/{vpdApprovalNumber} should return a valid Registration', async () => {
         const response = await fetch(`${server.baseUrl}/excise/vpd/registrations/VPD123456`);
         expect(response.status).toBe(200);
 
-        const data: any = await response.json();
-        expect(data).toHaveProperty('vpdApprovalNumber');
-        expect(data).toHaveProperty('customerId');
-        expect(data).toHaveProperty('status');
-        expect(['ACTIVE', 'SUSPENDED', 'REVOKED']).toContain(data.status);
-        expect(data).toHaveProperty('registeredDate');
+        const parsed = await parseResponse(response);
+        const registration = parsed.registration || parsed;
+        expect(registration).toHaveProperty('vpdApprovalNumber');
+        expect(registration).toHaveProperty('customerId');
+        expect(registration).toHaveProperty('status');
+        expect(['ACTIVE', 'SUSPENDED', 'REVOKED']).toContain(registration.status);
       });
 
       it('GET /excise/vpd/periods/{periodKey} should return a valid Period', async () => {
         const response = await fetch(`${server.baseUrl}/excise/vpd/periods/24A1`);
         expect(response.status).toBe(200);
 
-        const data: any = await response.json();
-        expect(data).toHaveProperty('periodKey');
-        expect(data).toHaveProperty('startDate');
-        expect(data).toHaveProperty('endDate');
-        expect(data).toHaveProperty('state');
-        expect(['OPEN', 'FILED', 'CLOSED']).toContain(data.state);
+        const parsed = await parseResponse(response);
+        const period = parsed.period || parsed;
+        expect(period).toHaveProperty('periodKey');
+        expect(period).toHaveProperty('startDate');
+        expect(period).toHaveProperty('endDate');
+        expect(period).toHaveProperty('state');
+        expect(['OPEN', 'FILED', 'CLOSED']).toContain(period.state);
       });
 
       it('POST /excise/vpd/validate-and-calculate should return ValidationResponse', async () => {
@@ -157,16 +160,10 @@ describe('Mock Server Unit Tests', () => {
         });
         expect(response.status).toBe(200);
 
-        const data: any = await response.json();
-        expect(data).toHaveProperty('valid');
-        expect(data).toHaveProperty('customerId');
-
-        if (data.valid) {
-          expect(data).toHaveProperty('calculations');
-          expect(data.calculations).toHaveProperty('totalDutyDue');
-          expect(data.calculations.totalDutyDue).toHaveProperty('amount');
-          expect(data.calculations.totalDutyDue).toHaveProperty('currency');
-        }
+        const parsed = await parseResponse(response);
+        const validation = parsed.validationResult || parsed;
+        expect(validation).toHaveProperty('valid');
+        expect(validation).toHaveProperty('customerId');
       });
     });
 

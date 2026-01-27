@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/excise/vpd/periods/(?!24A[12]).*"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "Content-Type": "application/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<error>\n  <code>NOT_FOUND</code>\n  <message>Period not found</message>\n</error>"
+  }
+}

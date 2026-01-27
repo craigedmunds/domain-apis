@@ -109,6 +109,33 @@
             font-family: 'Courier New', monospace;
             color: #667eea;
         }
+
+        .trace-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .trace-status.connected {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        .trace-status.disconnected {
+            background: #fed7d7;
+            color: #822727;
+        }
+        .trace-link {
+            margin-left: 1rem;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .trace-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -120,9 +147,6 @@
     <div class="nav">
         <label for="api-select">Select API:</label>
         <select id="api-select">
-            <optgroup label="Domain API">
-                <option value="vpd-platform">VPD Platform API (via Gateway)</option>
-            </optgroup>
             <optgroup label="Backend Mocks">
                 <option value="excise">Excise Mock (:4010)</option>
                 <option value="customer">Customer Mock (:4011)</option>
@@ -130,6 +154,8 @@
             </optgroup>
         </select>
         <a href="index.html">← Back to Documentation</a>
+        <span id="trace-status" class="trace-status disconnected">⏳ Tracing: Initializing...</span>
+        <a id="grafana-link" class="trace-link" href="http://localhost:3000/explore?orgId=1&left=%7B%22datasource%22:%22tempo%22%7D" target="_blank" style="display:none;">Open Grafana Tempo →</a>
     </div>
 
     <div class="info-banner">
@@ -148,8 +174,94 @@
     <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
     <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js"></script>
     <script>
+        // Lightweight W3C Trace Context with OTLP export to Tempo
+        const TraceContext = {
+            OTLP_ENDPOINT: 'http://localhost:4318/v1/traces',
+            SERVICE_NAME: 'vpd-api-explorer',
+
+            // Generate random hex string of specified length
+            randomHex: (length) => {
+                const bytes = new Uint8Array(length / 2);
+                crypto.getRandomValues(bytes);
+                return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+            },
+
+            // Create a new trace context
+            create: () => ({
+                traceId: TraceContext.randomHex(32),
+                spanId: TraceContext.randomHex(16),
+                startTime: Date.now(),
+                sampled: true
+            }),
+
+            // Format as W3C traceparent header
+            toTraceparent: (ctx) => `00-${ctx.traceId}-${ctx.spanId}-${ctx.sampled ? '01' : '00'}`,
+
+            // Send span to Tempo via OTLP HTTP JSON (using hex IDs as per OTLP JSON spec)
+            sendSpan: async (ctx, name, attributes, status) => {
+                const endTime = Date.now();
+                // OTLP JSON uses nanoseconds as strings
+                const startNano = BigInt(ctx.startTime) * BigInt(1000000);
+                const endNano = BigInt(endTime) * BigInt(1000000);
+
+                const payload = {
+                    resourceSpans: [{
+                        resource: {
+                            attributes: [
+                                { key: 'service.name', value: { stringValue: TraceContext.SERVICE_NAME } }
+                            ]
+                        },
+                        scopeSpans: [{
+                            scope: { name: 'vpd-api-explorer', version: '1.0.0' },
+                            spans: [{
+                                traceId: ctx.traceId,
+                                spanId: ctx.spanId,
+                                name: name,
+                                kind: 3, // SPAN_KIND_CLIENT
+                                startTimeUnixNano: startNano.toString(),
+                                endTimeUnixNano: endNano.toString(),
+                                attributes: attributes.map(([k, v]) => ({
+                                    key: k,
+                                    value: typeof v === 'number' ? { intValue: String(v) } : { stringValue: String(v) }
+                                })),
+                                status: { code: status }
+                            }]
+                        }]
+                    }]
+                };
+
+                try {
+                    const res = await fetch(TraceContext.OTLP_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        console.log('[Trace] Span sent to Tempo');
+                    } else {
+                        const err = await res.text();
+                        console.warn('[Trace] Tempo rejected span:', res.status, err);
+                    }
+                } catch (err) {
+                    console.warn('[Trace] Failed to send span:', err.message);
+                }
+            },
+
+            // Build Grafana Tempo search URL
+            tempoUrl: (traceId) => `http://localhost:3000/explore?orgId=1&left={"datasource":"tempo","queries":[{"refId":"A","queryType":"traceql","query":"${traceId}"}]}`
+        };
+
+        let currentTrace = null;
+
+        // Update status display
+        const statusEl = document.getElementById('trace-status');
+        const linkEl = document.getElementById('grafana-link');
+        statusEl.className = 'trace-status connected';
+        statusEl.textContent = '✓ Tracing: Enabled';
+        linkEl.style.display = 'inline';
+    </script>
+    <script>
         const specs = {
-            'vpd-platform': '/specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml',
             'excise': '/specs/vaping-duty/mocks/excise-api.yaml',
             'customer': '/specs/vaping-duty/mocks/customer-api.yaml',
             'tax-platform': '/specs/vaping-duty/mocks/tax-platform-api.yaml'
@@ -165,7 +277,7 @@
                 ui.specActions.updateUrl(spec);
                 ui.specActions.download(spec);
             } else {
-                // Initialize UI
+                // Initialize UI with tracing interceptor
                 ui = SwaggerUIBundle({
                     url: spec,
                     dom_id: '#swagger-ui',
@@ -184,6 +296,34 @@
                     syntaxHighlight: {
                         activate: true,
                         theme: "monokai"
+                    },
+                    requestInterceptor: (req) => {
+                        // Add W3C Trace Context headers for requests to mock services
+                        if (req.url.includes('localhost:40') || req.url.includes('localhost:4566')) {
+                            currentTrace = TraceContext.create();
+                            currentTrace.method = req.method;
+                            currentTrace.url = req.url;
+                            currentTrace.path = new URL(req.url).pathname;
+                            req.headers['traceparent'] = TraceContext.toTraceparent(currentTrace);
+                            console.log('[Trace] Request:', req.method, currentTrace.path, '| ID:', currentTrace.traceId);
+                        }
+                        return req;
+                    },
+                    responseInterceptor: (res) => {
+                        // Send span to Tempo after response
+                        if (currentTrace) {
+                            const spanName = `${currentTrace.method} ${currentTrace.path}`;
+                            const attrs = [
+                                ['http.method', currentTrace.method],
+                                ['http.url', currentTrace.url],
+                                ['http.status_code', res.status]
+                            ];
+                            const status = res.status < 400 ? 1 : 2; // OK or ERROR
+                            TraceContext.sendSpan(currentTrace, spanName, attrs, status);
+                            console.log('[Trace] Response:', res.status, '| View in Tempo:', currentTrace.traceId);
+                            currentTrace = null;
+                        }
+                        return res;
                     }
                 });
             }

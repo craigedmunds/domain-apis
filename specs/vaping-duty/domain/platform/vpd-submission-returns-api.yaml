@@ -25,6 +25,8 @@ info:
     correlationId: true
     etags: true
 servers:
+- url: http://localhost:4566
+  description: Local Development (Docker)
 - url: https://api.hip.hmrc.gov.uk
   description: Production
 - url: https://api.qa.hip.hmrc.gov.uk

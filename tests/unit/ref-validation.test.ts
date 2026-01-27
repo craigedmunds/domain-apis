@@ -46,7 +46,8 @@ describe('$ref Reference Resolution', () => {
       expect(validationRefs.length).toBeGreaterThan(0);
     });
 
-    it('should reference Money schema', () => {
+    // Note: Excise API uses XML with inline money definitions, no Money schema ref
+    it.skip('should reference Money schema', () => {
       const refs = findRefs(spec);
       const moneyRefs = Array.from(refs).filter((ref) => ref.includes('Money'));
 
@@ -224,18 +225,15 @@ describe('$ref Reference Resolution', () => {
     });
 
     it('should have consistent Money schema where used', () => {
-      const exciseSpec = loadSpec('specs/vaping-duty/mocks/excise-api.yaml');
+      // Note: Excise API uses XML with inline money definitions, so only check tax-platform
       const taxPlatformSpec = loadSpec('specs/vaping-duty/mocks/tax-platform-api.yaml');
 
-      // Both specs that use Money should have consistent structure
-      for (const spec of [exciseSpec, taxPlatformSpec]) {
-        const moneySchema = spec.components.schemas.Money;
-        expect(moneySchema).toBeDefined();
-        expect(moneySchema.required).toContain('amount');
-        expect(moneySchema.required).toContain('currency');
-        expect(moneySchema.properties.amount.type).toBe('number');
-        expect(moneySchema.properties.currency.type).toBe('string');
-      }
+      const moneySchema = taxPlatformSpec.components.schemas.Money;
+      expect(moneySchema).toBeDefined();
+      expect(moneySchema.required).toContain('amount');
+      expect(moneySchema.required).toContain('currency');
+      expect(moneySchema.properties.amount.type).toBe('number');
+      expect(moneySchema.properties.currency.type).toBe('string');
     });
   });
 });

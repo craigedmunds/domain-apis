@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/excise/vpd/registrations/(?!VPD123456).*"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "Content-Type": "application/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<error>\n  <code>NOT_FOUND</code>\n  <message>VPD approval number not found</message>\n</error>"
+  }
+}

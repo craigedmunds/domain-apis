@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/excise/vpd/registrations/VPD123456"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<registration>\n  <vpdApprovalNumber>VPD123456</vpdApprovalNumber>\n  <customerId>CUST789</customerId>\n  <status>ACTIVE</status>\n  <registeredDate>2023-06-15</registeredDate>\n</registration>"
+  }
+}
