@@ -164,9 +164,14 @@ tasks:
 
   # Testing tasks
   test:
-    desc: Run all tests
+    desc: Run all tests (unit, integration, property, acceptance)
     cmds:
-      - npm run test
+      - task: test:unit
+      - task: test:integration
+      - task: test:property
+      - task: test:acceptance:install
+      - task: test:acceptance:gateway:install
+      - task: test:acceptance
 
   test:unit:
     desc: Run unit tests
@@ -187,6 +192,12 @@ tasks:
     desc: Run tests in watch mode
     cmds:
       - npm run test:watch
+
+  test:load:
+    desc: Run k6 load tests (requires Docker mocks running)
+    dir: tests/load
+    cmds:
+      - k6 run smoke-test-mocks.js
 
   # Installation
   install:
