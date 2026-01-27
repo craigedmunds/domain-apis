@@ -21,15 +21,13 @@
 services:
 
   # =============================================================================
-  # Domain API (Apache Camel JBang + YAML DSL)
+  # Domain API (Apache Camel JBang + YAML DSL) - Internal
   # =============================================================================
 
-  domain-api:
+  domain-api-internal:
     image: apache/camel-jbang:4.16.0
-    container_name: vpd-domain-api
+    container_name: vpd-domain-api-internal
     command: ["run", "/routes/integration.yaml"]
-    ports:
-      - "8081:8080"
     volumes:
       - ./specs/vaping-duty/domain/platform/routes:/routes:ro
     networks:
@@ -42,6 +40,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  # =============================================================================
+  # Domain API Proxy (Envoy) - CORS, logging, tracing
+  # =============================================================================
+
+  domain-api-proxy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: vpd-domain-api-proxy
+    ports:
+      - "8081:8080"
+      - "9900:9901"
+    volumes:
+      - ./specs/vaping-duty/proxies/envoy-domain-api.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      domain-api-internal:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-external-labels: "service=domain-api-proxy,job=envoy"
+    networks:
+      - domain-api-network
 
   # =============================================================================
   # Docs / Try It Site
@@ -213,6 +236,7 @@ services:
     volumes:
       - ./tests/load:/tests
     environment:
+      - DOMAIN_API_URL=http://domain-api-proxy:8080
       - EXCISE_URL=http://excise-proxy:4010
       - CUSTOMER_URL=http://customer-proxy:4010
       - TAX_PLATFORM_URL=http://tax-platform-proxy:4010
@@ -221,6 +245,7 @@ services:
     profiles:
       - test
     depends_on:
+      - domain-api-proxy
       - excise-proxy
       - customer-proxy
       - tax-platform-proxy

@@ -147,6 +147,9 @@
     <div class="nav">
         <label for="api-select">Select API:</label>
         <select id="api-select">
+            <optgroup label="Domain API">
+                <option value="domain-api">VPD Domain API (:8081)</option>
+            </optgroup>
             <optgroup label="Backend Mocks">
                 <option value="excise">Excise Mock (:4010)</option>
                 <option value="customer">Customer Mock (:4011)</option>
@@ -165,7 +168,7 @@
             2. Expand any endpoint to see details<br>
             3. Click "Try it out" to enable the request form<br>
             4. Fill in parameters and click "Execute" to invoke the API<br>
-            5. Mock servers run on ports 4010-4012, platform API via gateway on 4566
+            5. Domain API runs on port 8081, mock backends on ports 4010-4012
         </p>
     </div>
     
@@ -262,6 +265,7 @@
     </script>
     <script>
         const specs = {
+            'domain-api': '/specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml',
             'excise': '/specs/vaping-duty/mocks/excise-api.yaml',
             'customer': '/specs/vaping-duty/mocks/customer-api.yaml',
             'tax-platform': '/specs/vaping-duty/mocks/tax-platform-api.yaml'
@@ -298,8 +302,8 @@
                         theme: "monokai"
                     },
                     requestInterceptor: (req) => {
-                        // Add W3C Trace Context headers for requests to mock services
-                        if (req.url.includes('localhost:40') || req.url.includes('localhost:4566')) {
+                        // Add W3C Trace Context headers for requests to domain API and mock services
+                        if (req.url.includes('localhost:40') || req.url.includes('localhost:8081')) {
                             currentTrace = TraceContext.create();
                             currentTrace.method = req.method;
                             currentTrace.url = req.url;
@@ -329,9 +333,9 @@
             }
         }
 
-        // Get API from URL parameter or default to excise
+        // Get API from URL parameter or default to domain-api
         const urlParams = new URLSearchParams(window.location.search);
-        const initialApi = urlParams.get('api') || 'excise';
+        const initialApi = urlParams.get('api') || 'domain-api';
         
         // Set the dropdown to match
         document.getElementById('api-select').value = initialApi;
