@@ -179,26 +179,11 @@ describe('$ref Reference Resolution', () => {
     });
   });
 
-  describe('VPD Domain API - Platform (when exists)', () => {
-    let spec: any;
-
-    beforeAll(() => {
-      try {
-        spec = loadSpec('specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml');
-      } catch {
-        spec = null;
-      }
-    });
-
-    it('should have all $ref references resolvable when it exists', () => {
-      if (!spec) return;
-
+  // Phase 2: VPD Domain API specs - skipped until files are created
+  describe.skip('VPD Domain API - Platform', () => {
+    it('should have all $ref references resolvable', () => {
+      const spec = loadSpec('specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml');
       const result = validateRefs(spec);
-
-      if (!result.valid) {
-        console.log('Reference resolution errors:', result.errors);
-      }
-
       expect(result.valid).toBe(true);
     });
   });
