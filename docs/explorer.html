@@ -147,9 +147,6 @@
     <div class="nav">
         <label for="api-select">Select API:</label>
         <select id="api-select">
-            <optgroup label="Domain API">
-                <option value="vpd-platform">VPD Platform API (via Gateway)</option>
-            </optgroup>
             <optgroup label="Backend Mocks">
                 <option value="excise">Excise Mock (:4010)</option>
                 <option value="customer">Customer Mock (:4011)</option>
@@ -265,7 +262,6 @@
     </script>
     <script>
         const specs = {
-            'vpd-platform': '/specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml',
             'excise': '/specs/vaping-duty/mocks/excise-api.yaml',
             'customer': '/specs/vaping-duty/mocks/customer-api.yaml',
             'tax-platform': '/specs/vaping-duty/mocks/tax-platform-api.yaml'
@@ -302,32 +298,19 @@
                         theme: "monokai"
                     },
                     requestInterceptor: (req) => {
-                        // Add W3C Trace Context headers for requests to mock services and platform API
-                        console.log('[Trace Debug] requestInterceptor called');
-                        console.log('[Trace Debug] req.url:', req.url);
-                        console.log('[Trace Debug] matches localhost:40?', req.url.includes('localhost:40'));
-                        console.log('[Trace Debug] matches localhost:4566?', req.url.includes('localhost:4566'));
-
+                        // Add W3C Trace Context headers for requests to mock services
                         if (req.url.includes('localhost:40') || req.url.includes('localhost:4566')) {
                             currentTrace = TraceContext.create();
                             currentTrace.method = req.method;
                             currentTrace.url = req.url;
                             currentTrace.path = new URL(req.url).pathname;
                             req.headers['traceparent'] = TraceContext.toTraceparent(currentTrace);
-                            console.log('[Trace] Request:', req.method, currentTrace.path);
-                            console.log('[Trace] ID:', currentTrace.traceId);
-                            console.log('[Trace] traceparent header:', req.headers['traceparent']);
-                        } else {
-                            console.log('[Trace Debug] URL did not match any pattern, skipping trace');
+                            console.log('[Trace] Request:', req.method, currentTrace.path, '| ID:', currentTrace.traceId);
                         }
                         return req;
                     },
                     responseInterceptor: (res) => {
                         // Send span to Tempo after response
-                        console.log('[Trace Debug] responseInterceptor called');
-                        console.log('[Trace Debug] res.status:', res.status);
-                        console.log('[Trace Debug] currentTrace:', currentTrace ? 'exists' : 'null');
-
                         if (currentTrace) {
                             const spanName = `${currentTrace.method} ${currentTrace.path}`;
                             const attrs = [
@@ -336,12 +319,9 @@
                                 ['http.status_code', res.status]
                             ];
                             const status = res.status < 400 ? 1 : 2; // OK or ERROR
-                            console.log('[Trace] Sending span to Tempo:', spanName);
                             TraceContext.sendSpan(currentTrace, spanName, attrs, status);
-                            console.log('[Trace] Response:', res.status, '| View:', TraceContext.tempoUrl(currentTrace.traceId));
+                            console.log('[Trace] Response:', res.status, '| View in Tempo:', currentTrace.traceId);
                             currentTrace = null;
-                        } else {
-                            console.log('[Trace Debug] No currentTrace, skipping span send');
                         }
                         return res;
                     }
