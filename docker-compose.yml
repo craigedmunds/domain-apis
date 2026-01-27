@@ -1,6 +1,7 @@
 # Domain APIs - Docker Compose
 #
 # VPD Submission Returns POC stack:
+# - Domain API (JBang + Camel YAML DSL): Orchestration service
 # - excise mock (WireMock): Returns XML (legacy system simulation)
 # - customer mock (Prism): Returns JSON
 # - tax-platform mock (Prism): Returns JSON
@@ -9,15 +10,38 @@
 # - k6 for load testing
 #
 # Architecture:
-#   External ports → Envoy proxies → Mocks (internal)
+#   External ports → Domain API → Envoy proxies → Mocks (internal)
 #
 # Usage:
 #   docker-compose up -d                 # Start all services
-#   docker-compose logs -f excise-proxy  # Follow logs for a service
+#   docker-compose logs -f domain-api    # Follow domain API logs
 #   docker-compose run k6 run /tests/smoke-test-mocks.js  # Run tests
 #   docker-compose down                  # Stop and remove containers
 
 services:
+
+  # =============================================================================
+  # Domain API (Apache Camel JBang + YAML DSL)
+  # =============================================================================
+
+  domain-api:
+    image: apache/camel-jbang:4.16.0
+    container_name: vpd-domain-api
+    command: ["run", "/routes/integration.yaml"]
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./specs/vaping-duty/domain/platform/routes:/routes:ro
+    networks:
+      - domain-api-network
+    depends_on:
+      - tax-platform-proxy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   # =============================================================================
   # Docs / Try It Site

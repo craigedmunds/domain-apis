@@ -1,0 +1,61 @@
+# VPD Domain API - Camel YAML DSL Routes
+#
+# Phase 7a: Simple pass-through to validate JBang + Camel YAML DSL setup
+#
+# Demonstrates GET submission by acknowledgement reference pass-through.
+# Dependencies inferred automatically by apache/camel-jbang image.
+
+# camel-jbang dependency annotations (auto-resolved)
+# //DEPS org.apache.camel:camel-http
+# //DEPS org.apache.camel:camel-jackson
+# //DEPS org.apache.camel:camel-platform-http
+
+# REST configuration
+- restConfiguration:
+    component: platform-http
+    bindingMode: off
+    port: 8080
+
+# REST endpoints
+- rest:
+    path: /duty/vpd/submission-returns/v1
+    get:
+      - to: direct:getSubmission
+
+# Health endpoint
+- rest:
+    path: /health
+    get:
+      - to: direct:health
+
+# Route: Get submission by acknowledgement reference
+- route:
+    id: getSubmission
+    from:
+      uri: direct:getSubmission
+      steps:
+        - setProperty:
+            name: ackRef
+            simple: "${header.acknowledgementReference}"
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# Route: Health check
+- route:
+    id: health
+    from:
+      uri: direct:health
+      steps:
+        - setBody:
+            constant: '{"status": "UP"}'

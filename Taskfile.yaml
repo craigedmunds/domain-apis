@@ -195,9 +195,8 @@ tasks:
 
   test:load:
     desc: Run k6 load tests (requires Docker mocks running)
-    dir: tests/load
     cmds:
-      - k6 run smoke-test-mocks.js
+      - docker compose run --rm k6 run /tests/smoke-test-mocks.js
 
   # Installation
   install:
