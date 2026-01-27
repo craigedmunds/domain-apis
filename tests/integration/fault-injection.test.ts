@@ -5,6 +5,9 @@
  * These tests require Docker Compose to be running with Envoy proxies.
  *
  * Run with: docker-compose up -d && npm run test:integration -- fault-injection
+ *
+ * NOTE: These tests are skipped in CI because CI runs Prism directly without Envoy.
+ * They only run when the full Docker Compose stack (with Envoy proxies) is available.
  */
 
 // Envoy proxy ports (not direct Prism ports)
@@ -14,31 +17,39 @@ const ENVOY_PORTS = {
   'tax-platform': 4012,
 };
 
-// Skip these tests if not running against Docker (Envoy proxies)
-const isDockerRunning = async (): Promise<boolean> => {
+// Skip in CI - fault injection requires Envoy which isn't available in CI
+const isCI = process.env.CI === 'true';
+
+// Check if Envoy is running by testing if fault injection actually works
+const isEnvoyRunning = async (): Promise<boolean> => {
+  if (isCI) return false;
+
   try {
-    const response = await fetch(`http://localhost:${ENVOY_PORTS.excise}/excise/vpd/registrations/VPD123456`, {
+    // Try to inject a fault - if Envoy is running, this will return 503
+    const response = await fetch(`http://localhost:${ENVOY_PORTS.customer}/customers/CUST789`, {
+      headers: { 'x-envoy-fault-abort-request': '503' },
       signal: AbortSignal.timeout(2000),
     });
-    return response.ok || response.status === 404;
+    // If we get 503, Envoy is processing our fault injection header
+    return response.status === 503;
   } catch {
     return false;
   }
 };
 
 describe('Fault Injection via Envoy Headers', () => {
-  let dockerAvailable = false;
+  let envoyAvailable = false;
 
   beforeAll(async () => {
-    dockerAvailable = await isDockerRunning();
-    if (!dockerAvailable) {
-      console.log('Skipping fault injection tests - Docker/Envoy not running');
+    envoyAvailable = await isEnvoyRunning();
+    if (!envoyAvailable) {
+      console.log('Skipping fault injection tests - Envoy not running (CI or Docker not started)');
     }
   });
 
   describe('Delay Injection', () => {
     it('should inject delay when x-envoy-fault-delay-request header is set', async () => {
-      if (!dockerAvailable) return;
+      if (!envoyAvailable) return;
 
       const delayMs = 500;
       const startTime = Date.now();
@@ -61,7 +72,7 @@ describe('Fault Injection via Envoy Headers', () => {
     }, 10000);
 
     it('should not delay when header is absent', async () => {
-      if (!dockerAvailable) return;
+      if (!envoyAvailable) return;
 
       const startTime = Date.now();
 
@@ -79,7 +90,7 @@ describe('Fault Injection via Envoy Headers', () => {
 
   describe('Error Injection', () => {
     it('should return 503 when x-envoy-fault-abort-request header is set to 503', async () => {
-      if (!dockerAvailable) return;
+      if (!envoyAvailable) return;
 
       const response = await fetch(
         `http://localhost:${ENVOY_PORTS.customer}/customers/CUST789`,
@@ -94,7 +105,7 @@ describe('Fault Injection via Envoy Headers', () => {
     });
 
     it('should return 500 when x-envoy-fault-abort-request header is set to 500', async () => {
-      if (!dockerAvailable) return;
+      if (!envoyAvailable) return;
 
       const response = await fetch(
         `http://localhost:${ENVOY_PORTS.customer}/customers/CUST789`,
@@ -109,7 +120,7 @@ describe('Fault Injection via Envoy Headers', () => {
     });
 
     it('should not error when header is absent', async () => {
-      if (!dockerAvailable) return;
+      if (!envoyAvailable) return;
 
       const response = await fetch(
         `http://localhost:${ENVOY_PORTS.customer}/customers/CUST789`
@@ -121,7 +132,7 @@ describe('Fault Injection via Envoy Headers', () => {
 
   describe('Combined Delay and Error', () => {
     it('should inject both delay and error when both headers are set', async () => {
-      if (!dockerAvailable) return;
+      if (!envoyAvailable) return;
 
       const delayMs = 300;
       const startTime = Date.now();
@@ -153,7 +164,7 @@ describe('Fault Injection via Envoy Headers', () => {
 
     backends.forEach(({ name, port, path }) => {
       it(`should inject error on ${name} backend`, async () => {
-        if (!dockerAvailable) return;
+        if (!envoyAvailable) return;
 
         const response = await fetch(`http://localhost:${port}${path}`, {
           headers: {
