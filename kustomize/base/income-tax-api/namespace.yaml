@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: domain-api-income-tax
-  labels:
-    name: domain-api-income-tax
