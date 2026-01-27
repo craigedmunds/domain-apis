@@ -1,0 +1,385 @@
+openapi: 3.0.3
+info:
+  title: Excise Duty System API - VPD
+  version: 1.0.0
+  description: |
+    Backend API for Excise Duty System managing VPD registrations, periods,
+    and duty calculations.
+
+    **System of Record For:**
+    - VPD registrations (vpdApprovalNumber → customerId mapping)
+    - Period definitions and state
+    - Duty calculation rules and validation
+
+servers:
+  - url: http://localhost:4010
+    description: Local mock server
+  - url: http://excise-mock:4010
+    description: Docker internal
+  - url: https://excise.internal.hmrc.gov.uk
+    description: Internal production
+
+tags:
+  - name: Registrations
+    description: VPD registration operations
+  - name: Periods
+    description: Period operations
+  - name: Validation
+    description: Submission validation and calculation
+
+paths:
+  /excise/vpd/registrations/{vpdApprovalNumber}:
+    get:
+      tags:
+        - Registrations
+      summary: Get VPD registration
+      description: |
+        Returns VPD registration details including the customerId mapping
+        and approval status.
+      operationId: getRegistration
+      parameters:
+        - name: vpdApprovalNumber
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "VPD123456"
+      responses:
+        '200':
+          description: Registration found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Registration'
+              examples:
+                active:
+                  $ref: '#/components/examples/ActiveRegistration'
+        '404':
+          description: Registration not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /excise/vpd/periods/{periodKey}:
+    get:
+      tags:
+        - Periods
+      summary: Get period definition
+      description: |
+        Returns period definition including dates, duty rates, and current state.
+      operationId: getPeriod
+      parameters:
+        - name: periodKey
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "24A1"
+      responses:
+        '200':
+          description: Period found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Period'
+              examples:
+                openPeriod:
+                  $ref: '#/components/examples/OpenPeriod'
+        '404':
+          description: Period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /excise/vpd/validate-and-calculate:
+    post:
+      tags:
+        - Validation
+      summary: Validate submission and calculate duty
+      description: |
+        Validates a VPD submission against business rules and calculates
+        duty and VAT totals. Returns customerId for downstream enrichment.
+
+        **Validation includes:**
+        - VPD approval number is active and valid
+        - Period is in OPEN state
+        - Submission payload meets business rules
+        - Duty products are valid
+
+        **Calculation includes:**
+        - Total duty due
+        - VAT calculations
+        - Calculation hash for idempotency verification
+      operationId: validateAndCalculate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidationRequest'
+            examples:
+              valid:
+                $ref: '#/components/examples/ValidValidationRequest'
+      responses:
+        '200':
+          description: Validation and calculation complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResponse'
+              examples:
+                valid:
+                  $ref: '#/components/examples/ValidValidationResponse'
+                invalid:
+                  $ref: '#/components/examples/InvalidValidationResponse'
+        '400':
+          description: Malformed request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Approval number or period not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Period already filed or not in OPEN state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation failed - business rule violations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResponse'
+
+components:
+  schemas:
+    Registration:
+      type: object
+      required:
+        - vpdApprovalNumber
+        - customerId
+        - status
+        - registeredDate
+      properties:
+        vpdApprovalNumber:
+          type: string
+          example: "VPD123456"
+        customerId:
+          type: string
+          description: Customer ID in customer system
+          example: "CUST789"
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, REVOKED]
+          example: "ACTIVE"
+        registeredDate:
+          type: string
+          format: date
+          example: "2023-06-15"
+
+    Period:
+      type: object
+      required:
+        - periodKey
+        - startDate
+        - endDate
+        - state
+      properties:
+        periodKey:
+          type: string
+          example: "24A1"
+        startDate:
+          type: string
+          format: date
+          example: "2024-01-01"
+        endDate:
+          type: string
+          format: date
+          example: "2024-03-31"
+        state:
+          type: string
+          enum: [OPEN, FILED, CLOSED]
+          description: |
+            OPEN - Period is open for filing
+            FILED - Returns filed but period still open for amendments
+            CLOSED - Period closed, no further changes allowed
+          example: "OPEN"
+        dutyRates:
+          type: object
+          description: Duty rates for this period
+          additionalProperties:
+            type: number
+
+    ValidationRequest:
+      type: object
+      required:
+        - vpdApprovalNumber
+        - periodKey
+        - submission
+      properties:
+        vpdApprovalNumber:
+          type: string
+          example: "VPD123456"
+        periodKey:
+          type: string
+          example: "24A1"
+        submission:
+          type: object
+          description: Full submission payload to validate
+          properties:
+            basicInformation:
+              type: object
+            dutyProducts:
+              type: array
+              items:
+                type: object
+
+    ValidationResponse:
+      type: object
+      required:
+        - valid
+        - customerId
+      properties:
+        valid:
+          type: boolean
+          description: True if validation passed
+          example: true
+        customerId:
+          type: string
+          description: Customer ID from registration (for downstream enrichment)
+          example: "CUST789"
+        calculations:
+          type: object
+          description: Calculated duty and VAT (only present if valid=true)
+          properties:
+            totalDutyDue:
+              $ref: '#/components/schemas/Money'
+            vat:
+              $ref: '#/components/schemas/Money'
+            calculationHash:
+              type: string
+              description: Hash of calculation inputs for idempotency verification
+              example: "sha256:abc123def456"
+        warnings:
+          type: array
+          description: Non-blocking warnings
+          items:
+            $ref: '#/components/schemas/ValidationMessage'
+        errors:
+          type: array
+          description: Validation errors (only present if valid=false)
+          items:
+            $ref: '#/components/schemas/ValidationMessage'
+
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 12345.67
+        currency:
+          type: string
+          example: "GBP"
+
+    ValidationMessage:
+      type: object
+      required:
+        - code
+        - text
+      properties:
+        code:
+          type: string
+          example: "WARN-VD-001"
+        text:
+          type: string
+          example: "Spoilt product close to upper threshold"
+        path:
+          type: string
+          description: JSON path to the field with the issue
+          example: "/dutyProducts/0/quantity"
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "VPD approval number not found"
+
+  examples:
+    ActiveRegistration:
+      summary: Active VPD registration
+      value:
+        vpdApprovalNumber: "VPD123456"
+        customerId: "CUST789"
+        status: "ACTIVE"
+        registeredDate: "2023-06-15"
+
+    OpenPeriod:
+      summary: Open period
+      value:
+        periodKey: "24A1"
+        startDate: "2024-01-01"
+        endDate: "2024-03-31"
+        state: "OPEN"
+        dutyRates:
+          standardRate: 0.15
+
+    ValidValidationRequest:
+      summary: Valid validation request
+      value:
+        vpdApprovalNumber: "VPD123456"
+        periodKey: "24A1"
+        submission:
+          basicInformation:
+            returnType: "ORIGINAL"
+            submittedBy:
+              type: "ORG"
+              name: "Example Vapes Ltd"
+          dutyProducts: []
+
+    ValidValidationResponse:
+      summary: Validation passed
+      value:
+        valid: true
+        customerId: "CUST789"
+        calculations:
+          totalDutyDue:
+            amount: 12345.67
+            currency: "GBP"
+          vat:
+            amount: 2469.13
+            currency: "GBP"
+          calculationHash: "sha256:abc123def456"
+        warnings:
+          - code: "WARN-VD-001"
+            text: "Spoilt product close to upper threshold"
+        errors: []
+
+    InvalidValidationResponse:
+      summary: Validation failed
+      value:
+        valid: false
+        customerId: "CUST789"
+        warnings: []
+        errors:
+          - code: "ERR-VD-002"
+            text: "Duty product quantity must be greater than zero"
+            path: "/dutyProducts/0/quantity"

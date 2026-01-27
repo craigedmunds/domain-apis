@@ -1,0 +1,207 @@
+# Platform Common Responses
+# https://platform.hip.hmrc.gov.uk/common/responses.yaml
+
+BadRequest:
+  description: Bad request - invalid parameters, malformed payload, or invalid query syntax
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        malformedJson:
+          summary: Malformed JSON payload
+          value:
+            code: "MALFORMED_JSON"
+            message: "Request body contains invalid JSON"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+        invalidParameter:
+          summary: Invalid query parameter
+          value:
+            code: "INVALID_PARAMETER"
+            message: "Invalid query parameter value"
+            details:
+              - code: "INVALID_FORMAT"
+                message: "Parameter must be a valid date"
+                path: "/query/fromDate"
+                value: "not-a-date"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+Unauthorized:
+  description: Unauthorized - missing or invalid authentication token
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+    WWW-Authenticate:
+      description: Authentication scheme required
+      schema:
+        type: string
+        example: "Bearer"
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        missingToken:
+          summary: Missing authentication token
+          value:
+            code: "MISSING_TOKEN"
+            message: "Authentication token is required"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+        invalidToken:
+          summary: Invalid or expired token
+          value:
+            code: "INVALID_TOKEN"
+            message: "Authentication token is invalid or expired"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+Forbidden:
+  description: Forbidden - authenticated but insufficient permissions
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        insufficientScope:
+          summary: Insufficient OAuth scope
+          value:
+            code: "INSUFFICIENT_SCOPE"
+            message: "Token does not have required scope: vpd:submit"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+NotFound:
+  description: Resource not found
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        resourceNotFound:
+          summary: Resource not found
+          value:
+            code: "NOT_FOUND"
+            message: "Requested resource does not exist"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+Conflict:
+  description: Conflict - resource state conflict or idempotency key reused with different payload
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        idempotencyConflict:
+          summary: Idempotency key conflict
+          value:
+            code: "IDEMPOTENCY_CONFLICT"
+            message: "Idempotency key already used with different payload"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+        resourceConflict:
+          summary: Resource state conflict
+          value:
+            code: "RESOURCE_CONFLICT"
+            message: "Period already filed - cannot submit new return"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+ValidationError:
+  description: Validation failed - business rule violations or invalid data
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        validationFailed:
+          summary: Multiple validation errors
+          value:
+            code: "VALIDATION_ERROR"
+            message: "Validation failed"
+            details:
+              - code: "FIELD_REQUIRED"
+                message: "Field is required"
+                path: "/basicInformation/returnType"
+              - code: "VALUE_OUT_OF_RANGE"
+                message: "Quantity must be greater than zero"
+                path: "/dutyProducts/0/quantity"
+                value: -5
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+TooManyRequests:
+  description: Rate limit exceeded
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+    X-RateLimit-Limit:
+      $ref: '../../headers/v1/oas.yaml#/X-RateLimit-Limit'
+    X-RateLimit-Remaining:
+      $ref: '../../headers/v1/oas.yaml#/X-RateLimit-Remaining'
+    X-RateLimit-Reset:
+      $ref: '../../headers/v1/oas.yaml#/X-RateLimit-Reset'
+    Retry-After:
+      description: Seconds until rate limit resets
+      schema:
+        type: integer
+        example: 60
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        rateLimitExceeded:
+          summary: Rate limit exceeded
+          value:
+            code: "RATE_LIMIT_EXCEEDED"
+            message: "Rate limit exceeded. Retry after 60 seconds."
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+InternalServerError:
+  description: Internal server error - unexpected platform or service failure
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        internalError:
+          summary: Internal server error
+          value:
+            code: "INTERNAL_ERROR"
+            message: "An unexpected error occurred. Please try again later."
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"
+
+ServiceUnavailable:
+  description: Service temporarily unavailable - maintenance or downstream service failure
+  headers:
+    X-Correlation-Id:
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+    Retry-After:
+      description: Seconds until service is expected to be available
+      schema:
+        type: integer
+        example: 300
+  content:
+    application/json:
+      schema:
+        $ref: '../../schemas/v1/oas.yaml#/Error'
+      examples:
+        maintenance:
+          summary: Service under maintenance
+          value:
+            code: "SERVICE_UNAVAILABLE"
+            message: "Service is temporarily unavailable for maintenance"
+            correlationId: "550e8400-e29b-41d4-a716-446655440000"

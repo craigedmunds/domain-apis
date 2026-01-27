@@ -1,0 +1,412 @@
+openapi: 3.0.3
+info:
+  title: Tax Platform Submissions API - VPD
+  version: 1.0.0
+  description: |
+    Backend API for Tax Platform managing submission storage and retrieval.
+
+    **System of Record For:**
+    - VPD submission records
+    - Acknowledgement references
+    - ETags for optimistic locking
+    - Idempotency key tracking
+
+servers:
+  - url: http://localhost:4012
+    description: Local mock server
+  - url: http://tax-platform-mock:4010
+    description: Docker internal
+  - url: https://tax-platform.internal.hmrc.gov.uk
+    description: Internal production
+
+tags:
+  - name: Submissions
+    description: VPD submission operations
+
+paths:
+  /submissions/vpd:
+    post:
+      tags:
+        - Submissions
+      summary: Store a VPD submission
+      description: |
+        Stores a VPD submission idempotently. Uses X-Idempotency-Key header
+        to detect replays.
+
+        **Idempotency behavior:**
+        - First request with a key: Stores submission, returns 201 with ack ref
+        - Replay with same key + same payload hash: Returns cached 201 response
+        - Replay with same key + different payload: Returns 409 Conflict
+
+        The submission includes all data from the domain API orchestration:
+        - Submission payload from client
+        - Calculations from excise
+        - Warnings from excise
+        - customerId from excise
+      operationId: storeSubmission
+      parameters:
+        - $ref: '#/components/parameters/X-Idempotency-Key'
+        - $ref: '#/components/parameters/X-Correlation-Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreRequest'
+            examples:
+              newSubmission:
+                $ref: '#/components/examples/StoreRequest'
+      responses:
+        '201':
+          description: Submission stored successfully
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/StoreResponse'
+        '400':
+          description: Malformed request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Idempotency key conflict - same key, different payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      tags:
+        - Submissions
+      summary: Find VPD submission
+      description: |
+        Find a VPD submission by approval number and period key.
+        Returns the most recent submission for the given combination.
+      operationId: findSubmission
+      parameters:
+        - name: vpdApprovalNumber
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "VPD123456"
+        - name: periodKey
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "24A1"
+        - $ref: '#/components/parameters/X-Correlation-Id'
+      responses:
+        '200':
+          description: Submission found
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredSubmission'
+              examples:
+                found:
+                  $ref: '#/components/examples/StoredSubmission'
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /submissions/vpd/{acknowledgementReference}:
+    get:
+      tags:
+        - Submissions
+      summary: Get VPD submission by acknowledgement
+      description: |
+        Retrieve a VPD submission by its acknowledgement reference.
+      operationId: getSubmission
+      parameters:
+        - name: acknowledgementReference
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "ACK-2026-01-26-000123"
+        - $ref: '#/components/parameters/X-Correlation-Id'
+      responses:
+        '200':
+          description: Submission found
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredSubmission'
+              examples:
+                found:
+                  $ref: '#/components/examples/StoredSubmission'
+        '404':
+          description: Submission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  parameters:
+    X-Idempotency-Key:
+      name: X-Idempotency-Key
+      in: header
+      description: Idempotency key for safe retries
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        example: "abc-123-def-456"
+
+    X-Correlation-Id:
+      name: X-Correlation-Id
+      in: header
+      description: Correlation ID for request tracing
+      required: false
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+  headers:
+    ETag:
+      description: Entity tag for optimistic locking
+      schema:
+        type: string
+        example: "W/3-6b1f"
+
+    X-Correlation-Id:
+      description: Correlation ID echoed from request
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    StoreRequest:
+      type: object
+      required:
+        - vpdApprovalNumber
+        - periodKey
+        - customerId
+        - submission
+        - calculations
+      properties:
+        vpdApprovalNumber:
+          type: string
+          example: "VPD123456"
+        periodKey:
+          type: string
+          example: "24A1"
+        customerId:
+          type: string
+          description: Customer ID from excise (for correlation)
+          example: "CUST789"
+        submission:
+          type: object
+          description: Full submission payload from client
+          properties:
+            basicInformation:
+              type: object
+            dutyProducts:
+              type: array
+              items:
+                type: object
+        calculations:
+          type: object
+          description: Calculations from excise
+          properties:
+            totalDutyDue:
+              $ref: '#/components/schemas/Money'
+            vat:
+              $ref: '#/components/schemas/Money'
+            calculationHash:
+              type: string
+              example: "sha256:abc123def456"
+        warnings:
+          type: array
+          description: Warnings from excise
+          items:
+            $ref: '#/components/schemas/Warning'
+
+    StoreResponse:
+      type: object
+      required:
+        - acknowledgementReference
+        - storedAt
+      properties:
+        acknowledgementReference:
+          type: string
+          description: Unique acknowledgement reference
+          example: "ACK-2026-01-26-000123"
+        storedAt:
+          type: string
+          format: date-time
+          example: "2026-01-26T14:51:02Z"
+
+    StoredSubmission:
+      type: object
+      required:
+        - acknowledgementReference
+        - vpdApprovalNumber
+        - periodKey
+        - customerId
+        - submission
+        - calculations
+        - submittedAt
+        - status
+      properties:
+        acknowledgementReference:
+          type: string
+          example: "ACK-2026-01-26-000123"
+        vpdApprovalNumber:
+          type: string
+          example: "VPD123456"
+        periodKey:
+          type: string
+          example: "24A1"
+        customerId:
+          type: string
+          description: Customer ID (for enrichment by domain API)
+          example: "CUST789"
+        submission:
+          type: object
+          description: Full submission payload
+        calculations:
+          type: object
+          properties:
+            totalDutyDue:
+              $ref: '#/components/schemas/Money'
+            vat:
+              $ref: '#/components/schemas/Money'
+            calculationHash:
+              type: string
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+        submittedAt:
+          type: string
+          format: date-time
+          example: "2026-01-26T14:51:02Z"
+        status:
+          type: string
+          enum: [RECEIVED, VALIDATED, REJECTED]
+          description: Processing status
+          example: "RECEIVED"
+
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: double
+          example: 12345.67
+        currency:
+          type: string
+          example: "GBP"
+
+    Warning:
+      type: object
+      required:
+        - code
+        - text
+      properties:
+        code:
+          type: string
+          example: "WARN-VD-001"
+        text:
+          type: string
+          example: "Spoilt product close to upper threshold"
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "IDEMPOTENCY_CONFLICT"
+        message:
+          type: string
+          example: "Idempotency key already used with different payload"
+
+  examples:
+    StoreRequest:
+      summary: Store submission request
+      value:
+        vpdApprovalNumber: "VPD123456"
+        periodKey: "24A1"
+        customerId: "CUST789"
+        submission:
+          basicInformation:
+            returnType: "ORIGINAL"
+            submittedBy:
+              type: "ORG"
+              name: "Example Vapes Ltd"
+          dutyProducts: []
+        calculations:
+          totalDutyDue:
+            amount: 12345.67
+            currency: "GBP"
+          vat:
+            amount: 2469.13
+            currency: "GBP"
+          calculationHash: "sha256:abc123def456"
+        warnings: []
+
+    StoreResponse:
+      summary: Store submission response
+      value:
+        acknowledgementReference: "ACK-2026-01-26-000123"
+        storedAt: "2026-01-26T14:51:02Z"
+
+    StoredSubmission:
+      summary: Stored submission
+      value:
+        acknowledgementReference: "ACK-2026-01-26-000123"
+        vpdApprovalNumber: "VPD123456"
+        periodKey: "24A1"
+        customerId: "CUST789"
+        submission:
+          basicInformation:
+            returnType: "ORIGINAL"
+            submittedBy:
+              type: "ORG"
+              name: "Example Vapes Ltd"
+          dutyProducts: []
+        calculations:
+          totalDutyDue:
+            amount: 12345.67
+            currency: "GBP"
+          vat:
+            amount: 2469.13
+            currency: "GBP"
+          calculationHash: "sha256:abc123def456"
+        warnings: []
+        submittedAt: "2026-01-26T14:51:02Z"
+        status: "RECEIVED"

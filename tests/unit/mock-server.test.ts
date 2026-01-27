@@ -1,10 +1,10 @@
 /**
- * Unit Tests for Mock Server Functionality (Task 8.5)
+ * Unit Tests for Mock Server Functionality
  *
  * These tests verify that Prism mock servers:
  * 1. Start successfully and become healthy
  * 2. Return valid responses conforming to OpenAPI schemas
- * 3. Generate correctly-formed relationship links
+ * 3. Support VPD backend operations
  */
 
 import {
@@ -16,7 +16,6 @@ import {
   isValidResourceId,
   isValidLinkUrl,
 } from '../helpers/mock-server-manager';
-import { loadSpec } from '../helpers/openapi-validator';
 
 describe('Mock Server Unit Tests', () => {
   // Track active servers for cleanup
@@ -31,82 +30,84 @@ describe('Mock Server Unit Tests', () => {
   });
 
   describe('Server Startup', () => {
-    describe('Taxpayer API', () => {
+    describe('Excise Duty System API', () => {
       it('should spawn and become healthy', async () => {
-        const server = await spawnMockServer(API_CONFIGS.taxpayer);
+        const server = await spawnMockServer(API_CONFIGS.excise);
         activeServers.push(server);
 
         expect(server).toBeDefined();
-        expect(server.name).toBe('Taxpayer API');
-        expect(server.port).toBe(8081);
-        expect(server.baseUrl).toBe('http://localhost:8081');
+        expect(server.name).toBe('Excise Duty System API');
+        expect(server.port).toBe(4010);
+        expect(server.baseUrl).toBe('http://localhost:4010');
 
         const isHealthy = await healthCheck(server);
         expect(isHealthy).toBe(true);
       }, 35000);
 
-      it('should respond to requests', async () => {
-        const server = await spawnMockServer(API_CONFIGS.taxpayer);
+      it('should respond to registration requests', async () => {
+        const server = await spawnMockServer(API_CONFIGS.excise);
         activeServers.push(server);
 
-        const response = await fetch(`${server.baseUrl}/taxpayers`);
+        const response = await fetch(`${server.baseUrl}/excise/vpd/registrations/VPD123456`);
         expect(response.status).toBe(200);
       }, 35000);
     });
 
-    describe('Income Tax API', () => {
+    describe('Customer Master Data API', () => {
       it('should spawn and become healthy', async () => {
-        const server = await spawnMockServer(API_CONFIGS['income-tax']);
+        const server = await spawnMockServer(API_CONFIGS.customer);
         activeServers.push(server);
 
         expect(server).toBeDefined();
-        expect(server.name).toBe('Income Tax API');
-        expect(server.port).toBe(8082);
-        expect(server.baseUrl).toBe('http://localhost:8082');
+        expect(server.name).toBe('Customer Master Data API');
+        expect(server.port).toBe(4011);
+        expect(server.baseUrl).toBe('http://localhost:4011');
 
         const isHealthy = await healthCheck(server);
         expect(isHealthy).toBe(true);
       }, 35000);
 
-      it('should respond to requests', async () => {
-        const server = await spawnMockServer(API_CONFIGS['income-tax']);
+      it('should respond to customer requests', async () => {
+        const server = await spawnMockServer(API_CONFIGS.customer);
         activeServers.push(server);
 
-        const response = await fetch(`${server.baseUrl}/tax-returns`);
+        const response = await fetch(`${server.baseUrl}/customers/CUST789`);
         expect(response.status).toBe(200);
       }, 35000);
     });
 
-    describe('Payment API', () => {
+    describe('Tax Platform Submissions API', () => {
       it('should spawn and become healthy', async () => {
-        const server = await spawnMockServer(API_CONFIGS.payment);
+        const server = await spawnMockServer(API_CONFIGS['tax-platform']);
         activeServers.push(server);
 
         expect(server).toBeDefined();
-        expect(server.name).toBe('Payment API');
-        expect(server.port).toBe(8083);
-        expect(server.baseUrl).toBe('http://localhost:8083');
+        expect(server.name).toBe('Tax Platform Submissions API');
+        expect(server.port).toBe(4012);
+        expect(server.baseUrl).toBe('http://localhost:4012');
 
         const isHealthy = await healthCheck(server);
         expect(isHealthy).toBe(true);
       }, 35000);
 
-      it('should respond to requests', async () => {
-        const server = await spawnMockServer(API_CONFIGS.payment);
+      it('should respond to submission query requests', async () => {
+        const server = await spawnMockServer(API_CONFIGS['tax-platform']);
         activeServers.push(server);
 
-        const response = await fetch(`${server.baseUrl}/payments`);
+        const response = await fetch(
+          `${server.baseUrl}/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1`
+        );
         expect(response.status).toBe(200);
       }, 35000);
     });
   });
 
   describe('Schema Conformance', () => {
-    describe('Taxpayer API Responses', () => {
+    describe('Excise API Responses', () => {
       let server: MockServerInstance;
 
       beforeAll(async () => {
-        server = await spawnMockServer(API_CONFIGS.taxpayer);
+        server = await spawnMockServer(API_CONFIGS.excise);
         activeServers.push(server);
       }, 35000);
 
@@ -117,39 +118,102 @@ describe('Mock Server Unit Tests', () => {
         }
       });
 
-      it('GET /taxpayers should return a collection with items and _links', async () => {
-        const response = await fetch(`${server.baseUrl}/taxpayers`);
+      it('GET /excise/vpd/registrations/{vpdApprovalNumber} should return a valid Registration', async () => {
+        const response = await fetch(`${server.baseUrl}/excise/vpd/registrations/VPD123456`);
         expect(response.status).toBe(200);
 
         const data: any = await response.json();
-        expect(data).toHaveProperty('items');
-        expect(Array.isArray(data.items)).toBe(true);
-        expect(data).toHaveProperty('_links');
-        expect(data._links).toHaveProperty('self');
+        expect(data).toHaveProperty('vpdApprovalNumber');
+        expect(data).toHaveProperty('customerId');
+        expect(data).toHaveProperty('status');
+        expect(['ACTIVE', 'SUSPENDED', 'REVOKED']).toContain(data.status);
+        expect(data).toHaveProperty('registeredDate');
       });
 
-      it('GET /taxpayers/{id} should return a valid Taxpayer resource', async () => {
-        const response = await fetch(`${server.baseUrl}/taxpayers/TP123456`);
+      it('GET /excise/vpd/periods/{periodKey} should return a valid Period', async () => {
+        const response = await fetch(`${server.baseUrl}/excise/vpd/periods/24A1`);
         expect(response.status).toBe(200);
 
         const data: any = await response.json();
-        expect(data).toHaveProperty('id');
-        expect(data).toHaveProperty('type', 'taxpayer');
-        expect(data).toHaveProperty('nino');
-        expect(data.nino).toMatch(/^[A-Z]{2}\d{6}[A-Z]$/);
+        expect(data).toHaveProperty('periodKey');
+        expect(data).toHaveProperty('startDate');
+        expect(data).toHaveProperty('endDate');
+        expect(data).toHaveProperty('state');
+        expect(['OPEN', 'FILED', 'CLOSED']).toContain(data.state);
+      });
+
+      it('POST /excise/vpd/validate-and-calculate should return ValidationResponse', async () => {
+        const response = await fetch(`${server.baseUrl}/excise/vpd/validate-and-calculate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vpdApprovalNumber: 'VPD123456',
+            periodKey: '24A1',
+            submission: {
+              basicInformation: { returnType: 'ORIGINAL' },
+              dutyProducts: [],
+            },
+          }),
+        });
+        expect(response.status).toBe(200);
+
+        const data: any = await response.json();
+        expect(data).toHaveProperty('valid');
+        expect(data).toHaveProperty('customerId');
+
+        if (data.valid) {
+          expect(data).toHaveProperty('calculations');
+          expect(data.calculations).toHaveProperty('totalDutyDue');
+          expect(data.calculations.totalDutyDue).toHaveProperty('amount');
+          expect(data.calculations.totalDutyDue).toHaveProperty('currency');
+        }
+      });
+    });
+
+    describe('Customer API Responses', () => {
+      let server: MockServerInstance;
+
+      beforeAll(async () => {
+        server = await spawnMockServer(API_CONFIGS.customer);
+        activeServers.push(server);
+      }, 35000);
+
+      afterAll(() => {
+        if (server) {
+          stopMockServer(server);
+          activeServers = activeServers.filter((s) => s !== server);
+        }
+      });
+
+      it('GET /customers/{customerId} should return a valid Customer', async () => {
+        const response = await fetch(`${server.baseUrl}/customers/CUST789`);
+        expect(response.status).toBe(200);
+
+        const data: any = await response.json();
+        expect(data).toHaveProperty('customerId');
         expect(data).toHaveProperty('name');
-        expect(data.name).toHaveProperty('firstName');
-        expect(data.name).toHaveProperty('lastName');
-        expect(data).toHaveProperty('address');
-        expect(data).toHaveProperty('_links');
+        expect(data).toHaveProperty('type');
+        expect(['ORG', 'INDIVIDUAL']).toContain(data.type);
+      });
+
+      it('should return customer with address when available', async () => {
+        const response = await fetch(`${server.baseUrl}/customers/CUST789`);
+        expect(response.status).toBe(200);
+
+        const data: any = await response.json();
+        if (data.registeredAddress) {
+          expect(data.registeredAddress).toHaveProperty('line1');
+          expect(data.registeredAddress).toHaveProperty('postcode');
+          expect(data.registeredAddress).toHaveProperty('country');
+        }
       });
     });
 
-    describe('Income Tax API Responses', () => {
+    describe('Tax Platform API Responses', () => {
       let server: MockServerInstance;
 
       beforeAll(async () => {
-        server = await spawnMockServer(API_CONFIGS['income-tax']);
+        server = await spawnMockServer(API_CONFIGS['tax-platform']);
         activeServers.push(server);
       }, 35000);
 
@@ -160,264 +224,116 @@ describe('Mock Server Unit Tests', () => {
         }
       });
 
-      it('GET /tax-returns should return a collection with items and _links', async () => {
-        const response = await fetch(`${server.baseUrl}/tax-returns`);
+      it('GET /submissions/vpd should return a StoredSubmission', async () => {
+        const response = await fetch(
+          `${server.baseUrl}/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1`
+        );
         expect(response.status).toBe(200);
 
         const data: any = await response.json();
-        expect(data).toHaveProperty('items');
-        expect(Array.isArray(data.items)).toBe(true);
-        expect(data).toHaveProperty('_links');
-        expect(data._links).toHaveProperty('self');
-      });
-
-      it('GET /tax-returns/{id} should return a valid TaxReturn resource', async () => {
-        const response = await fetch(`${server.baseUrl}/tax-returns/TR20230001`);
-        expect(response.status).toBe(200);
-
-        const data: any = await response.json();
-        expect(data).toHaveProperty('id');
-        expect(data).toHaveProperty('type', 'tax-return');
-        expect(data).toHaveProperty('taxpayerId');
-        expect(data).toHaveProperty('taxYear');
-        expect(data.taxYear).toMatch(/^\d{4}-\d{2}$/);
+        expect(data).toHaveProperty('acknowledgementReference');
+        expect(data).toHaveProperty('vpdApprovalNumber');
+        expect(data).toHaveProperty('periodKey');
         expect(data).toHaveProperty('status');
-        expect(data).toHaveProperty('_links');
-      });
-    });
-
-    describe('Payment API Responses', () => {
-      let server: MockServerInstance;
-
-      beforeAll(async () => {
-        server = await spawnMockServer(API_CONFIGS.payment);
-        activeServers.push(server);
-      }, 35000);
-
-      afterAll(() => {
-        if (server) {
-          stopMockServer(server);
-          activeServers = activeServers.filter((s) => s !== server);
-        }
+        expect(['RECEIVED', 'VALIDATED', 'REJECTED']).toContain(data.status);
       });
 
-      it('GET /payments should return a collection with items and _links', async () => {
-        const response = await fetch(`${server.baseUrl}/payments`);
+      it('GET /submissions/vpd/{acknowledgementReference} should return a StoredSubmission', async () => {
+        const response = await fetch(`${server.baseUrl}/submissions/vpd/ACK-2026-01-26-000123`);
         expect(response.status).toBe(200);
 
         const data: any = await response.json();
-        expect(data).toHaveProperty('items');
-        expect(Array.isArray(data.items)).toBe(true);
-        expect(data).toHaveProperty('_links');
-        expect(data._links).toHaveProperty('self');
+        expect(data).toHaveProperty('acknowledgementReference');
+        expect(data).toHaveProperty('submittedAt');
+        expect(data).toHaveProperty('calculations');
       });
 
-      it('GET /payments/{id} should return a valid Payment resource', async () => {
-        const response = await fetch(`${server.baseUrl}/payments/PM20230001`);
-        expect(response.status).toBe(200);
+      it('POST /submissions/vpd should return a StoreResponse', async () => {
+        const response = await fetch(`${server.baseUrl}/submissions/vpd`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': 'test-key-123',
+          },
+          body: JSON.stringify({
+            vpdApprovalNumber: 'VPD123456',
+            periodKey: '24A1',
+            customerId: 'CUST789',
+            submission: {
+              basicInformation: { returnType: 'ORIGINAL' },
+              dutyProducts: [],
+            },
+            calculations: {
+              totalDutyDue: { amount: 12345.67, currency: 'GBP' },
+              vat: { amount: 2469.13, currency: 'GBP' },
+              calculationHash: 'sha256:abc123',
+            },
+            warnings: [],
+          }),
+        });
+        expect(response.status).toBe(201);
 
         const data: any = await response.json();
-        expect(data).toHaveProperty('id');
-        expect(data).toHaveProperty('type', 'payment');
-        expect(data).toHaveProperty('taxpayerId');
-        expect(data).toHaveProperty('amount');
-        expect(data.amount).toHaveProperty('amount');
-        expect(data.amount).toHaveProperty('currency', 'GBP');
-        expect(data).toHaveProperty('paymentMethod');
-        expect(data).toHaveProperty('status');
-        expect(data).toHaveProperty('_links');
-      });
-    });
-  });
-
-  describe('Link Format Validation', () => {
-    describe('Taxpayer API Links', () => {
-      let server: MockServerInstance;
-
-      beforeAll(async () => {
-        server = await spawnMockServer(API_CONFIGS.taxpayer);
-        activeServers.push(server);
-      }, 35000);
-
-      afterAll(() => {
-        if (server) {
-          stopMockServer(server);
-          activeServers = activeServers.filter((s) => s !== server);
-        }
-      });
-
-      it('should have valid self link for taxpayer resource', async () => {
-        const response = await fetch(`${server.baseUrl}/taxpayers/TP123456`);
-        const data: any = await response.json();
-
-        expect(data._links.self).toBeDefined();
-        const selfLink = typeof data._links.self === 'string' ? data._links.self : data._links.self.href;
-        expect(selfLink).toContain('/taxpayers/');
-      });
-
-      it('should have valid taxReturns relationship link', async () => {
-        const response = await fetch(`${server.baseUrl}/taxpayers/TP123456`);
-        const data: any = await response.json();
-
-        if (data._links.taxReturns) {
-          const taxReturnsLink = data._links.taxReturns.href || data._links.taxReturns;
-          expect(taxReturnsLink).toContain('/tax-returns');
-          expect(taxReturnsLink).toContain('taxpayerId=');
-        }
-      });
-
-      it('should have valid payments relationship link', async () => {
-        const response = await fetch(`${server.baseUrl}/taxpayers/TP123456`);
-        const data: any = await response.json();
-
-        if (data._links.payments) {
-          const paymentsLink = data._links.payments.href || data._links.payments;
-          expect(paymentsLink).toContain('/payments');
-          expect(paymentsLink).toContain('taxpayerId=');
-        }
-      });
-    });
-
-    describe('Income Tax API Links', () => {
-      let server: MockServerInstance;
-
-      beforeAll(async () => {
-        server = await spawnMockServer(API_CONFIGS['income-tax']);
-        activeServers.push(server);
-      }, 35000);
-
-      afterAll(() => {
-        if (server) {
-          stopMockServer(server);
-          activeServers = activeServers.filter((s) => s !== server);
-        }
-      });
-
-      it('should have valid self link for tax-return resource', async () => {
-        const response = await fetch(`${server.baseUrl}/tax-returns/TR20230001`);
-        const data: any = await response.json();
-
-        expect(data._links.self).toBeDefined();
-        const selfLink = typeof data._links.self === 'string' ? data._links.self : data._links.self.href;
-        expect(selfLink).toContain('/tax-returns/');
-      });
-
-      it('should have valid taxpayer relationship link', async () => {
-        const response = await fetch(`${server.baseUrl}/tax-returns/TR20230001`);
-        const data: any = await response.json();
-
-        if (data._links.taxpayer) {
-          const taxpayerLink = data._links.taxpayer.href || data._links.taxpayer;
-          expect(taxpayerLink).toContain('/taxpayers/');
-        }
-      });
-
-      it('should have valid assessments relationship link', async () => {
-        const response = await fetch(`${server.baseUrl}/tax-returns/TR20230001`);
-        const data: any = await response.json();
-
-        if (data._links.assessments) {
-          const assessmentsLink = data._links.assessments.href || data._links.assessments;
-          expect(assessmentsLink).toContain('/assessments');
-        }
-      });
-    });
-
-    describe('Payment API Links', () => {
-      let server: MockServerInstance;
-
-      beforeAll(async () => {
-        server = await spawnMockServer(API_CONFIGS.payment);
-        activeServers.push(server);
-      }, 35000);
-
-      afterAll(() => {
-        if (server) {
-          stopMockServer(server);
-          activeServers = activeServers.filter((s) => s !== server);
-        }
-      });
-
-      it('should have valid self link for payment resource', async () => {
-        const response = await fetch(`${server.baseUrl}/payments/PM20230001`);
-        const data: any = await response.json();
-
-        expect(data._links.self).toBeDefined();
-        const selfLink = typeof data._links.self === 'string' ? data._links.self : data._links.self.href;
-        expect(selfLink).toContain('/payments/');
-      });
-
-      it('should have valid taxpayer relationship link', async () => {
-        const response = await fetch(`${server.baseUrl}/payments/PM20230001`);
-        const data: any = await response.json();
-
-        if (data._links.taxpayer) {
-          const taxpayerLink = data._links.taxpayer.href || data._links.taxpayer;
-          expect(taxpayerLink).toContain('/taxpayers/');
-        }
-      });
-
-      it('should have valid allocations relationship link', async () => {
-        const response = await fetch(`${server.baseUrl}/payments/PM20230001`);
-        const data: any = await response.json();
-
-        if (data._links.allocations) {
-          const allocationsLink = data._links.allocations.href || data._links.allocations;
-          expect(allocationsLink).toContain('/allocations');
-        }
+        expect(data).toHaveProperty('acknowledgementReference');
+        expect(data).toHaveProperty('storedAt');
       });
     });
   });
 
   describe('Helper Function Tests', () => {
     describe('isValidResourceId', () => {
-      it('should validate taxpayer IDs correctly', () => {
-        expect(isValidResourceId('taxpayer', 'TP123456')).toBe(true);
-        expect(isValidResourceId('taxpayer', 'TP999999')).toBe(true);
-        expect(isValidResourceId('taxpayer', 'TP12345')).toBe(false); // Too short
-        expect(isValidResourceId('taxpayer', 'TP1234567')).toBe(false); // Too long
-        expect(isValidResourceId('taxpayer', 'TX123456')).toBe(false); // Wrong prefix
+      it('should validate VPD approval numbers correctly', () => {
+        expect(isValidResourceId('vpdApprovalNumber', 'VPD123456')).toBe(true);
+        expect(isValidResourceId('vpdApprovalNumber', 'VPD999999')).toBe(true);
+        expect(isValidResourceId('vpdApprovalNumber', 'VPD12345')).toBe(false); // Too short
+        expect(isValidResourceId('vpdApprovalNumber', 'VPD1234567')).toBe(false); // Too long
+        expect(isValidResourceId('vpdApprovalNumber', 'ABC123456')).toBe(false); // Wrong prefix
       });
 
-      it('should validate tax return IDs correctly', () => {
-        expect(isValidResourceId('taxReturn', 'TR20230001')).toBe(true);
-        expect(isValidResourceId('taxReturn', 'TR99999999')).toBe(true);
-        expect(isValidResourceId('taxReturn', 'TR2023001')).toBe(false); // Too short
-        expect(isValidResourceId('taxReturn', 'TX20230001')).toBe(false); // Wrong prefix
+      it('should validate customer IDs correctly', () => {
+        expect(isValidResourceId('customerId', 'CUST789')).toBe(true);
+        expect(isValidResourceId('customerId', 'CUST1234567')).toBe(true);
+        expect(isValidResourceId('customerId', 'CUST12')).toBe(false); // Too short
+        expect(isValidResourceId('customerId', 'ABC789')).toBe(false); // Wrong prefix
       });
 
-      it('should validate payment IDs correctly', () => {
-        expect(isValidResourceId('payment', 'PM20230001')).toBe(true);
-        expect(isValidResourceId('payment', 'PM99999999')).toBe(true);
-        expect(isValidResourceId('payment', 'PM2023001')).toBe(false); // Too short
-        expect(isValidResourceId('payment', 'PY20230001')).toBe(false); // Wrong prefix
+      it('should validate period keys correctly', () => {
+        expect(isValidResourceId('periodKey', '24A1')).toBe(true);
+        expect(isValidResourceId('periodKey', '25B2')).toBe(true);
+        expect(isValidResourceId('periodKey', '2024A1')).toBe(false); // Too long
+        expect(isValidResourceId('periodKey', 'A1')).toBe(false); // Too short
+      });
+
+      it('should validate acknowledgement references correctly', () => {
+        expect(isValidResourceId('acknowledgementReference', 'ACK-2026-01-26-000123')).toBe(true);
+        expect(isValidResourceId('acknowledgementReference', 'ACK-2025-12-31-999999')).toBe(true);
+        expect(isValidResourceId('acknowledgementReference', 'ACK123')).toBe(false); // Wrong format
       });
     });
 
     describe('isValidLinkUrl', () => {
-      it('should validate taxpayer URLs', () => {
-        expect(isValidLinkUrl('/taxpayers')).toBe(true);
-        expect(isValidLinkUrl('/taxpayers/TP123456')).toBe(true);
-        expect(isValidLinkUrl('/taxpayers?nino=AB123456C')).toBe(true);
+      it('should validate excise URLs', () => {
+        expect(isValidLinkUrl('/excise/vpd/registrations')).toBe(true);
+        expect(isValidLinkUrl('/excise/vpd/registrations/VPD123456')).toBe(true);
+        expect(isValidLinkUrl('/excise/vpd/periods')).toBe(true);
+        expect(isValidLinkUrl('/excise/vpd/periods/24A1')).toBe(true);
+        expect(isValidLinkUrl('/excise/vpd/validate-and-calculate')).toBe(true);
       });
 
-      it('should validate tax-return URLs', () => {
-        expect(isValidLinkUrl('/tax-returns')).toBe(true);
-        expect(isValidLinkUrl('/tax-returns/TR20230001')).toBe(true);
-        expect(isValidLinkUrl('/tax-returns?taxpayerId=TP123456')).toBe(true);
-        expect(isValidLinkUrl('/tax-returns/TR20230001/assessments')).toBe(true);
+      it('should validate customer URLs', () => {
+        expect(isValidLinkUrl('/customers')).toBe(true);
+        expect(isValidLinkUrl('/customers/CUST789')).toBe(true);
       });
 
-      it('should validate payment URLs', () => {
-        expect(isValidLinkUrl('/payments')).toBe(true);
-        expect(isValidLinkUrl('/payments/PM20230001')).toBe(true);
-        expect(isValidLinkUrl('/payments?taxpayerId=TP123456')).toBe(true);
-        expect(isValidLinkUrl('/payments/PM20230001/allocations')).toBe(true);
+      it('should validate submission URLs', () => {
+        expect(isValidLinkUrl('/submissions/vpd')).toBe(true);
+        expect(isValidLinkUrl('/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1')).toBe(true);
+        expect(isValidLinkUrl('/submissions/vpd/ACK-2026-01-26-000123')).toBe(true);
       });
 
       it('should reject invalid URLs', () => {
-        expect(isValidLinkUrl('http://localhost:8081/taxpayers')).toBe(false); // Full URL
-        expect(isValidLinkUrl('taxpayers')).toBe(false); // Missing leading slash
+        expect(isValidLinkUrl('http://localhost:4010/excise/vpd/registrations')).toBe(false); // Full URL
+        expect(isValidLinkUrl('excise/vpd/registrations')).toBe(false); // Missing leading slash
       });
     });
   });

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Domain API POC - API Documentation</title>
+    <title>VPD Domain API POC - API Documentation</title>
     <style>
         /* GOV.UK Design System inspired styles */
         * {
@@ -11,7 +11,7 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: "GDS Transport", Arial, sans-serif;
             -webkit-font-smoothing: antialiased;
@@ -20,12 +20,12 @@
             background-color: #f3f2f1;
             line-height: 1.5;
         }
-        
+
         .govuk-header {
             background-color: #0b0c0c;
             border-bottom: 10px solid #1d70b8;
         }
-        
+
         .govuk-header__container {
             max-width: 1200px;
             margin: 0 auto;
@@ -33,11 +33,11 @@
             display: flex;
             align-items: center;
         }
-        
+
         .govuk-header__logo {
             margin-right: 2rem;
         }
-        
+
         .govuk-header__logotype {
             display: inline-block;
             font-size: 1.875rem;
@@ -46,7 +46,7 @@
             text-decoration: none;
             line-height: 1;
         }
-        
+
         .govuk-header__logotype-crown {
             margin-right: 0.5rem;
             fill: currentColor;
@@ -54,20 +54,20 @@
             width: 36px;
             height: 32px;
         }
-        
+
         .govuk-header__service-name {
             color: #ffffff;
             font-size: 1.5rem;
             font-weight: 700;
             text-decoration: none;
         }
-        
+
         .govuk-phase-banner {
             padding: 0.625rem 0;
             border-bottom: 1px solid #b1b4b6;
             background-color: #ffffff;
         }
-        
+
         .govuk-phase-banner__content {
             max-width: 1200px;
             margin: 0 auto;
@@ -75,7 +75,7 @@
             display: flex;
             align-items: center;
         }
-        
+
         .govuk-phase-banner__tag {
             background-color: #1d70b8;
             color: #ffffff;
@@ -86,22 +86,22 @@
             letter-spacing: 1px;
             margin-right: 0.625rem;
         }
-        
+
         .govuk-phase-banner__text {
             color: #0b0c0c;
             font-size: 0.875rem;
         }
-        
+
         .govuk-width-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 1.5rem;
         }
-        
+
         .govuk-main-wrapper {
             padding: 2.5rem 0;
         }
-        
+
         .govuk-heading-xl {
             font-size: 3rem;
             font-weight: 700;
@@ -109,14 +109,14 @@
             margin-bottom: 1.875rem;
             color: #0b0c0c;
         }
-        
+
         .govuk-body-l {
             font-size: 1.5rem;
             line-height: 1.31579;
             margin-bottom: 1.875rem;
             color: #0b0c0c;
         }
-        
+
         .govuk-heading-m {
             font-size: 1.5rem;
             font-weight: 700;
@@ -125,25 +125,33 @@
             margin-top: 2.5rem;
             color: #0b0c0c;
         }
-        
+
         .api-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 1.875rem;
             margin-bottom: 2.5rem;
         }
-        
+
         .api-card {
             background: #ffffff;
             border: 1px solid #b1b4b6;
             padding: 1.875rem;
             position: relative;
         }
-        
+
+        .api-card--primary {
+            border-left: 5px solid #1d70b8;
+        }
+
+        .api-card--mock {
+            border-left: 5px solid #f47738;
+        }
+
         .api-card__header {
             margin-bottom: 1.25rem;
         }
-        
+
         .api-card__title {
             font-size: 1.5rem;
             font-weight: 700;
@@ -151,7 +159,7 @@
             margin-bottom: 0.625rem;
             color: #0b0c0c;
         }
-        
+
         .api-card__tag {
             display: inline-block;
             background-color: #f3f2f1;
@@ -161,14 +169,26 @@
             font-weight: 700;
             border: 1px solid #b1b4b6;
         }
-        
+
+        .api-card__tag--domain {
+            background-color: #1d70b8;
+            color: #ffffff;
+            border: none;
+        }
+
+        .api-card__tag--mock {
+            background-color: #f47738;
+            color: #ffffff;
+            border: none;
+        }
+
         .api-card__description {
             font-size: 1.1875rem;
             line-height: 1.31579;
             margin-bottom: 1.25rem;
             color: #0b0c0c;
         }
-        
+
         .api-card__endpoint {
             font-family: monospace;
             background: #f3f2f1;
@@ -178,31 +198,31 @@
             margin-bottom: 1.25rem;
             border-left: 4px solid #1d70b8;
         }
-        
+
         .api-card__features {
             list-style: none;
             margin-bottom: 1.875rem;
         }
-        
+
         .api-card__features li {
             padding: 0.3125rem 0;
             color: #505a5f;
             font-size: 1rem;
         }
-        
+
         .api-card__features li:before {
             content: "✓";
             color: #00703c;
             font-weight: bold;
             margin-right: 0.625rem;
         }
-        
+
         .api-card__actions {
             display: flex;
             gap: 0.625rem;
             flex-wrap: wrap;
         }
-        
+
         .govuk-button {
             font-family: "GDS Transport", Arial, sans-serif;
             font-weight: 400;
@@ -224,33 +244,33 @@
             cursor: pointer;
             text-decoration: none;
         }
-        
+
         .govuk-button:hover {
             background-color: #005a30;
         }
-        
+
         .govuk-button:active {
             top: 2px;
             box-shadow: none;
         }
-        
+
         .govuk-button--secondary {
             background-color: #f3f2f1;
             box-shadow: 0 2px 0 #929191;
             color: #0b0c0c;
         }
-        
+
         .govuk-button--secondary:hover {
             background-color: #dbdad9;
         }
-        
+
         .info-section {
             background: #ffffff;
             border: 1px solid #b1b4b6;
             padding: 1.875rem;
             margin-bottom: 2.5rem;
         }
-        
+
         .info-section__heading {
             font-size: 1.5rem;
             font-weight: 700;
@@ -258,42 +278,52 @@
             margin-bottom: 1.25rem;
             color: #0b0c0c;
         }
-        
+
         .info-section ul {
             list-style: none;
             padding-left: 0;
         }
-        
+
         .info-section li {
             padding: 0.625rem 0;
             border-bottom: 1px solid #b1b4b6;
         }
-        
+
         .info-section li:last-child {
             border-bottom: none;
         }
-        
+
         .info-section a {
             color: #1d70b8;
             text-decoration: underline;
             font-weight: 400;
         }
-        
+
         .info-section a:hover {
             color: #003078;
         }
-        
+
         .govuk-footer {
             background-color: #f3f2f1;
             border-top: 1px solid #b1b4b6;
             padding: 1.875rem 0;
             margin-top: 3.125rem;
         }
-        
+
         .govuk-footer__meta {
             text-align: center;
             color: #505a5f;
             font-size: 0.875rem;
+        }
+
+        .section-heading {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #505a5f;
+            margin-bottom: 1rem;
+            margin-top: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
     </style>
 </head>
@@ -309,110 +339,140 @@
                 </span>
             </div>
             <span class="govuk-header__service-name">
-                Domain API POC
+                VPD Domain API POC
             </span>
         </div>
     </header>
-    
+
     <div class="govuk-phase-banner">
         <div class="govuk-phase-banner__content">
             <strong class="govuk-phase-banner__tag">Prototype</strong>
             <span class="govuk-phase-banner__text">
-                This is a proof-of-concept for multi-API domain architecture
+                VPD Submission Returns Domain API - Proof of Concept
             </span>
         </div>
     </div>
-    
+
     <div class="govuk-width-container">
         <main class="govuk-main-wrapper" role="main">
-            <h1 class="govuk-heading-xl">Domain API Documentation</h1>
+            <h1 class="govuk-heading-xl">VPD Domain API Documentation</h1>
             <p class="govuk-body-l">
-                Multi-API architecture representing portions of the UK tax system. Each API represents a distinct subdomain with clear responsibilities.
+                Domain API for Vaping Products Duty (VPD) Submission Returns. Orchestrates three backend services through a unified interface with validation gates, parallel fetching, and ETag support.
             </p>
-            
+
+            <h2 class="section-heading">Domain API</h2>
+
             <div class="api-grid">
-                <div class="api-card">
+                <div class="api-card api-card--primary">
                     <div class="api-card__header">
-                        <h2 class="api-card__title">Taxpayer API</h2>
-                        <span class="api-card__tag">v1.0.0</span>
+                        <h2 class="api-card__title">VPD Submission Returns API</h2>
+                        <span class="api-card__tag api-card__tag--domain">Domain API</span>
                     </div>
-                    <p class="api-card__description">Manages taxpayer identity and registration information</p>
-                    <div class="api-card__endpoint">/taxpayer/v1</div>
+                    <p class="api-card__description">Unified API for submitting and retrieving VPD returns</p>
+                    <div class="api-card__endpoint">/duty/vpd/submission-returns/v1</div>
                     <ul class="api-card__features">
-                        <li>Taxpayer registration</li>
-                        <li>NINO validation</li>
-                        <li>Address management</li>
-                        <li>Cross-API relationships</li>
+                        <li>Submit VPD returns (POST)</li>
+                        <li>Retrieve by acknowledgement</li>
+                        <li>Retrieve by approval + period</li>
+                        <li>Sparse fieldsets support</li>
+                        <li>ETag for optimistic locking</li>
                     </ul>
                     <div class="api-card__actions">
-                        <a href="taxpayer/index.html" class="govuk-button govuk-button--secondary">View docs</a>
-                        <a href="explorer.html?api=taxpayer" class="govuk-button">Try it out</a>
-                    </div>
-                </div>
-                
-                <div class="api-card">
-                    <div class="api-card__header">
-                        <h2 class="api-card__title">Income Tax API</h2>
-                        <span class="api-card__tag">v1.0.0</span>
-                    </div>
-                    <p class="api-card__description">Handles income tax returns, assessments, and calculations</p>
-                    <div class="api-card__endpoint">/income-tax/v1</div>
-                    <ul class="api-card__features">
-                        <li>Tax return submission</li>
-                        <li>Assessment tracking</li>
-                        <li>Tax calculations</li>
-                        <li>Payment allocations</li>
-                    </ul>
-                    <div class="api-card__actions">
-                        <a href="income-tax/index.html" class="govuk-button govuk-button--secondary">View docs</a>
-                        <a href="explorer.html?api=income-tax" class="govuk-button">Try it out</a>
-                    </div>
-                </div>
-                
-                <div class="api-card">
-                    <div class="api-card__header">
-                        <h2 class="api-card__title">Payment API</h2>
-                        <span class="api-card__tag">v1.0.0</span>
-                    </div>
-                    <p class="api-card__description">Manages tax payments and payment allocations</p>
-                    <div class="api-card__endpoint">/payment/v1</div>
-                    <ul class="api-card__features">
-                        <li>Payment recording</li>
-                        <li>Multiple payment methods</li>
-                        <li>Payment allocations</li>
-                        <li>Status tracking</li>
-                    </ul>
-                    <div class="api-card__actions">
-                        <a href="payment/index.html" class="govuk-button govuk-button--secondary">View docs</a>
-                        <a href="explorer.html?api=payment" class="govuk-button">Try it out</a>
+                        <a href="vpd-platform-api/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=vpd-platform" class="govuk-button">Try it out</a>
                     </div>
                 </div>
             </div>
-            
+
+            <h2 class="section-heading">Backend Mocks</h2>
+
+            <div class="api-grid">
+                <div class="api-card api-card--mock">
+                    <div class="api-card__header">
+                        <h2 class="api-card__title">Excise Service</h2>
+                        <span class="api-card__tag api-card__tag--mock">Mock</span>
+                    </div>
+                    <p class="api-card__description">VPD registrations, periods, and duty calculations</p>
+                    <div class="api-card__endpoint">:4010 /excise/vpd/*</div>
+                    <ul class="api-card__features">
+                        <li>Get VPD registration</li>
+                        <li>Get period definitions</li>
+                        <li>Validate and calculate duty</li>
+                    </ul>
+                    <div class="api-card__actions">
+                        <a href="excise-mock/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=excise" class="govuk-button">Try it out</a>
+                    </div>
+                </div>
+
+                <div class="api-card api-card--mock">
+                    <div class="api-card__header">
+                        <h2 class="api-card__title">Customer Service</h2>
+                        <span class="api-card__tag api-card__tag--mock">Mock</span>
+                    </div>
+                    <p class="api-card__description">Trader and customer master data</p>
+                    <div class="api-card__endpoint">:4011 /customers/*</div>
+                    <ul class="api-card__features">
+                        <li>Get customer details</li>
+                        <li>Trader information</li>
+                        <li>Address management</li>
+                    </ul>
+                    <div class="api-card__actions">
+                        <a href="customer-mock/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=customer" class="govuk-button">Try it out</a>
+                    </div>
+                </div>
+
+                <div class="api-card api-card--mock">
+                    <div class="api-card__header">
+                        <h2 class="api-card__title">Tax Platform Service</h2>
+                        <span class="api-card__tag api-card__tag--mock">Mock</span>
+                    </div>
+                    <p class="api-card__description">Submission storage and acknowledgements</p>
+                    <div class="api-card__endpoint">:4012 /submissions/vpd/*</div>
+                    <ul class="api-card__features">
+                        <li>Store submissions</li>
+                        <li>Get by acknowledgement</li>
+                        <li>Find by approval + period</li>
+                        <li>ETag support</li>
+                    </ul>
+                    <div class="api-card__actions">
+                        <a href="tax-platform-mock/index.html" class="govuk-button govuk-button--secondary">View docs</a>
+                        <a href="explorer.html?api=tax-platform" class="govuk-button">Try it out</a>
+                    </div>
+                </div>
+            </div>
+
             <div class="info-section">
-                <h2 class="info-section__heading">Additional resources</h2>
+                <h2 class="info-section__heading">Quick Start</h2>
+                <ul>
+                    <li><code>docker-compose up -d</code> - Start all services</li>
+                    <li><a href="http://localhost:8090">http://localhost:8090</a> - Swagger UI (API Explorer)</li>
+                    <li><a href="http://localhost:3000">http://localhost:3000</a> - Grafana (Observability)</li>
+                </ul>
+
+                <h2 class="info-section__heading">Test Data</h2>
+                <ul>
+                    <li><strong>VPD Approval Number:</strong> VPD123456</li>
+                    <li><strong>Period Key:</strong> 24A1 (OPEN), 24A2 (FILED)</li>
+                    <li><strong>Customer ID:</strong> CUST789</li>
+                    <li><strong>Acknowledgement:</strong> ACK-2026-01-26-000123</li>
+                </ul>
+
+                <h2 class="info-section__heading">Additional Resources</h2>
                 <ul>
                     <li><a href="getting-started.md">Getting started guide</a></li>
                     <li><a href="mock-servers.md">Mock server setup</a></li>
-                    <li><a href="acceptance-testing.md">Acceptance testing guide</a></li>
-                    <li><a href="../specs/shared/shared-components.yaml">Shared components specification</a></li>
-                </ul>
-                
-                <h2 class="info-section__heading">Key features</h2>
-                <ul>
-                    <li><strong>Domain boundaries:</strong> Clear separation between taxpayer, income tax, and payment domains</li>
-                    <li><strong>Shared components:</strong> Reusable schemas for Address, Money, DateRange, and Links</li>
-                    <li><strong>Hypermedia navigation:</strong> Resources include links to related resources across APIs</li>
-                    <li><strong>Include parameter:</strong> Reduce API calls by embedding related resources</li>
-                    <li><strong>OpenAPI-first:</strong> Specifications drive implementation, documentation, and testing</li>
+                    <li><a href="api-producer-guide.md">API producer guide</a></li>
+                    <li><a href="api-consumer-guide.md">API consumer guide</a></li>
                 </ul>
             </div>
         </main>
     </div>
-    
+
     <footer class="govuk-footer" role="contentinfo">
         <div class="govuk-footer__meta">
-            <p>Domain API POC - UK Tax System Multi-API Architecture</p>
+            <p>VPD Domain API POC - Vaping Products Duty Submission Returns</p>
         </div>
     </footer>
 </body>

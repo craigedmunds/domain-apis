@@ -1,23 +1,97 @@
+# Domain APIs - Docker Compose
+#
+# VPD Submission Returns POC stack:
+# - Backend mocks (Prism): excise, customer, tax-platform
+# - LGTM observability stack: Loki, Grafana, Tempo, Mimir
+# - API Explorer (Swagger UI)
+# - LocalStack (for future API Gateway integration)
+# - Docs server
+#
+# Usage:
+#   docker-compose up                    # Start all services
+#   docker-compose up -d                 # Start in background
+#   docker-compose logs -f excise-mock   # Follow logs for a service
+#   docker-compose down                  # Stop and remove containers
+
 services:
-  localstack:
-    image: localstack/localstack:latest
-    container_name: domain-api-localstack
+  # =============================================================================
+  # VPD Backend Mocks (Prism)
+  # =============================================================================
+
+  excise-mock:
+    image: stoplight/prism:latest
+    container_name: vpd-excise-mock
+    command: mock -h 0.0.0.0 /specs/excise-api.yaml
     ports:
-      - "4566:4566"  # LocalStack gateway
-      - "4510-4559:4510-4559"  # External services port range
-    environment:
-      - SERVICES=apigateway,lambda,iam,cloudformation
-      - DEBUG=1
-      - LAMBDA_EXECUTOR=docker
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - AWS_DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
+      - "4010:4010"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./tools:/tools"
+      - ./specs/vaping-duty/mocks:/specs
+    environment:
+      - PRISM_LOG_LEVEL=info
     networks:
       - domain-api-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010/excise/vpd/registrations/VPD123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  customer-mock:
+    image: stoplight/prism:latest
+    container_name: vpd-customer-mock
+    command: mock -h 0.0.0.0 /specs/customer-api.yaml
+    ports:
+      - "4011:4010"
+    volumes:
+      - ./specs/vaping-duty/mocks:/specs
+    environment:
+      - PRISM_LOG_LEVEL=info
+    networks:
+      - domain-api-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010/customers/CUST789"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  tax-platform-mock:
+    image: stoplight/prism:latest
+    container_name: vpd-tax-platform-mock
+    command: mock -h 0.0.0.0 /specs/tax-platform-api.yaml
+    ports:
+      - "4012:4010"
+    volumes:
+      - ./specs/vaping-duty/mocks:/specs
+    environment:
+      - PRISM_LOG_LEVEL=info
+    networks:
+      - domain-api-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010/submissions/vpd/ACK-2026-01-26-000123"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # =============================================================================
+  # Observability Stack (LGTM)
+  # =============================================================================
+
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: vpd-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    networks:
+      - domain-api-network
+
+  # =============================================================================
+  # Infrastructure
+  # =============================================================================
 
   docs:
     image: halverneus/static-file-server:latest
@@ -33,63 +107,6 @@ services:
       - SHOW_LISTING=true
     networks:
       - domain-api-network
-
-  taxpayer-api:
-    image: stoplight/prism:latest
-    container_name: domain-api-taxpayer
-    command: mock -h 0.0.0.0 /specs/taxpayer-api.yaml
-    ports:
-      - "8081:4010"
-    volumes:
-      - ./specs/taxpayer:/specs
-      - ./specs/shared:/shared
-    environment:
-      - PRISM_LOG_LEVEL=info
-    networks:
-      - domain-api-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  income-tax-api:
-    image: stoplight/prism:latest
-    container_name: domain-api-income-tax
-    command: mock -h 0.0.0.0 /specs/income-tax-api.yaml
-    ports:
-      - "8082:4010"
-    volumes:
-      - ./specs/income-tax:/specs
-      - ./specs/shared:/shared
-    environment:
-      - PRISM_LOG_LEVEL=info
-    networks:
-      - domain-api-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  payment-api:
-    image: stoplight/prism:latest
-    container_name: domain-api-payment
-    command: mock -h 0.0.0.0 /specs/payment-api.yaml
-    ports:
-      - "8083:4010"
-    volumes:
-      - ./specs/payment:/specs
-      - ./specs/shared:/shared
-    environment:
-      - PRISM_LOG_LEVEL=info
-    networks:
-      - domain-api-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 networks:
   domain-api-network:

@@ -75,29 +75,42 @@ main() {
   
   # Generate documentation for each API
   local all_success=true
-  
-  generate_api_docs "Taxpayer" \
-    "$SPECS_DIR/taxpayer/taxpayer-api.yaml" \
-    "$DOCS_DIR/taxpayer" || all_success=false
-  
-  generate_api_docs "Income Tax" \
-    "$SPECS_DIR/income-tax/income-tax-api.yaml" \
-    "$DOCS_DIR/income-tax" || all_success=false
-  
-  generate_api_docs "Payment" \
-    "$SPECS_DIR/payment/payment-api.yaml" \
-    "$DOCS_DIR/payment" || all_success=false
-  
+
+  # VPD Domain API (Producer - source of truth)
+  generate_api_docs "VPD Domain API (Producer)" \
+    "$SPECS_DIR/vaping-duty/domain/producer/vpd-submission-returns-api.yaml" \
+    "$DOCS_DIR/vpd-domain-api" || all_success=false
+
+  # VPD Platform API (enhanced for platform)
+  generate_api_docs "VPD Platform API" \
+    "$SPECS_DIR/vaping-duty/domain/platform/vpd-submission-returns-api.yaml" \
+    "$DOCS_DIR/vpd-platform-api" || all_success=false
+
+  # VPD Backend Mocks
+  generate_api_docs "Excise Mock" \
+    "$SPECS_DIR/vaping-duty/mocks/excise-api.yaml" \
+    "$DOCS_DIR/excise-mock" || all_success=false
+
+  generate_api_docs "Customer Mock" \
+    "$SPECS_DIR/vaping-duty/mocks/customer-api.yaml" \
+    "$DOCS_DIR/customer-mock" || all_success=false
+
+  generate_api_docs "Tax Platform Mock" \
+    "$SPECS_DIR/vaping-duty/mocks/tax-platform-api.yaml" \
+    "$DOCS_DIR/tax-platform-mock" || all_success=false
+
   echo ""
   log "========================================"
-  
+
   if [ "$all_success" = true ]; then
     success "All documentation generated successfully!"
     echo ""
     log "View documentation:"
-    echo "  - Taxpayer API: file://$DOCS_DIR/taxpayer/index.html"
-    echo "  - Income Tax API: file://$DOCS_DIR/income-tax/index.html"
-    echo "  - Payment API: file://$DOCS_DIR/payment/index.html"
+    echo "  - VPD Domain API (Producer): file://$DOCS_DIR/vpd-domain-api/index.html"
+    echo "  - VPD Platform API: file://$DOCS_DIR/vpd-platform-api/index.html"
+    echo "  - Excise Mock: file://$DOCS_DIR/excise-mock/index.html"
+    echo "  - Customer Mock: file://$DOCS_DIR/customer-mock/index.html"
+    echo "  - Tax Platform Mock: file://$DOCS_DIR/tax-platform-mock/index.html"
     log "========================================"
     exit 0
   else
