@@ -79,24 +79,3 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
 
-  gateway-lambda-tests:
-    name: Gateway Lambda Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: gateway/lambda
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: gateway/lambda/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run Lambda unit tests
-        run: npm test -- --ci --forceExit

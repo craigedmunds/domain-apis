@@ -15,11 +15,6 @@ build/
 coverage/
 .nyc_output/
 
-# Generated documentation
-docs/taxpayer/index.html
-docs/income-tax/index.html
-docs/payment/index.html
-
 # IDE
 .vscode/
 .idea/

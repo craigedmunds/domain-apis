@@ -52,7 +52,7 @@ ETag:
   schema:
     type: string
     pattern: '^W/"[\w-]+"$'
-    example: "W/3-6b1f"
+    example: 'W/"3-6b1f"'
 
 Cache-Control:
   description: Cache control directives

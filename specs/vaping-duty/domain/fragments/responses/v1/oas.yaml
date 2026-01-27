@@ -5,11 +5,11 @@ BadRequest:
   description: Bad request - invalid parameters, malformed payload, or invalid query syntax
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         malformedJson:
           summary: Malformed JSON payload
@@ -33,7 +33,7 @@ Unauthorized:
   description: Unauthorized - missing or invalid authentication token
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
     WWW-Authenticate:
       description: Authentication scheme required
       schema:
@@ -42,7 +42,7 @@ Unauthorized:
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         missingToken:
           summary: Missing authentication token
@@ -61,11 +61,11 @@ Forbidden:
   description: Forbidden - authenticated but insufficient permissions
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         insufficientScope:
           summary: Insufficient OAuth scope
@@ -78,11 +78,11 @@ NotFound:
   description: Resource not found
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         resourceNotFound:
           summary: Resource not found
@@ -95,11 +95,11 @@ Conflict:
   description: Conflict - resource state conflict or idempotency key reused with different payload
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         idempotencyConflict:
           summary: Idempotency key conflict
@@ -118,11 +118,11 @@ ValidationError:
   description: Validation failed - business rule violations or invalid data
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         validationFailed:
           summary: Multiple validation errors
@@ -143,13 +143,13 @@ TooManyRequests:
   description: Rate limit exceeded
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
     X-RateLimit-Limit:
-      $ref: '../headers/v1/oas.yaml#/X-RateLimit-Limit'
+      $ref: '../../headers/v1/oas.yaml#/X-RateLimit-Limit'
     X-RateLimit-Remaining:
-      $ref: '../headers/v1/oas.yaml#/X-RateLimit-Remaining'
+      $ref: '../../headers/v1/oas.yaml#/X-RateLimit-Remaining'
     X-RateLimit-Reset:
-      $ref: '../headers/v1/oas.yaml#/X-RateLimit-Reset'
+      $ref: '../../headers/v1/oas.yaml#/X-RateLimit-Reset'
     Retry-After:
       description: Seconds until rate limit resets
       schema:
@@ -158,7 +158,7 @@ TooManyRequests:
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         rateLimitExceeded:
           summary: Rate limit exceeded
@@ -171,11 +171,11 @@ InternalServerError:
   description: Internal server error - unexpected platform or service failure
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         internalError:
           summary: Internal server error
@@ -188,7 +188,7 @@ ServiceUnavailable:
   description: Service temporarily unavailable - maintenance or downstream service failure
   headers:
     X-Correlation-Id:
-      $ref: '../headers/v1/oas.yaml#/X-Correlation-Id-Response'
+      $ref: '../../headers/v1/oas.yaml#/X-Correlation-Id-Response'
     Retry-After:
       description: Seconds until service is expected to be available
       schema:
@@ -197,7 +197,7 @@ ServiceUnavailable:
   content:
     application/json:
       schema:
-        $ref: '../schemas/v1/oas.yaml#/Error'
+        $ref: '../../schemas/v1/oas.yaml#/Error'
       examples:
         maintenance:
           summary: Service under maintenance
