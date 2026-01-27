@@ -1,0 +1,110 @@
+# Envoy Proxy Configuration for Tax Platform Mock (Prism)
+#
+# Provides:
+# - Request/response logging
+# - Trace context propagation (W3C Trace Context via OTLP)
+# - CORS support
+#
+# Upstream: tax-platform-mock-internal (Prism) on port 4010
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
+
+static_resources:
+  listeners:
+    - name: listener_tax_platform
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 4010
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: tax_platform_proxy
+                codec_type: AUTO
+                generate_request_id: true
+                tracing:
+                  provider:
+                    name: envoy.tracers.opentelemetry
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.config.trace.v3.OpenTelemetryConfig
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: otel_collector
+                        timeout: 0.250s
+                      service_name: tax-platform-proxy
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          timestamp: "%START_TIME%"
+                          service: "tax-platform-proxy"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(:PATH)%"
+                          response_code: "%RESPONSE_CODE%"
+                          duration_ms: "%DURATION%"
+                          content_type: "%RESP(CONTENT-TYPE)%"
+                route_config:
+                  name: tax_platform_route
+                  virtual_hosts:
+                    - name: tax_platform_service
+                      domains: ["*"]
+                      cors:
+                        allow_origin_string_match:
+                          - prefix: "*"
+                        allow_methods: "GET, POST, PUT, DELETE, OPTIONS"
+                        allow_headers: "content-type, x-correlation-id, x-idempotency-key, accept, traceparent, tracestate"
+                        expose_headers: "content-type, etag, x-idempotency-key"
+                        max_age: "86400"
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: tax_platform_mock
+                            timeout: 30s
+                http_filters:
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: tax_platform_mock
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: tax_platform_mock
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: tax-platform-mock-internal
+                      port_value: 4010
+
+    - name: otel_collector
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: otel_collector
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: lgtm
+                      port_value: 4317

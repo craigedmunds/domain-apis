@@ -47,12 +47,12 @@ test.describe('Documentation Site', () => {
   });
 
   test('should display VPD Domain API card', async ({ page }) => {
-    // Verify API grid is present
-    const apiGrid = page.locator('.api-grid');
+    // Verify API grid is present (there are 2: Domain API and Mock APIs)
+    const apiGrid = page.locator('.api-grid').first();
     await expect(apiGrid).toBeVisible();
 
-    // Find VPD Domain API card
-    const vpdCard = page.locator('.api-card').filter({ hasText: 'VPD' });
+    // Find VPD Domain API card (the primary one, not mock cards)
+    const vpdCard = page.locator('.api-card--primary').filter({ hasText: 'VPD' }).first();
     await expect(vpdCard).toBeVisible();
 
     // Verify card has required elements

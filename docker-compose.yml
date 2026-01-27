@@ -1,96 +1,26 @@
 # Domain APIs - Docker Compose
 #
 # VPD Submission Returns POC stack:
-# - Backend mocks (Prism): excise, customer, tax-platform
+# - excise mock (WireMock): Returns XML (legacy system simulation)
+# - customer mock (Prism): Returns JSON
+# - tax-platform mock (Prism): Returns JSON
+# - Logging proxies (Envoy): Request logging, tracing, CORS
 # - LGTM observability stack: Loki, Grafana, Tempo, Mimir
-# - API Explorer (Swagger UI)
-# - LocalStack (for future API Gateway integration)
-# - Docs server
+# - k6 for load testing
+#
+# Architecture:
+#   External ports → Envoy proxies → Mocks (internal)
 #
 # Usage:
-#   docker-compose up                    # Start all services
-#   docker-compose up -d                 # Start in background
-#   docker-compose logs -f excise-mock   # Follow logs for a service
+#   docker-compose up -d                 # Start all services
+#   docker-compose logs -f excise-proxy  # Follow logs for a service
+#   docker-compose run k6 run /tests/smoke-test-mocks.js  # Run tests
 #   docker-compose down                  # Stop and remove containers
 
 services:
-  # =============================================================================
-  # VPD Backend Mocks (Prism)
-  # =============================================================================
-
-  excise-mock:
-    image: stoplight/prism:latest
-    container_name: vpd-excise-mock
-    command: mock -h 0.0.0.0 /specs/excise-api.yaml
-    ports:
-      - "4010:4010"
-    volumes:
-      - ./specs/vaping-duty/mocks:/specs
-    environment:
-      - PRISM_LOG_LEVEL=info
-    networks:
-      - domain-api-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010/excise/vpd/registrations/VPD123456"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  customer-mock:
-    image: stoplight/prism:latest
-    container_name: vpd-customer-mock
-    command: mock -h 0.0.0.0 /specs/customer-api.yaml
-    ports:
-      - "4011:4010"
-    volumes:
-      - ./specs/vaping-duty/mocks:/specs
-    environment:
-      - PRISM_LOG_LEVEL=info
-    networks:
-      - domain-api-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010/customers/CUST789"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  tax-platform-mock:
-    image: stoplight/prism:latest
-    container_name: vpd-tax-platform-mock
-    command: mock -h 0.0.0.0 /specs/tax-platform-api.yaml
-    ports:
-      - "4012:4010"
-    volumes:
-      - ./specs/vaping-duty/mocks:/specs
-    environment:
-      - PRISM_LOG_LEVEL=info
-    networks:
-      - domain-api-network
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4010/submissions/vpd/ACK-2026-01-26-000123"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
   # =============================================================================
-  # Observability Stack (LGTM)
-  # =============================================================================
-
-  lgtm:
-    image: grafana/otel-lgtm:latest
-    container_name: vpd-lgtm
-    ports:
-      - "3000:3000"   # Grafana UI
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_SECURITY_ADMIN_USER=admin
-    networks:
-      - domain-api-network
-
-  # =============================================================================
-  # Infrastructure
+  # Docs / Try It Site
   # =============================================================================
 
   docs:
@@ -107,6 +37,169 @@ services:
       - SHOW_LISTING=true
     networks:
       - domain-api-network
+
+  # =============================================================================
+  # VPD Backend Mocks - Internal (accessed via proxies)
+  # =============================================================================
+
+  # Excise mock uses WireMock for XML support
+  excise-mock-internal:
+    image: wiremock/wiremock:3.3.1
+    container_name: vpd-excise-mock-internal
+    volumes:
+      - ./specs/vaping-duty/mocks/wiremock:/home/wiremock
+    command: --verbose --enable-stub-cors
+    networks:
+      - domain-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/__admin/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Customer mock uses Prism (JSON only)
+  customer-mock-internal:
+    image: stoplight/prism:latest
+    container_name: vpd-customer-mock-internal
+    command: mock -h 0.0.0.0 /specs/customer-api.yaml
+    volumes:
+      - ./specs/vaping-duty/mocks:/specs
+    environment:
+      - PRISM_LOG_LEVEL=info
+    networks:
+      - domain-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:4010/customers/CUST789', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # Tax Platform mock uses Prism (JSON only)
+  tax-platform-mock-internal:
+    image: stoplight/prism:latest
+    container_name: vpd-tax-platform-mock-internal
+    command: mock -h 0.0.0.0 /specs/tax-platform-api.yaml
+    volumes:
+      - ./specs/vaping-duty/mocks:/specs
+    environment:
+      - PRISM_LOG_LEVEL=info
+    networks:
+      - domain-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:4010/submissions/vpd/ACK-2026-01-26-000123', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # =============================================================================
+  # Logging Proxies (Envoy) - External access with tracing
+  # =============================================================================
+
+  excise-proxy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: vpd-excise-proxy
+    ports:
+      - "4010:4010"
+      - "9901:9901"
+    volumes:
+      - ./specs/vaping-duty/proxies/envoy-excise.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      excise-mock-internal:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-external-labels: "service=excise-proxy,job=envoy"
+    networks:
+      - domain-api-network
+
+  customer-proxy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: vpd-customer-proxy
+    ports:
+      - "4011:4010"
+      - "9902:9901"
+    volumes:
+      - ./specs/vaping-duty/proxies/envoy-customer.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      customer-mock-internal:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-external-labels: "service=customer-proxy,job=envoy"
+    networks:
+      - domain-api-network
+
+  tax-platform-proxy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: vpd-tax-platform-proxy
+    ports:
+      - "4012:4010"
+      - "9903:9901"
+    volumes:
+      - ./specs/vaping-duty/proxies/envoy-tax-platform.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      tax-platform-mock-internal:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-external-labels: "service=tax-platform-proxy,job=envoy"
+    networks:
+      - domain-api-network
+
+  # =============================================================================
+  # Observability Stack (LGTM)
+  # =============================================================================
+
+  lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: vpd-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "3100:3100"   # Loki API (for Promtail)
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    networks:
+      - domain-api-network
+
+  # =============================================================================
+  # Testing
+  # =============================================================================
+
+  k6:
+    image: grafana/k6:latest
+    container_name: vpd-k6
+    volumes:
+      - ./tests/load:/tests
+    environment:
+      - EXCISE_URL=http://excise-proxy:4010
+      - CUSTOMER_URL=http://customer-proxy:4010
+      - TAX_PLATFORM_URL=http://tax-platform-proxy:4010
+    networks:
+      - domain-api-network
+    profiles:
+      - test
+    depends_on:
+      - excise-proxy
+      - customer-proxy
+      - tax-platform-proxy
 
 networks:
   domain-api-network:

@@ -149,38 +149,29 @@ test.describe('API Explorer', () => {
     await expect(firstEndpoint.locator('.opblock-body')).toBeVisible({ timeout: 5000 });
   });
 
-  test('should enable "Try it out" functionality', async ({ page }) => {
+  test('should execute API and get response', async ({ page }) => {
     // Wait for Swagger UI to fully load
     await page.waitForSelector('#swagger-ui', { timeout: 10000 });
     await page.waitForSelector('.information-container', { timeout: 30000 });
     await page.waitForSelector('.opblock', { timeout: 10000 });
 
-    // Find a GET endpoint (safer for testing)
+    // Find a GET endpoint
     const getEndpoint = page.locator('.opblock-get').first();
     await getEndpoint.locator('.opblock-summary').click();
 
-    // Wait for expansion
-    await page.waitForTimeout(1000);
+    // Wait for endpoint body to expand
+    await expect(getEndpoint.locator('.opblock-body')).toBeVisible({ timeout: 5000 });
 
-    // Look for "Try it out" button
-    const tryItOutButton = getEndpoint.locator('button:has-text("Try it out")');
+    // tryItOutEnabled: true means Execute button is already visible
+    const executeButton = getEndpoint.locator('button:has-text("Execute")');
+    await expect(executeButton).toBeVisible({ timeout: 5000 });
 
-    if ((await tryItOutButton.count()) > 0) {
-      await tryItOutButton.click();
-      await page.waitForTimeout(1000);
+    // Click Execute to invoke the API
+    await executeButton.click();
 
-      // Verify "Execute" button appears
-      const executeButton = getEndpoint.locator('button:has-text("Execute")');
-      await expect(executeButton).toBeVisible({ timeout: 5000 });
-
-      // Click Execute to test it works
-      await executeButton.click();
-      await page.waitForTimeout(2000);
-
-      // Verify response section appears
-      const responseSection = getEndpoint.locator('.responses-wrapper');
-      await expect(responseSection).toBeVisible({ timeout: 5000 });
-    }
+    // Verify we get a 200 response
+    const responseCode = getEndpoint.getByRole('cell', { name: '200' });
+    await expect(responseCode).toBeVisible({ timeout: 10000 });
   });
 
   test('should display response schemas', async ({ page }) => {

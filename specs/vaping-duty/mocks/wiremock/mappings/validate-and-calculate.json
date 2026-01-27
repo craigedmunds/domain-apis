@@ -1,0 +1,18 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPattern": "/excise/vpd/validate-and-calculate",
+    "headers": {
+      "Content-Type": {
+        "contains": "application/json"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<validationResult>\n  <valid>true</valid>\n  <customerId>CUST789</customerId>\n  <calculations>\n    <totalDutyDue currency=\"GBP\">12345.67</totalDutyDue>\n    <vat rate=\"0.20\">2469.13</vat>\n    <calculationHash>sha256:abc123def456</calculationHash>\n  </calculations>\n  <warnings>\n    <warning code=\"WARN-VD-001\">Spoilt product close to upper threshold</warning>\n  </warnings>\n  <errors/>\n</validationResult>"
+  }
+}

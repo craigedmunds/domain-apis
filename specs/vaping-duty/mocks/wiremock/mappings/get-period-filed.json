@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/excise/vpd/periods/24A2"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/xml"
+    },
+    "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<period>\n  <periodKey>24A2</periodKey>\n  <startDate>2024-04-01</startDate>\n  <endDate>2024-06-30</endDate>\n  <state>FILED</state>\n  <dutyRates>\n    <standardRate>0.15</standardRate>\n    <reducedRate>0.075</reducedRate>\n  </dutyRates>\n</period>"
+  }
+}

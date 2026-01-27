@@ -5,16 +5,18 @@ Proof-of-concept Domain API for Vaping Products Duty (VPD) Submission Returns th
 ## Quick Start
 
 ```bash
-# Start all services
+# Start all services (from repos/domain-apis/)
 docker-compose up -d
 
-# Verify mocks are running
-curl http://localhost:4010/excise/vpd/registrations/VPD123456 | jq .
+# Verify excise mock returns XML
+curl http://localhost:4010/excise/vpd/registrations/VPD123456
+
+# Verify JSON mocks
 curl http://localhost:4011/customers/CUST789 | jq .
 curl http://localhost:4012/submissions/vpd/ACK-2026-01-26-000123 | jq .
 
-# Open API Explorer
-open http://localhost:8090
+# Run smoke tests
+docker-compose run k6 run /tests/smoke-test-mocks.js
 
 # Open Grafana (observability)
 open http://localhost:3000  # admin/admin
@@ -23,81 +25,83 @@ open http://localhost:3000  # admin/admin
 ## Architecture
 
 ```
-                                    ┌─────────────────┐
-                                    │   API Explorer  │
-                                    │  (Swagger UI)   │
-                                    │   :8090         │
-                                    └────────┬────────┘
-                                             │
-        ┌────────────────────────────────────┼────────────────────────────────────┐
-        │                                    │                                    │
-        ▼                                    ▼                                    ▼
-┌───────────────┐                  ┌───────────────┐                  ┌───────────────┐
-│  excise-mock  │                  │ customer-mock │                  │tax-platform-  │
-│   (Prism)     │                  │   (Prism)     │                  │   mock        │
-│   :4010       │                  │   :4011       │                  │   :4012       │
-└───────────────┘                  └───────────────┘                  └───────────────┘
-        │                                    │                                    │
-        └────────────────────────────────────┴────────────────────────────────────┘
-                                             │
-                                    ┌────────┴────────┐
-                                    │      LGTM      │
-                                    │   (Grafana)    │
-                                    │    :3000       │
-                                    └─────────────────┘
+                        ┌──────────────────────────────────────────────────────┐
+                        │                   External Ports                     │
+                        │     :4010 (excise)   :4011 (customer)   :4012 (tax)  │
+                        └──────────────────────────────────────────────────────┘
+                                            │
+                        ┌───────────────────┼───────────────────┐
+                        │                   │                   │
+                        ▼                   ▼                   ▼
+                ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+                │ excise-proxy  │   │customer-proxy │   │tax-platform-  │
+                │   (Envoy)     │   │   (Envoy)     │   │   proxy       │
+                │ tracing/CORS  │   │ tracing/CORS  │   │   (Envoy)     │
+                └───────┬───────┘   └───────┬───────┘   └───────┬───────┘
+                        │                   │                   │
+                        ▼                   ▼                   ▼
+                ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+                │ excise-mock   │   │ customer-mock │   │tax-platform-  │
+                │  (WireMock)   │   │   (Prism)     │   │   mock        │
+                │   **XML**     │   │   JSON        │   │   (Prism)     │
+                └───────────────┘   └───────────────┘   └───────────────┘
+                        │                   │                   │
+                        └───────────────────┴───────────────────┘
+                                            │
+                                    ┌───────┴───────┐
+                                    │     LGTM     │
+                                    │   (Grafana)  │
+                                    │    :3000     │
+                                    │ traces/logs  │
+                                    └──────────────┘
 ```
 
 ## Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| excise-mock | 4010 | VPD registrations, periods, duty calculations |
-| customer-mock | 4011 | Trader/customer master data |
-| tax-platform-mock | 4012 | Submission storage and retrieval |
-| swagger-ui | 8090 | Interactive API explorer |
-| lgtm | 3000 | Grafana + Loki + Tempo + Mimir |
+| Service | Port | Content-Type | Technology |
+|---------|------|--------------|------------|
+| excise-proxy | 4010 | **XML** | Envoy → WireMock |
+| customer-proxy | 4011 | JSON | Envoy → Prism |
+| tax-platform-proxy | 4012 | JSON | Envoy → Prism |
+| lgtm | 3000 | - | Grafana + Loki + Tempo + Mimir |
+| k6 | - | - | Load testing (on-demand) |
+
+## Content Types
+
+The excise backend returns **XML** to simulate a legacy system. The Domain API (Phase 3) transforms XML→JSON for unified responses.
+
+| Backend | Request | Response |
+|---------|---------|----------|
+| excise | JSON | **XML** |
+| customer | - | JSON |
+| tax-platform | JSON | JSON |
 
 ## Backend Mocks
 
-### Excise Service
+### Excise Service (XML via WireMock)
 
 System of record for VPD registrations, periods, and duty calculation rules.
 
 ```bash
-# Get registration
-curl http://localhost:4010/excise/vpd/registrations/VPD123456 | jq .
+# Get registration (XML response)
+curl http://localhost:4010/excise/vpd/registrations/VPD123456
 
-# Get period
-curl http://localhost:4010/excise/vpd/periods/24A1 | jq .
+# Get period (XML response)
+curl http://localhost:4010/excise/vpd/periods/24A1
 
-# Validate and calculate
+# Validate and calculate (JSON request, XML response)
 curl -X POST http://localhost:4010/excise/vpd/validate-and-calculate \
   -H "Content-Type: application/json" \
-  -d '{
-    "vpdApprovalNumber": "VPD123456",
-    "periodKey": "24A1",
-    "submission": {
-      "basicInformation": {
-        "returnType": "ORIGINAL",
-        "submittedBy": {"type": "ORG", "name": "Example Vapes Ltd"}
-      },
-      "dutyProducts": []
-    }
-  }' | jq .
+  -d '{"vpdApprovalNumber":"VPD123456","periodKey":"24A1","submission":{}}'
 ```
 
-### Customer Service
-
-System of record for trader/organization master data.
+### Customer Service (JSON via Prism)
 
 ```bash
-# Get customer
 curl http://localhost:4011/customers/CUST789 | jq .
 ```
 
-### Tax Platform Service
-
-System of record for submission storage and acknowledgements.
+### Tax Platform Service (JSON via Prism)
 
 ```bash
 # Store submission
@@ -118,31 +122,6 @@ curl -X POST http://localhost:4012/submissions/vpd \
 
 # Get by acknowledgement reference
 curl http://localhost:4012/submissions/vpd/ACK-2026-01-26-000123 | jq .
-
-# Find by approval + period
-curl "http://localhost:4012/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1" | jq .
-```
-
-## Test Data
-
-| Resource | Pattern | Example |
-|----------|---------|---------|
-| VPD Approval Number | `VPD[0-9]{6}` | `VPD123456` |
-| Period Key | `[0-9]{2}[A-Z][0-9]` | `24A1` |
-| Customer ID | `CUST[0-9]+` | `CUST789` |
-| Acknowledgement Reference | `ACK-YYYY-MM-DD-NNNNNN` | `ACK-2026-01-26-000123` |
-
-## Load Testing
-
-```bash
-# Install k6
-brew install k6
-
-# Run smoke test against mocks
-k6 run tests/load/smoke-test-mocks.js
-
-# Run with custom URLs
-k6 run -e EXCISE_URL=http://localhost:4010 tests/load/smoke-test-mocks.js
 ```
 
 ## Observability
@@ -150,33 +129,54 @@ k6 run -e EXCISE_URL=http://localhost:4010 tests/load/smoke-test-mocks.js
 Access Grafana at http://localhost:3000 (admin/admin).
 
 **Available datasources:**
+- **Tempo** - Distributed tracing (traces from Envoy proxies)
 - **Loki** - Log aggregation
-- **Tempo** - Distributed tracing
 - **Mimir** - Metrics (Prometheus-compatible)
+
+**Viewing traces:**
+1. Open Grafana → Explore → Select Tempo datasource
+2. Search for traces by service name (excise-proxy, customer-proxy, tax-platform-proxy)
+
+## Testing
+
+```bash
+# Run smoke tests (in docker)
+docker-compose run k6 run /tests/smoke-test-mocks.js
+
+# Run locally (if k6 installed)
+k6 run specs/vaping-duty/tests/load/smoke-test-mocks.js
+```
+
+## Test Data
+
+| Resource | Example |
+|----------|---------|
+| VPD Approval Number | `VPD123456` |
+| Period Key (OPEN) | `24A1` |
+| Period Key (FILED) | `24A2` |
+| Customer ID | `CUST789` |
+| Acknowledgement Reference | `ACK-2026-01-26-000123` |
 
 ## Directory Structure
 
 ```
 specs/vaping-duty/
-├── docker-compose.yaml          # Full stack definition
-├── README.md                    # This file
+├── README.md
 ├── domain/                      # Domain API specifications
 │   ├── producer/                # Producer OAS (source of truth)
 │   ├── platform/                # Platform OAS (generated)
 │   ├── fragments/               # Reusable OAS fragments
 │   └── tools/                   # Platform OAS generator
-├── mocks/                       # Backend mock specifications
-│   ├── excise-api.yaml
-│   ├── customer-api.yaml
-│   └── tax-platform-api.yaml
-└── tests/
-    └── load/                    # k6 load test scripts
+├── mocks/
+│   ├── excise-api.yaml          # Excise OAS (XML responses)
+│   ├── customer-api.yaml        # Customer OAS (JSON)
+│   ├── tax-platform-api.yaml    # Tax Platform OAS (JSON)
+│   └── wiremock/                # WireMock stubs for excise
+│       └── mappings/            # Request/response mappings
+├── proxies/                     # Envoy proxy configurations
+│   ├── envoy-excise.yaml
+│   ├── envoy-customer.yaml
+│   └── envoy-tax-platform.yaml
+tests/load/                     # Load tests (repo root)
+└── smoke-test-mocks.js
 ```
-
-## Next Steps
-
-1. **Phase 2**: Create Quarkus/Camel domain service
-2. **Phase 3**: Implement orchestration logic
-3. **Phase 4**: Add sparse fieldsets support
-4. **Phase 5**: Kong gateway integration
-5. **Phase 6**: Kubernetes deployment
