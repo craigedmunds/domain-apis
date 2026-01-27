@@ -52,7 +52,7 @@ services:
       - "8081:8080"
       - "9900:9901"
     volumes:
-      - ./specs/vaping-duty/proxies/envoy-domain-api.yaml:/etc/envoy/envoy.yaml:ro
+      - ./config/envoy/envoy-domain-api.yaml:/etc/envoy/envoy.yaml:ro
     depends_on:
       domain-api-internal:
         condition: service_healthy
@@ -152,7 +152,7 @@ services:
       - "4010:4010"
       - "9901:9901"
     volumes:
-      - ./specs/vaping-duty/proxies/envoy-excise.yaml:/etc/envoy/envoy.yaml:ro
+      - ./config/envoy/envoy-excise.yaml:/etc/envoy/envoy.yaml:ro
     depends_on:
       excise-mock-internal:
         condition: service_healthy
@@ -173,7 +173,7 @@ services:
       - "4011:4010"
       - "9902:9901"
     volumes:
-      - ./specs/vaping-duty/proxies/envoy-customer.yaml:/etc/envoy/envoy.yaml:ro
+      - ./config/envoy/envoy-customer.yaml:/etc/envoy/envoy.yaml:ro
     depends_on:
       customer-mock-internal:
         condition: service_healthy
@@ -194,7 +194,7 @@ services:
       - "4012:4010"
       - "9903:9901"
     volumes:
-      - ./specs/vaping-duty/proxies/envoy-tax-platform.yaml:/etc/envoy/envoy.yaml:ro
+      - ./config/envoy/envoy-tax-platform.yaml:/etc/envoy/envoy.yaml:ro
     depends_on:
       tax-platform-mock-internal:
         condition: service_healthy
