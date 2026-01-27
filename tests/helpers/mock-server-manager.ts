@@ -7,6 +7,7 @@
 
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
+import { XMLParser } from 'fast-xml-parser';
 
 export interface MockServerConfig {
   name: string;
@@ -254,4 +255,39 @@ export function isValidLinkUrl(linkUrl: string): boolean {
   ];
 
   return validPathPatterns.some((pattern) => pattern.test(linkUrl));
+}
+
+/**
+ * XML Parser instance configured for VPD API responses
+ */
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+});
+
+/**
+ * Parses XML response body to JavaScript object
+ *
+ * @param xmlText - Raw XML string
+ * @returns Parsed JavaScript object
+ */
+export function parseXml(xmlText: string): any {
+  return xmlParser.parse(xmlText);
+}
+
+/**
+ * Fetches and parses response - handles both JSON and XML content types
+ *
+ * @param response - Fetch response object
+ * @returns Parsed response body as JavaScript object
+ */
+export async function parseResponse(response: Response): Promise<any> {
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+
+  if (contentType.includes('application/xml') || text.trim().startsWith('<?xml')) {
+    return parseXml(text);
+  }
+
+  return JSON.parse(text);
 }

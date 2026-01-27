@@ -15,6 +15,7 @@ import {
   MockServerInstance,
   isValidResourceId,
   isValidLinkUrl,
+  parseResponse,
 } from '../helpers/mock-server-manager';
 
 describe('Mock Server Unit Tests', () => {
@@ -118,20 +119,33 @@ describe('Mock Server Unit Tests', () => {
         }
       });
 
-      // Note: Excise API returns XML which Prism doesn't support well.
-      // XML schema conformance is tested by k6 smoke tests against WireMock.
-      // These tests are skipped for Prism-based unit testing.
-      it.skip('GET /excise/vpd/registrations/{vpdApprovalNumber} should return a valid Registration', async () => {
+      // Excise API returns XML - parse with parseResponse helper
+      it('GET /excise/vpd/registrations/{vpdApprovalNumber} should return a valid Registration', async () => {
         const response = await fetch(`${server.baseUrl}/excise/vpd/registrations/VPD123456`);
         expect(response.status).toBe(200);
+
+        const parsed = await parseResponse(response);
+        const registration = parsed.registration || parsed;
+        expect(registration).toHaveProperty('vpdApprovalNumber');
+        expect(registration).toHaveProperty('customerId');
+        expect(registration).toHaveProperty('status');
+        expect(['ACTIVE', 'SUSPENDED', 'REVOKED']).toContain(registration.status);
       });
 
-      it.skip('GET /excise/vpd/periods/{periodKey} should return a valid Period', async () => {
+      it('GET /excise/vpd/periods/{periodKey} should return a valid Period', async () => {
         const response = await fetch(`${server.baseUrl}/excise/vpd/periods/24A1`);
         expect(response.status).toBe(200);
+
+        const parsed = await parseResponse(response);
+        const period = parsed.period || parsed;
+        expect(period).toHaveProperty('periodKey');
+        expect(period).toHaveProperty('startDate');
+        expect(period).toHaveProperty('endDate');
+        expect(period).toHaveProperty('state');
+        expect(['OPEN', 'FILED', 'CLOSED']).toContain(period.state);
       });
 
-      it.skip('POST /excise/vpd/validate-and-calculate should return ValidationResponse', async () => {
+      it('POST /excise/vpd/validate-and-calculate should return ValidationResponse', async () => {
         const response = await fetch(`${server.baseUrl}/excise/vpd/validate-and-calculate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -145,6 +159,11 @@ describe('Mock Server Unit Tests', () => {
           }),
         });
         expect(response.status).toBe(200);
+
+        const parsed = await parseResponse(response);
+        const validation = parsed.validationResult || parsed;
+        expect(validation).toHaveProperty('valid');
+        expect(validation).toHaveProperty('customerId');
       });
     });
 
