@@ -1,6 +1,6 @@
 /**
  * Unit Tests for OpenAPI Specification Validation
- * 
+ *
  * These tests verify that OpenAPI specifications are well-formed
  * and include required fields.
  */
@@ -8,173 +8,222 @@
 import { loadSpec, hasRequiredFields, hasExamples, validateRefs } from '../helpers/openapi-validator';
 
 describe('OpenAPI Specification Validation', () => {
-  describe('Shared Components', () => {
-    let sharedSpec: any;
+  describe('VPD Domain API - Platform', () => {
+    let platformSpec: any;
 
     beforeAll(() => {
       try {
-        sharedSpec = loadSpec('specs/shared/shared-components.yaml');
+        platformSpec = loadSpec('specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml');
       } catch (error) {
         // File doesn't exist yet - tests will be skipped
-        sharedSpec = null;
+        platformSpec = null;
       }
     });
 
-    it('should have valid shared components file', () => {
-      expect(sharedSpec).toBeDefined();
-      expect(sharedSpec.openapi).toBeDefined();
-      expect(sharedSpec.openapi).toMatch(/^3\./);
-      expect(sharedSpec.info).toBeDefined();
-      expect(sharedSpec.info.version).toBeDefined();
-      expect(sharedSpec.components).toBeDefined();
-      expect(sharedSpec.components.schemas).toBeDefined();
+    it('should have valid OpenAPI specification when it exists', () => {
+      if (!platformSpec) {
+        // File doesn't exist yet - skip
+        return;
+      }
+
+      const result = hasRequiredFields(platformSpec);
+
+      if (!result.valid) {
+        console.log('Validation errors:', result.errors);
+      }
+
+      expect(result.valid).toBe(true);
     });
 
-    it('should have Address schema with UK postcode validation', () => {
-      if (!sharedSpec) return;
-      
-      const address = sharedSpec.components.schemas.Address;
-      expect(address).toBeDefined();
-      expect(address.type).toBe('object');
-      expect(address.required).toContain('line1');
-      expect(address.required).toContain('postcode');
-      expect(address.required).toContain('country');
-      
-      // Check UK postcode pattern
-      expect(address.properties.postcode).toBeDefined();
-      expect(address.properties.postcode.pattern).toBeDefined();
-      expect(address.properties.postcode.pattern).toContain('[A-Z]');
-      
-      // Check country enum
-      expect(address.properties.country.enum).toContain('GB');
-      expect(address.properties.country.enum).toContain('UK');
+    it('should have OpenAPI 3.0+ version', () => {
+      if (!platformSpec) return;
+
+      expect(platformSpec.openapi).toBeDefined();
+      expect(platformSpec.openapi).toMatch(/^3\./);
     });
 
-    it('should have Money schema with GBP currency', () => {
-      if (!sharedSpec) return;
-      
-      const money = sharedSpec.components.schemas.Money;
-      expect(money).toBeDefined();
-      expect(money.type).toBe('object');
-      expect(money.required).toContain('amount');
-      expect(money.required).toContain('currency');
-      
-      // Check amount is a number
-      expect(money.properties.amount.type).toBe('number');
-      
-      // Check currency is GBP only
-      expect(money.properties.currency.enum).toEqual(['GBP']);
-      expect(money.properties.currency.default).toBe('GBP');
-    });
+    it('should have info section with title and version', () => {
+      if (!platformSpec) return;
 
-    it('should have DateRange schema', () => {
-      if (!sharedSpec) return;
-      
-      const dateRange = sharedSpec.components.schemas.DateRange;
-      expect(dateRange).toBeDefined();
-      expect(dateRange.type).toBe('object');
-      expect(dateRange.required).toContain('startDate');
-      expect(dateRange.required).toContain('endDate');
-      
-      // Check date format
-      expect(dateRange.properties.startDate.format).toBe('date');
-      expect(dateRange.properties.endDate.format).toBe('date');
-    });
-
-    it('should have Links schema for hypermedia', () => {
-      if (!sharedSpec) return;
-      
-      const links = sharedSpec.components.schemas.Links;
-      expect(links).toBeDefined();
-      expect(links.type).toBe('object');
-      expect(links.required).toContain('self');
-      
-      // Check self link - uses uri-reference format per RFC 3986 for relative/absolute URIs
-      expect(links.properties.self).toBeDefined();
-      expect(links.properties.self.format).toBe('uri-reference');
-      
-      // Check additional properties support
-      expect(links.additionalProperties).toBeDefined();
-    });
-
-    it('should have version field in info section', () => {
-      if (!sharedSpec) return;
-      
-      expect(sharedSpec.info.version).toBeDefined();
-      expect(sharedSpec.info.version).toMatch(/^\d+\.\d+\.\d+$/);
-    });
-
-    it('should have IncludeParameter defined', () => {
-      if (!sharedSpec) return;
-      
-      const includeParam = sharedSpec.components.parameters?.IncludeParameter;
-      expect(includeParam).toBeDefined();
-      expect(includeParam.name).toBe('include');
-      expect(includeParam.in).toBe('query');
-      expect(includeParam.required).toBe(false);
-    });
-
-    it('should have standard error response schemas', () => {
-      if (!sharedSpec) return;
-      
-      expect(sharedSpec.components.responses).toBeDefined();
-      expect(sharedSpec.components.responses.NotFound).toBeDefined();
-      expect(sharedSpec.components.responses.BadRequest).toBeDefined();
-      expect(sharedSpec.components.responses.BadGateway).toBeDefined();
+      expect(platformSpec.info).toBeDefined();
+      expect(platformSpec.info.title).toBeDefined();
+      expect(platformSpec.info.version).toBeDefined();
     });
   });
 
-  describe('Taxpayer API', () => {
-    it('should have valid OpenAPI specification when it exists', () => {
+  describe('VPD Domain API - Producer', () => {
+    let producerSpec: any;
+
+    beforeAll(() => {
       try {
-        const spec = loadSpec('specs/taxpayer/taxpayer-api.yaml');
-        const result = hasRequiredFields(spec);
-        
-        if (!result.valid) {
-          console.log('Validation errors:', result.errors);
-        }
-        
-        expect(result.valid).toBe(true);
-      } catch (error: any) {
-        // File doesn't exist yet - this is expected during initial setup
-        expect(error.message).toContain('not found');
+        producerSpec = loadSpec('specs/vaping-duty/domain/producer/vpd-submission-returns-api.yaml');
+      } catch (error) {
+        // File doesn't exist yet - tests will be skipped
+        producerSpec = null;
       }
+    });
+
+    it('should have valid OpenAPI specification when it exists', () => {
+      if (!producerSpec) {
+        // File doesn't exist yet - skip
+        return;
+      }
+
+      const result = hasRequiredFields(producerSpec);
+
+      if (!result.valid) {
+        console.log('Validation errors:', result.errors);
+      }
+
+      expect(result.valid).toBe(true);
     });
   });
 
-  describe('Income Tax API', () => {
-    it('should have valid OpenAPI specification when it exists', () => {
-      try {
-        const spec = loadSpec('specs/income-tax/income-tax-api.yaml');
-        const result = hasRequiredFields(spec);
-        
-        if (!result.valid) {
-          console.log('Validation errors:', result.errors);
-        }
-        
-        expect(result.valid).toBe(true);
-      } catch (error: any) {
-        // File doesn't exist yet - this is expected during initial setup
-        expect(error.message).toContain('not found');
+  describe('Excise Duty System API (Mock)', () => {
+    let exciseSpec: any;
+
+    beforeAll(() => {
+      exciseSpec = loadSpec('specs/vaping-duty/mocks/excise-api.yaml');
+    });
+
+    it('should have valid OpenAPI specification', () => {
+      const result = hasRequiredFields(exciseSpec);
+
+      if (!result.valid) {
+        console.log('Validation errors:', result.errors);
       }
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should have registration endpoint', () => {
+      expect(exciseSpec.paths['/excise/vpd/registrations/{vpdApprovalNumber}']).toBeDefined();
+      expect(exciseSpec.paths['/excise/vpd/registrations/{vpdApprovalNumber}'].get).toBeDefined();
+    });
+
+    it('should have period endpoint', () => {
+      expect(exciseSpec.paths['/excise/vpd/periods/{periodKey}']).toBeDefined();
+      expect(exciseSpec.paths['/excise/vpd/periods/{periodKey}'].get).toBeDefined();
+    });
+
+    it('should have validate-and-calculate endpoint', () => {
+      expect(exciseSpec.paths['/excise/vpd/validate-and-calculate']).toBeDefined();
+      expect(exciseSpec.paths['/excise/vpd/validate-and-calculate'].post).toBeDefined();
+    });
+
+    it('should have Registration schema with required fields', () => {
+      const registration = exciseSpec.components.schemas.Registration;
+      expect(registration).toBeDefined();
+      expect(registration.required).toContain('vpdApprovalNumber');
+      expect(registration.required).toContain('customerId');
+      expect(registration.required).toContain('status');
+    });
+
+    it('should have ValidationResponse schema', () => {
+      const validationResponse = exciseSpec.components.schemas.ValidationResponse;
+      expect(validationResponse).toBeDefined();
+      expect(validationResponse.required).toContain('valid');
+      expect(validationResponse.required).toContain('customerId');
     });
   });
 
-  describe('Payment API', () => {
-    it('should have valid OpenAPI specification when it exists', () => {
-      try {
-        const spec = loadSpec('specs/payment/payment-api.yaml');
-        const result = hasRequiredFields(spec);
-        
-        if (!result.valid) {
-          console.log('Validation errors:', result.errors);
-        }
-        
-        expect(result.valid).toBe(true);
-      } catch (error: any) {
-        // File doesn't exist yet - this is expected during initial setup
-        expect(error.message).toContain('not found');
+  describe('Customer Master Data API (Mock)', () => {
+    let customerSpec: any;
+
+    beforeAll(() => {
+      customerSpec = loadSpec('specs/vaping-duty/mocks/customer-api.yaml');
+    });
+
+    it('should have valid OpenAPI specification', () => {
+      const result = hasRequiredFields(customerSpec);
+
+      if (!result.valid) {
+        console.log('Validation errors:', result.errors);
       }
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should have customer endpoint', () => {
+      expect(customerSpec.paths['/customers/{customerId}']).toBeDefined();
+      expect(customerSpec.paths['/customers/{customerId}'].get).toBeDefined();
+    });
+
+    it('should have Customer schema with required fields', () => {
+      const customer = customerSpec.components.schemas.Customer;
+      expect(customer).toBeDefined();
+      expect(customer.required).toContain('customerId');
+      expect(customer.required).toContain('name');
+      expect(customer.required).toContain('type');
+    });
+
+    it('should have customer type enum', () => {
+      const customer = customerSpec.components.schemas.Customer;
+      expect(customer.properties.type.enum).toContain('ORG');
+      expect(customer.properties.type.enum).toContain('INDIVIDUAL');
+    });
+  });
+
+  describe('Tax Platform Submissions API (Mock)', () => {
+    let taxPlatformSpec: any;
+
+    beforeAll(() => {
+      taxPlatformSpec = loadSpec('specs/vaping-duty/mocks/tax-platform-api.yaml');
+    });
+
+    it('should have valid OpenAPI specification', () => {
+      const result = hasRequiredFields(taxPlatformSpec);
+
+      if (!result.valid) {
+        console.log('Validation errors:', result.errors);
+      }
+
+      expect(result.valid).toBe(true);
+    });
+
+    it('should have POST submission endpoint', () => {
+      expect(taxPlatformSpec.paths['/submissions/vpd']).toBeDefined();
+      expect(taxPlatformSpec.paths['/submissions/vpd'].post).toBeDefined();
+    });
+
+    it('should have GET submission by query endpoint', () => {
+      expect(taxPlatformSpec.paths['/submissions/vpd'].get).toBeDefined();
+    });
+
+    it('should have GET submission by acknowledgement endpoint', () => {
+      expect(taxPlatformSpec.paths['/submissions/vpd/{acknowledgementReference}']).toBeDefined();
+      expect(taxPlatformSpec.paths['/submissions/vpd/{acknowledgementReference}'].get).toBeDefined();
+    });
+
+    it('should have StoreRequest schema with required fields', () => {
+      const storeRequest = taxPlatformSpec.components.schemas.StoreRequest;
+      expect(storeRequest).toBeDefined();
+      expect(storeRequest.required).toContain('vpdApprovalNumber');
+      expect(storeRequest.required).toContain('periodKey');
+      expect(storeRequest.required).toContain('customerId');
+      expect(storeRequest.required).toContain('submission');
+      expect(storeRequest.required).toContain('calculations');
+    });
+
+    it('should have StoreResponse schema', () => {
+      const storeResponse = taxPlatformSpec.components.schemas.StoreResponse;
+      expect(storeResponse).toBeDefined();
+      expect(storeResponse.required).toContain('acknowledgementReference');
+      expect(storeResponse.required).toContain('storedAt');
+    });
+
+    it('should have StoredSubmission schema', () => {
+      const storedSubmission = taxPlatformSpec.components.schemas.StoredSubmission;
+      expect(storedSubmission).toBeDefined();
+      expect(storedSubmission.required).toContain('acknowledgementReference');
+      expect(storedSubmission.required).toContain('status');
+    });
+
+    it('should have X-Idempotency-Key parameter', () => {
+      const idempotencyKey = taxPlatformSpec.components.parameters['X-Idempotency-Key'];
+      expect(idempotencyKey).toBeDefined();
+      expect(idempotencyKey.in).toBe('header');
+      expect(idempotencyKey.required).toBe(true);
     });
   });
 });

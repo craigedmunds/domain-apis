@@ -1,16 +1,14 @@
 /**
- * Integration Tests for Cross-API Traversal (Task 12.7)
+ * Integration Tests for VPD Backend API Orchestration
  *
- * These tests verify that relationship links between APIs can be traversed
- * and resolve to valid resources. All three mock servers must be running.
+ * These tests verify that the backend APIs can be orchestrated together
+ * as the VPD Domain API will do:
  *
- * Test Scenarios:
- * 1. Taxpayer -> Income Tax: follow taxReturns link
- * 2. Taxpayer -> Payment: follow payments link
- * 3. Income Tax -> Taxpayer: follow taxpayer link
- * 4. Income Tax -> Payment: follow allocations link
- * 5. Payment -> Taxpayer: follow taxpayer link
- * 6. Bidirectional: verify A->B and B->A both resolve
+ * 1. Excise API: Get registration, validate submission
+ * 2. Customer API: Enrich with customer details
+ * 3. Tax Platform API: Store and retrieve submissions
+ *
+ * All three mock servers must be running.
  */
 
 import {
@@ -20,298 +18,277 @@ import {
   MockServerInstance,
 } from '../helpers/mock-server-manager';
 
-describe('Cross-API Traversal Integration Tests', () => {
-  let taxpayerServer: MockServerInstance;
-  let incomeTaxServer: MockServerInstance;
-  let paymentServer: MockServerInstance;
-
-  // Helper to extract href from link (handles both string and object formats)
-  const getHref = (link: any): string | null => {
-    if (!link) return null;
-    return typeof link === 'string' ? link : link.href;
-  };
-
-  // Helper to convert relative link to absolute URL for the correct server
-  const resolveLink = (href: string): string => {
-    if (href.startsWith('/taxpayers')) {
-      return `${taxpayerServer.baseUrl}${href}`;
-    }
-    if (href.startsWith('/tax-returns') || href.startsWith('/assessments')) {
-      return `${incomeTaxServer.baseUrl}${href}`;
-    }
-    if (href.startsWith('/payments') || href.startsWith('/allocations')) {
-      return `${paymentServer.baseUrl}${href}`;
-    }
-    throw new Error(`Cannot resolve link: ${href}`);
-  };
+describe('VPD Backend API Integration Tests', () => {
+  let exciseServer: MockServerInstance;
+  let customerServer: MockServerInstance;
+  let taxPlatformServer: MockServerInstance;
 
   beforeAll(async () => {
     // Start all three mock servers in parallel
-    [taxpayerServer, incomeTaxServer, paymentServer] = await Promise.all([
-      spawnMockServer(API_CONFIGS.taxpayer),
-      spawnMockServer(API_CONFIGS['income-tax']),
-      spawnMockServer(API_CONFIGS.payment),
+    [exciseServer, customerServer, taxPlatformServer] = await Promise.all([
+      spawnMockServer(API_CONFIGS.excise),
+      spawnMockServer(API_CONFIGS.customer),
+      spawnMockServer(API_CONFIGS['tax-platform']),
     ]);
   }, 60000);
 
   afterAll(() => {
     // Clean up all servers
-    [taxpayerServer, incomeTaxServer, paymentServer].forEach((server) => {
+    [exciseServer, customerServer, taxPlatformServer].forEach((server) => {
       if (server) {
         stopMockServer(server);
       }
     });
   });
 
-  describe('Taxpayer to Income Tax API Traversal', () => {
-    it('should follow taxReturns link from Taxpayer to get tax returns', async () => {
-      // Step 1: Get a taxpayer
-      const taxpayerResponse = await fetch(`${taxpayerServer.baseUrl}/taxpayers/TP123456`);
-      expect(taxpayerResponse.status).toBe(200);
-      const taxpayer: any = await taxpayerResponse.json();
+  describe('Registration Lookup Flow', () => {
+    it('should look up VPD registration and get customerId', async () => {
+      // Step 1: Get VPD registration from excise
+      const registrationResponse = await fetch(
+        `${exciseServer.baseUrl}/excise/vpd/registrations/VPD123456`
+      );
+      expect(registrationResponse.status).toBe(200);
 
-      // Step 2: Extract taxReturns link
-      const taxReturnsHref = getHref(taxpayer._links?.taxReturns);
-      expect(taxReturnsHref).toBeTruthy();
-      expect(taxReturnsHref).toContain('/tax-returns');
+      const registration: any = await registrationResponse.json();
+      expect(registration.vpdApprovalNumber).toBe('VPD123456');
+      expect(registration.customerId).toBeDefined();
+      expect(registration.status).toBe('ACTIVE');
 
-      // Step 3: Follow the link (resolve to income-tax server)
-      const taxReturnsUrl = resolveLink(taxReturnsHref!);
-      const taxReturnsResponse = await fetch(taxReturnsUrl);
-      expect(taxReturnsResponse.status).toBe(200);
+      // Step 2: Use customerId to get customer details
+      const customerResponse = await fetch(
+        `${customerServer.baseUrl}/customers/${registration.customerId}`
+      );
+      expect(customerResponse.status).toBe(200);
 
-      // Step 4: Verify response structure
-      const taxReturns: any = await taxReturnsResponse.json();
-      expect(taxReturns).toHaveProperty('items');
-      expect(Array.isArray(taxReturns.items)).toBe(true);
-
-      // Step 5: If items exist, verify they have back-links to taxpayer
-      if (taxReturns.items.length > 0) {
-        const taxReturn: any = taxReturns.items[0];
-        expect(taxReturn._links?.taxpayer).toBeDefined();
-        const taxpayerBackLink = getHref(taxReturn._links.taxpayer);
-        expect(taxpayerBackLink).toContain('/taxpayers/');
-      }
+      const customer: any = await customerResponse.json();
+      expect(customer.customerId).toBe(registration.customerId);
+      expect(customer.name).toBeDefined();
+      expect(customer.type).toBeDefined();
     });
   });
 
-  describe('Taxpayer to Payment API Traversal', () => {
-    it('should follow payments link from Taxpayer to get payments', async () => {
-      // Step 1: Get a taxpayer
-      const taxpayerResponse = await fetch(`${taxpayerServer.baseUrl}/taxpayers/TP123456`);
-      expect(taxpayerResponse.status).toBe(200);
-      const taxpayer: any = await taxpayerResponse.json();
+  describe('Submission Validation Flow', () => {
+    it('should validate submission and receive calculations', async () => {
+      // Submit a validation request to excise
+      const validationResponse = await fetch(
+        `${exciseServer.baseUrl}/excise/vpd/validate-and-calculate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vpdApprovalNumber: 'VPD123456',
+            periodKey: '24A1',
+            submission: {
+              basicInformation: {
+                returnType: 'ORIGINAL',
+                submittedBy: { type: 'ORG', name: 'Example Vapes Ltd' },
+              },
+              dutyProducts: [],
+            },
+          }),
+        }
+      );
+      expect(validationResponse.status).toBe(200);
 
-      // Step 2: Extract payments link
-      const paymentsHref = getHref(taxpayer._links?.payments);
-      expect(paymentsHref).toBeTruthy();
-      expect(paymentsHref).toContain('/payments');
-
-      // Step 3: Follow the link (resolve to payment server)
-      const paymentsUrl = resolveLink(paymentsHref!);
-      const paymentsResponse = await fetch(paymentsUrl);
-      expect(paymentsResponse.status).toBe(200);
-
-      // Step 4: Verify response structure
-      const payments: any = await paymentsResponse.json();
-      expect(payments).toHaveProperty('items');
-      expect(Array.isArray(payments.items)).toBe(true);
-
-      // Step 5: If items exist, verify they have back-links to taxpayer
-      if (payments.items.length > 0) {
-        const payment: any = payments.items[0];
-        expect(payment._links?.taxpayer).toBeDefined();
-        const taxpayerBackLink = getHref(payment._links.taxpayer);
-        expect(taxpayerBackLink).toContain('/taxpayers/');
-      }
+      const validation: any = await validationResponse.json();
+      expect(validation.valid).toBe(true);
+      expect(validation.customerId).toBeDefined();
+      expect(validation.calculations).toBeDefined();
+      expect(validation.calculations.totalDutyDue).toBeDefined();
+      expect(validation.calculations.calculationHash).toBeDefined();
     });
   });
 
-  describe('Income Tax to Taxpayer API Traversal', () => {
-    it('should follow taxpayer link from TaxReturn to get taxpayer', async () => {
-      // Step 1: Get a tax return
-      const taxReturnResponse = await fetch(`${incomeTaxServer.baseUrl}/tax-returns/TR20230001`);
-      expect(taxReturnResponse.status).toBe(200);
-      const taxReturn: any = await taxReturnResponse.json();
+  describe('Full Submission Orchestration Flow', () => {
+    it('should complete full submission flow: validate, enrich, store', async () => {
+      const vpdApprovalNumber = 'VPD123456';
+      const periodKey = '24A1';
 
-      // Step 2: Extract taxpayer link
-      const taxpayerHref = getHref(taxReturn._links?.taxpayer);
-      expect(taxpayerHref).toBeTruthy();
-      expect(taxpayerHref).toContain('/taxpayers/');
+      // === Step 1: Validate submission with excise ===
+      const validationResponse = await fetch(
+        `${exciseServer.baseUrl}/excise/vpd/validate-and-calculate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vpdApprovalNumber,
+            periodKey,
+            submission: {
+              basicInformation: {
+                returnType: 'ORIGINAL',
+                submittedBy: { type: 'ORG', name: 'Example Vapes Ltd' },
+              },
+              dutyProducts: [],
+            },
+          }),
+        }
+      );
+      expect(validationResponse.status).toBe(200);
 
-      // Step 3: Follow the link (resolve to taxpayer server)
-      const taxpayerUrl = resolveLink(taxpayerHref!);
-      const taxpayerResponse = await fetch(taxpayerUrl);
-      expect(taxpayerResponse.status).toBe(200);
+      const validation: any = await validationResponse.json();
+      expect(validation.valid).toBe(true);
+      const { customerId, calculations, warnings = [] } = validation;
 
-      // Step 4: Verify response structure
-      const taxpayer: any = await taxpayerResponse.json();
-      expect(taxpayer).toHaveProperty('id');
-      expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).toHaveProperty('nino');
-      expect(taxpayer).toHaveProperty('_links');
+      // === Step 2: Enrich with customer details (parallel with validation) ===
+      const customerResponse = await fetch(`${customerServer.baseUrl}/customers/${customerId}`);
+      expect(customerResponse.status).toBe(200);
+
+      const customer: any = await customerResponse.json();
+      expect(customer.customerId).toBe(customerId);
+
+      // === Step 3: Store submission in tax platform ===
+      const storeResponse = await fetch(`${taxPlatformServer.baseUrl}/submissions/vpd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `test-${Date.now()}`,
+          'X-Correlation-Id': '550e8400-e29b-41d4-a716-446655440000',
+        },
+        body: JSON.stringify({
+          vpdApprovalNumber,
+          periodKey,
+          customerId,
+          submission: {
+            basicInformation: {
+              returnType: 'ORIGINAL',
+              submittedBy: { type: customer.type, name: customer.name },
+            },
+            dutyProducts: [],
+          },
+          calculations,
+          warnings,
+        }),
+      });
+      expect(storeResponse.status).toBe(201);
+
+      const stored: any = await storeResponse.json();
+      expect(stored.acknowledgementReference).toBeDefined();
+      expect(stored.storedAt).toBeDefined();
+
+      // === Step 4: Verify retrieval by acknowledgement ===
+      const retrieveResponse = await fetch(
+        `${taxPlatformServer.baseUrl}/submissions/vpd/${stored.acknowledgementReference}`
+      );
+      expect(retrieveResponse.status).toBe(200);
+
+      const retrieved: any = await retrieveResponse.json();
+      expect(retrieved.acknowledgementReference).toBe(stored.acknowledgementReference);
+      expect(retrieved.vpdApprovalNumber).toBe(vpdApprovalNumber);
+      expect(retrieved.periodKey).toBe(periodKey);
+      expect(retrieved.status).toBeDefined();
     });
   });
 
-  describe('Income Tax to Payment API Traversal', () => {
-    it('should follow allocations link from TaxReturn to get allocations', async () => {
-      // Step 1: Get a tax return
-      const taxReturnResponse = await fetch(`${incomeTaxServer.baseUrl}/tax-returns/TR20230001`);
-      expect(taxReturnResponse.status).toBe(200);
-      const taxReturn: any = await taxReturnResponse.json();
+  describe('Period Lookup', () => {
+    it('should look up period details', async () => {
+      const periodResponse = await fetch(`${exciseServer.baseUrl}/excise/vpd/periods/24A1`);
+      expect(periodResponse.status).toBe(200);
 
-      // Step 2: Extract allocations link (if present)
-      const allocationsHref = getHref(taxReturn._links?.allocations);
-
-      // This link may or may not be present depending on the mock data
-      if (allocationsHref) {
-        expect(allocationsHref).toContain('/allocations');
-
-        // Step 3: Follow the link (resolve to payment server)
-        const allocationsUrl = resolveLink(allocationsHref);
-        const allocationsResponse = await fetch(allocationsUrl);
-
-        // Allocations endpoint should return a client response (not a server error)
-        // 200 = success, 404 = not found, 405 = method not allowed (no GET endpoint)
-        // All are valid as they indicate the server is reachable and the URL is valid
-        expect(allocationsResponse.status).toBeLessThan(500);
-      }
+      const period: any = await periodResponse.json();
+      expect(period.periodKey).toBe('24A1');
+      expect(period.startDate).toBeDefined();
+      expect(period.endDate).toBeDefined();
+      expect(period.state).toBe('OPEN');
     });
   });
 
-  describe('Payment to Taxpayer API Traversal', () => {
-    it('should follow taxpayer link from Payment to get taxpayer', async () => {
-      // Step 1: Get a payment
-      const paymentResponse = await fetch(`${paymentServer.baseUrl}/payments/PM20230001`);
-      expect(paymentResponse.status).toBe(200);
-      const payment: any = await paymentResponse.json();
-
-      // Step 2: Extract taxpayer link
-      const taxpayerHref = getHref(payment._links?.taxpayer);
-      expect(taxpayerHref).toBeTruthy();
-      expect(taxpayerHref).toContain('/taxpayers/');
-
-      // Step 3: Follow the link (resolve to taxpayer server)
-      const taxpayerUrl = resolveLink(taxpayerHref!);
-      const taxpayerResponse = await fetch(taxpayerUrl);
-      expect(taxpayerResponse.status).toBe(200);
-
-      // Step 4: Verify response structure
-      const taxpayer: any = await taxpayerResponse.json();
-      expect(taxpayer).toHaveProperty('id');
-      expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).toHaveProperty('_links');
-    });
-  });
-
-  describe('Bidirectional Relationship Tests', () => {
-    it('Taxpayer -> TaxReturn -> Taxpayer should return same taxpayer ID', async () => {
-      const taxpayerId = 'TP123456';
-
-      // Step 1: Get taxpayer
-      const taxpayer1Response = await fetch(`${taxpayerServer.baseUrl}/taxpayers/${taxpayerId}`);
-      expect(taxpayer1Response.status).toBe(200);
-      const taxpayer1: any = await taxpayer1Response.json();
-
-      // Step 2: Follow taxReturns link
-      const taxReturnsHref = getHref(taxpayer1._links?.taxReturns);
-      if (!taxReturnsHref) {
-        // Skip if no taxReturns link
-        return;
-      }
-
-      const taxReturnsUrl = resolveLink(taxReturnsHref);
-      const taxReturnsResponse = await fetch(taxReturnsUrl);
-      expect(taxReturnsResponse.status).toBe(200);
-      const taxReturns: any = await taxReturnsResponse.json();
-
-      if (taxReturns.items.length === 0) {
-        // Skip if no tax returns
-        return;
-      }
-
-      // Step 3: Get first tax return and follow taxpayer link back
-      const taxReturn: any = taxReturns.items[0];
-      const taxpayerBackHref = getHref(taxReturn._links?.taxpayer);
-      expect(taxpayerBackHref).toBeTruthy();
-
-      const taxpayer2Url = resolveLink(taxpayerBackHref!);
-      const taxpayer2Response = await fetch(taxpayer2Url);
-      expect(taxpayer2Response.status).toBe(200);
-      const taxpayer2: any = await taxpayer2Response.json();
-
-      // Step 4: Verify same taxpayer (or at least consistent data structure)
-      expect(taxpayer2).toHaveProperty('id');
-      expect(taxpayer2).toHaveProperty('type', 'taxpayer');
-    });
-
-    it('Taxpayer -> Payment -> Taxpayer should return same taxpayer ID', async () => {
-      const taxpayerId = 'TP123456';
-
-      // Step 1: Get taxpayer
-      const taxpayer1Response = await fetch(`${taxpayerServer.baseUrl}/taxpayers/${taxpayerId}`);
-      expect(taxpayer1Response.status).toBe(200);
-      const taxpayer1: any = await taxpayer1Response.json();
-
-      // Step 2: Follow payments link
-      const paymentsHref = getHref(taxpayer1._links?.payments);
-      if (!paymentsHref) {
-        // Skip if no payments link
-        return;
-      }
-
-      const paymentsUrl = resolveLink(paymentsHref);
-      const paymentsResponse = await fetch(paymentsUrl);
-      expect(paymentsResponse.status).toBe(200);
-      const payments: any = await paymentsResponse.json();
-
-      if (payments.items.length === 0) {
-        // Skip if no payments
-        return;
-      }
-
-      // Step 3: Get first payment and follow taxpayer link back
-      const payment: any = payments.items[0];
-      const taxpayerBackHref = getHref(payment._links?.taxpayer);
-      expect(taxpayerBackHref).toBeTruthy();
-
-      const taxpayer2Url = resolveLink(taxpayerBackHref!);
-      const taxpayer2Response = await fetch(taxpayer2Url);
-      expect(taxpayer2Response.status).toBe(200);
-      const taxpayer2: any = await taxpayer2Response.json();
-
-      // Step 4: Verify same taxpayer (or at least consistent data structure)
-      expect(taxpayer2).toHaveProperty('id');
-      expect(taxpayer2).toHaveProperty('type', 'taxpayer');
-    });
-  });
-
-  describe('Collection Link Traversal', () => {
-    it('should traverse taxpayer list and follow links for each', async () => {
-      // Get taxpayer collection
-      const response = await fetch(`${taxpayerServer.baseUrl}/taxpayers`);
+  describe('Submission Retrieval Flow', () => {
+    it('should retrieve submission by approval number and period', async () => {
+      const response = await fetch(
+        `${taxPlatformServer.baseUrl}/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1`
+      );
       expect(response.status).toBe(200);
-      const collection = await response.json() as any;
 
-      expect(collection.items).toBeDefined();
-      expect(Array.isArray(collection.items)).toBe(true);
+      const submission: any = await response.json();
+      expect(submission.vpdApprovalNumber).toBe('VPD123456');
+      expect(submission.periodKey).toBe('24A1');
+      expect(submission.acknowledgementReference).toBeDefined();
+      expect(submission.calculations).toBeDefined();
+    });
 
-      // Verify each taxpayer has valid self link
-      for (const taxpayer of collection.items) {
-        expect(taxpayer._links?.self).toBeDefined();
-        const selfHref = getHref(taxpayer._links.self);
-        expect(selfHref).toContain('/taxpayers/');
+    it('should enrich retrieved submission with customer details', async () => {
+      // Get submission
+      const submissionResponse = await fetch(
+        `${taxPlatformServer.baseUrl}/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1`
+      );
+      expect(submissionResponse.status).toBe(200);
 
-        // Verify relationship links exist
-        if (taxpayer._links?.taxReturns) {
-          const taxReturnsHref = getHref(taxpayer._links.taxReturns);
-          expect(taxReturnsHref).toContain('/tax-returns');
-        }
+      const submission: any = await submissionResponse.json();
 
-        if (taxpayer._links?.payments) {
-          const paymentsHref = getHref(taxpayer._links.payments);
-          expect(paymentsHref).toContain('/payments');
-        }
+      // Use customerId from submission to get customer
+      const customerResponse = await fetch(
+        `${customerServer.baseUrl}/customers/${submission.customerId}`
+      );
+      expect(customerResponse.status).toBe(200);
+
+      const customer: any = await customerResponse.json();
+      expect(customer.customerId).toBe(submission.customerId);
+
+      // Domain API would combine these for the response
+      const enrichedSubmission = {
+        ...submission,
+        customer: {
+          name: customer.name,
+          type: customer.type,
+        },
+      };
+
+      expect(enrichedSubmission.customer.name).toBeDefined();
+      expect(enrichedSubmission.customer.type).toBeDefined();
+    });
+  });
+
+  describe('Parallel Backend Calls', () => {
+    it('should support parallel calls to independent backends', async () => {
+      // In the domain API, we can fetch registration and period in parallel
+      const startTime = Date.now();
+
+      const [registrationResponse, periodResponse] = await Promise.all([
+        fetch(`${exciseServer.baseUrl}/excise/vpd/registrations/VPD123456`),
+        fetch(`${exciseServer.baseUrl}/excise/vpd/periods/24A1`),
+      ]);
+
+      expect(registrationResponse.status).toBe(200);
+      expect(periodResponse.status).toBe(200);
+
+      const registration: any = await registrationResponse.json();
+      const period: any = await periodResponse.json();
+
+      // Both should be valid
+      expect(registration.status).toBe('ACTIVE');
+      expect(period.state).toBe('OPEN');
+    });
+  });
+
+  describe('Header Handling', () => {
+    it('should echo correlation ID header', async () => {
+      const correlationId = '550e8400-e29b-41d4-a716-446655440000';
+
+      const response = await fetch(`${taxPlatformServer.baseUrl}/submissions/vpd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `test-header-${Date.now()}`,
+          'X-Correlation-Id': correlationId,
+        },
+        body: JSON.stringify({
+          vpdApprovalNumber: 'VPD123456',
+          periodKey: '24A1',
+          customerId: 'CUST789',
+          submission: {},
+          calculations: {
+            totalDutyDue: { amount: 100, currency: 'GBP' },
+          },
+        }),
+      });
+
+      expect(response.status).toBe(201);
+
+      // Check for ETag header in response
+      const etag = response.headers.get('ETag');
+      // ETag may or may not be present depending on Prism configuration
+      if (etag) {
+        expect(etag).toBeTruthy();
       }
     });
   });

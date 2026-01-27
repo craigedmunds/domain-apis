@@ -12,6 +12,7 @@ export interface MockServerConfig {
   name: string;
   specPath: string;
   port: number;
+  healthCheckPath?: string;
 }
 
 export interface MockServerInstance {
@@ -22,23 +23,26 @@ export interface MockServerInstance {
 }
 
 /**
- * Default configurations for the three Domain APIs
+ * Default configurations for the VPD backend mock APIs
  */
 export const API_CONFIGS: Record<string, MockServerConfig> = {
-  taxpayer: {
-    name: 'Taxpayer API',
-    specPath: 'specs/taxpayer/taxpayer-api.yaml',
-    port: 8081,
+  excise: {
+    name: 'Excise Duty System API',
+    specPath: 'specs/vaping-duty/mocks/excise-api.yaml',
+    port: 4010,
+    healthCheckPath: '/excise/vpd/registrations/VPD123456',
   },
-  'income-tax': {
-    name: 'Income Tax API',
-    specPath: 'specs/income-tax/income-tax-api.yaml',
-    port: 8082,
+  customer: {
+    name: 'Customer Master Data API',
+    specPath: 'specs/vaping-duty/mocks/customer-api.yaml',
+    port: 4011,
+    healthCheckPath: '/customers/CUST789',
   },
-  payment: {
-    name: 'Payment API',
-    specPath: 'specs/payment/payment-api.yaml',
-    port: 8083,
+  'tax-platform': {
+    name: 'Tax Platform Submissions API',
+    specPath: 'specs/vaping-duty/mocks/tax-platform-api.yaml',
+    port: 4012,
+    healthCheckPath: '/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1',
   },
 };
 
@@ -78,7 +82,8 @@ export async function spawnMockServer(config: MockServerConfig): Promise<MockSer
     // Wait for server to be ready by checking health
     const healthCheckInterval = setInterval(async () => {
       try {
-        const response = await fetch(baseUrl);
+        const healthPath = config.healthCheckPath || '/';
+        const response = await fetch(`${baseUrl}${healthPath}`);
         // Prism returns 404 for root path but that means it's running
         if (response.status === 404 || response.ok) {
           clearInterval(healthCheckInterval);
@@ -108,7 +113,7 @@ export async function spawnMockServer(config: MockServerConfig): Promise<MockSer
 }
 
 /**
- * Spawns all three Domain API mock servers
+ * Spawns all VPD backend mock servers
  *
  * @returns Promise resolving to an array of MockServerInstance
  */
@@ -192,7 +197,7 @@ export async function waitForHealth(
 /**
  * Gets the base URL for a specific API
  *
- * @param apiName - The API name (taxpayer, income-tax, payment)
+ * @param apiName - The API name (excise, customer, tax-platform)
  * @returns The base URL for the API
  */
 export function getApiBaseUrl(apiName: string): string {
@@ -204,20 +209,19 @@ export function getApiBaseUrl(apiName: string): string {
 }
 
 /**
- * Resource ID patterns for validation
+ * Resource ID patterns for VPD validation
  */
 export const ID_PATTERNS = {
-  taxpayer: /^TP\d{6}$/,
-  taxReturn: /^TR\d{8}$/,
-  payment: /^PM\d{8}$/,
-  assessment: /^AS\d{8}$/,
-  allocation: /^AL\d{8}$/,
+  vpdApprovalNumber: /^VPD\d{6}$/,
+  customerId: /^CUST\d{3,}$/,
+  periodKey: /^\d{2}[A-Z]\d$/,
+  acknowledgementReference: /^ACK-\d{4}-\d{2}-\d{2}-\d{6}$/,
 };
 
 /**
  * Validates a resource ID against its expected pattern
  *
- * @param resourceType - The type of resource (taxpayer, taxReturn, payment, assessment, allocation)
+ * @param resourceType - The type of resource
  * @param id - The ID to validate
  * @returns true if the ID matches the expected pattern
  */
@@ -227,7 +231,7 @@ export function isValidResourceId(resourceType: keyof typeof ID_PATTERNS, id: st
 }
 
 /**
- * Validates that a link URL follows expected patterns
+ * Validates that a link URL follows expected VPD patterns
  *
  * @param linkUrl - The URL to validate
  * @returns true if the URL is a valid path-only URL
@@ -238,19 +242,15 @@ export function isValidLinkUrl(linkUrl: string): boolean {
     return false;
   }
 
-  // Should match one of the known path patterns
+  // Should match one of the known VPD path patterns
   const validPathPatterns = [
-    /^\/taxpayers(\/TP\d{6})?$/,
-    /^\/taxpayers\?.*$/,
-    /^\/tax-returns(\/TR\d{8})?$/,
-    /^\/tax-returns\?.*$/,
-    /^\/tax-returns\/TR\d{8}\/assessments$/,
-    /^\/assessments(\/AS\d{8})?$/,
-    /^\/payments(\/PM\d{8})?$/,
-    /^\/payments\?.*$/,
-    /^\/payments\/PM\d{8}\/allocations$/,
-    /^\/allocations(\/AL\d{8})?$/,
-    /^\/allocations\?.*$/,
+    /^\/excise\/vpd\/registrations(\/VPD\d{6})?$/,
+    /^\/excise\/vpd\/periods(\/\d{2}[A-Z]\d)?$/,
+    /^\/excise\/vpd\/validate-and-calculate$/,
+    /^\/customers(\/CUST\d{3,})?$/,
+    /^\/submissions\/vpd$/,
+    /^\/submissions\/vpd\?.*$/,
+    /^\/submissions\/vpd\/ACK-[\d-]+$/,
   ];
 
   return validPathPatterns.some((pattern) => pattern.test(linkUrl));

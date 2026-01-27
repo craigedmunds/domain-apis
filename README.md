@@ -1,159 +1,137 @@
-# Domain API POC
+# Domain APIs POC
 
-This is a proof-of-concept for a multi-API domain architecture representing portions of the UK tax system.
+Proof-of-concept Domain APIs demonstrating orchestration patterns for UK tax services.
 
-## Architecture
+## Current: VPD Submission Returns
 
-The system consists of three separate Domain APIs:
+The VPD (Vaping Products Duty) Submission Returns Domain API orchestrates three backend services through a unified interface:
 
-1. **Taxpayer API** (`/taxpayer/v1`) - Manages taxpayer identity and registration information
-2. **Income Tax API** (`/income-tax/v1`) - Handles income tax returns, assessments, and calculations
-3. **Payment API** (`/payment/v1`) - Manages tax payments and payment allocations
+- **excise** - VPD registrations, periods, duty calculations
+- **customer** - Trader/customer master data
+- **tax-platform** - Submission storage and retrieval
 
-Each API has its own OpenAPI specification but shares common components through reusable specification fragments.
+## Quick Start
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Verify mocks are running
+curl http://localhost:4010/excise/vpd/registrations/VPD123456 | jq .
+curl http://localhost:4011/customers/CUST789 | jq .
+curl http://localhost:4012/submissions/vpd/ACK-2026-01-26-000123 | jq .
+
+# Open API Explorer (via docs site)
+open http://localhost:8080/explorer.html
+
+# Open Grafana (observability)
+open http://localhost:3000  # admin/admin
+
+# Open Docs
+open http://localhost:8080
+```
+
+## Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| excise-mock | 4010 | VPD registrations, periods, duty calculations |
+| customer-mock | 4011 | Trader/customer master data |
+| tax-platform-mock | 4012 | Submission storage and retrieval |
+| docs | 8080 | Documentation + API Explorer |
+| lgtm | 3000 | Grafana + Loki + Tempo + Mimir |
+| localstack | 4566 | AWS LocalStack (API Gateway) |
 
 ## Directory Structure
 
 ```
 domain-apis/
-├── specs/                      # OpenAPI specifications
-│   ├── shared/                 # Shared component definitions
-│   │   └── shared-components.yaml
-│   ├── taxpayer/               # Taxpayer API specification
-│   │   └── taxpayer-api.yaml
-│   ├── income-tax/             # Income Tax API specification
-│   │   └── income-tax-api.yaml
-│   └── payment/                # Payment API specification
-│       └── payment-api.yaml
-├── docs/                       # Generated documentation
-│   ├── taxpayer/
-│   ├── income-tax/
-│   └── payment/
-├── tests/                      # Test suites
-│   ├── unit/                   # Unit tests
-│   ├── property/               # Property-based tests
-│   └── integration/            # Integration tests
-├── tools/                      # Tooling scripts and configuration
-│   ├── validate.sh             # OpenAPI validation script
-│   ├── generate-docs.sh        # Documentation generation script
-│   └── start-mocks.sh          # Mock server startup script
-└── package.json                # Node.js dependencies for tooling
+├── docker-compose.yml           # Full stack definition
+├── specs/
+│   └── vaping-duty/
+│       ├── domain/              # Domain API specifications
+│       │   ├── producer/        # Producer OAS (source of truth)
+│       │   ├── platform/        # Platform OAS (generated)
+│       │   └── fragments/       # Reusable OAS fragments
+│       ├── mocks/               # Backend mock specifications
+│       │   ├── excise-api.yaml
+│       │   ├── customer-api.yaml
+│       │   └── tax-platform-api.yaml
+│       ├── tests/load/          # k6 load test scripts
+│       └── README.md
+├── docs/                        # Documentation site
+├── tests/                       # Integration tests
+└── tools/                       # Utility scripts
 ```
 
-## Getting Started
+## Backend Mock APIs
 
-### Prerequisites
-
-- Node.js 18+ (for tooling)
-- npm or yarn
-
-### Installation
+### Excise Service (4010)
 
 ```bash
+# Get registration
+curl http://localhost:4010/excise/vpd/registrations/VPD123456
+
+# Get period
+curl http://localhost:4010/excise/vpd/periods/24A1
+
+# Validate and calculate
+curl -X POST http://localhost:4010/excise/vpd/validate-and-calculate \
+  -H "Content-Type: application/json" \
+  -d '{"vpdApprovalNumber":"VPD123456","periodKey":"24A1","submission":{}}'
+```
+
+### Customer Service (4011)
+
+```bash
+curl http://localhost:4011/customers/CUST789
+```
+
+### Tax Platform Service (4012)
+
+```bash
+# Store submission
+curl -X POST http://localhost:4012/submissions/vpd \
+  -H "Content-Type: application/json" \
+  -H "X-Idempotency-Key: test-123" \
+  -d '{"vpdApprovalNumber":"VPD123456","periodKey":"24A1","customerId":"CUST789","submission":{},"calculations":{},"warnings":[]}'
+
+# Get by acknowledgement
+curl http://localhost:4012/submissions/vpd/ACK-2026-01-26-000123
+```
+
+## Test Data
+
+| Resource | Pattern | Example |
+|----------|---------|---------|
+| VPD Approval Number | `VPD[0-9]{6}` | `VPD123456` |
+| Period Key | `[0-9]{2}[A-Z][0-9]` | `24A1` |
+| Customer ID | `CUST[0-9]+` | `CUST789` |
+| Acknowledgement | `ACK-YYYY-MM-DD-NNNNNN` | `ACK-2026-01-26-000123` |
+
+## Load Testing
+
+```bash
+# Install k6
+brew install k6
+
+# Run smoke test against mocks
+k6 run specs/vaping-duty/tests/load/smoke-test-mocks.js
+```
+
+## Generate Documentation
+
+```bash
+# Install dependencies (first time)
 npm install
+
+# Generate Redoc documentation
+./tools/generate-docs.sh
 ```
-
-### Validate OpenAPI Specifications
-
-```bash
-npm run validate
-```
-
-### Generate Documentation
-
-```bash
-npm run docs
-```
-
-### Start Mock Servers
-
-```bash
-# Start all mock servers concurrently
-task mock
-
-# Or start individual servers
-task mock:taxpayer    # Port 8081
-task mock:income-tax  # Port 8082
-task mock:payment     # Port 8083
-```
-
-This will start three mock servers:
-- Taxpayer API: http://127.0.0.1:8081
-- Income Tax API: http://127.0.0.1:8082
-- Payment API: http://127.0.0.1:8083
-
-**Test the mock servers:**
-```bash
-./test-mock-servers.sh
-```
-
-See [Mock Server Documentation](docs/mock-servers.md) for detailed usage.
-
-### View Interactive API Documentation
-
-```bash
-npm run swagger
-```
-
-This opens Swagger UI with all three API specifications loaded.
-
-## Development Workflow
-
-1. **Define OpenAPI specifications** in the `specs/` directory
-2. **Validate specifications** using `npm run validate`
-3. **Generate mock servers** using `npm run mock`
-4. **Test cross-API traversal** using the mock servers
-5. **Generate documentation** using `npm run docs`
-6. **Implement real APIs** based on validated specifications
-
-## Key Features
-
-- **Multi-API Architecture**: Clear domain boundaries with independent versioning
-- **Shared Components**: Reusable schemas for common types (Address, Money, etc.)
-- **Hypermedia Navigation**: Resources include links to related resources across APIs
-- **Include Parameter**: Reduce API calls by embedding related resources
-- **OpenAPI-First**: Specifications drive implementation, documentation, and testing
-
-## Testing
-
-```bash
-# Run all tests (unit, property, integration)
-task test
-
-# Run unit tests only
-task test:unit
-
-# Run property-based tests only
-task test:property
-
-# Run integration tests only
-task test:integration
-
-# Run acceptance tests (separate Playwright project)
-task test:acceptance
-
-# Run acceptance tests in headed mode (see browser)
-task test:acceptance:headed
-
-# Run acceptance tests in UI mode (interactive)
-task test:acceptance:ui
-
-# Install acceptance test dependencies
-task test:acceptance:install
-
-# View acceptance test report
-task test:acceptance:report
-```
-
-**Note**: Acceptance tests are maintained in a separate Playwright project at `tests/acceptance/`. See [Acceptance Testing Guide](docs/acceptance-testing.md) for details.
 
 ## Documentation
 
-- [Getting Started Guide](docs/getting-started.md)
-- [Mock Server Setup](docs/mock-servers.md)
-- [API Architecture](docs/architecture.md)
-- [Cross-API Traversal](docs/cross-api-traversal.md)
-- [Acceptance Testing Guide](docs/acceptance-testing.md)
-- [Taxpayer API Documentation](docs/taxpayer/)
-- [Income Tax API Documentation](docs/income-tax/)
-- [Payment API Documentation](docs/payment/)
+- [Getting Started](docs/getting-started.md)
+- [Mock Servers](docs/mock-servers.md)
+- [API Producer Guide](docs/api-producer-guide.md)
+- [API Consumer Guide](docs/api-consumer-guide.md)

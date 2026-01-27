@@ -1,0 +1,147 @@
+# Platform Common Schemas
+# https://platform.hip.hmrc.gov.uk/common/schemas.yaml
+
+Money:
+  type: object
+  required:
+    - amount
+    - currency
+  properties:
+    amount:
+      type: number
+      format: double
+      description: Monetary amount (supports decimal precision)
+      example: 12345.67
+    currency:
+      type: string
+      description: ISO 4217 currency code
+      pattern: '^[A-Z]{3}$'
+      example: "GBP"
+
+Address:
+  type: object
+  description: UK postal address
+  properties:
+    line1:
+      type: string
+      maxLength: 100
+      example: "123 High Street"
+    line2:
+      type: string
+      maxLength: 100
+      example: "Suite 100"
+    line3:
+      type: string
+      maxLength: 100
+    city:
+      type: string
+      maxLength: 50
+      example: "London"
+    county:
+      type: string
+      maxLength: 50
+      example: "Greater London"
+    postcode:
+      type: string
+      pattern: '^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$'
+      example: "AB1 2CD"
+    country:
+      type: string
+      description: ISO 3166-1 alpha-2 country code
+      pattern: '^[A-Z]{2}$'
+      default: "GB"
+      example: "GB"
+
+Error:
+  type: object
+  required:
+    - code
+    - message
+  properties:
+    code:
+      type: string
+      description: Machine-readable error code
+      example: "VALIDATION_ERROR"
+    message:
+      type: string
+      description: Human-readable error message
+      example: "Validation failed"
+    details:
+      type: array
+      description: Detailed error information (e.g., field-level validation errors)
+      items:
+        $ref: '#/ErrorDetail'
+    correlationId:
+      type: string
+      format: uuid
+      description: Correlation ID for tracing this error
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+ErrorDetail:
+  type: object
+  description: Detailed information about a specific error
+  required:
+    - code
+    - message
+  properties:
+    code:
+      type: string
+      description: Specific error code
+      example: "FIELD_REQUIRED"
+    message:
+      type: string
+      description: Human-readable error message
+      example: "Field is required"
+    path:
+      type: string
+      description: JSON path to the field with the error
+      example: "/dutyProducts/0/quantity"
+    value:
+      description: The invalid value that caused the error
+      example: -5
+
+Timestamp:
+  type: string
+  format: date-time
+  description: ISO 8601 timestamp (RFC 3339)
+  example: "2026-01-27T14:51:02Z"
+
+PeriodKey:
+  type: string
+  description: |
+    Period key in format: YYQN (Year, Quarter, Number)
+    - YY: Last two digits of year
+    - Q: Quarter (A for Q1-Q4, B for monthly)
+    - N: Period number within quarter
+  pattern: '^[0-9]{2}[AB][0-9]$'
+  example: "24A1"
+
+PaginationMetadata:
+  type: object
+  description: Pagination metadata for collection responses
+  required:
+    - totalCount
+    - pageSize
+    - currentPage
+  properties:
+    totalCount:
+      type: integer
+      description: Total number of items across all pages
+      minimum: 0
+      example: 150
+    pageSize:
+      type: integer
+      description: Number of items per page
+      minimum: 1
+      maximum: 100
+      example: 20
+    currentPage:
+      type: integer
+      description: Current page number (1-based)
+      minimum: 1
+      example: 1
+    totalPages:
+      type: integer
+      description: Total number of pages
+      minimum: 0
+      example: 8

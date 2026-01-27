@@ -1,0 +1,161 @@
+openapi: 3.0.3
+info:
+  title: Customer Master Data API
+  version: 1.0.0
+  description: |
+    Backend API for Customer Master Data system.
+
+    **System of Record For:**
+    - Trader/organization information
+    - Customer names, types, addresses
+    - Uses generic customer IDs (not VPD-specific)
+
+servers:
+  - url: http://localhost:4011
+    description: Local mock server
+  - url: http://customer-mock:4010
+    description: Docker internal
+  - url: https://customer.internal.hmrc.gov.uk
+    description: Internal production
+
+tags:
+  - name: Customers
+    description: Customer operations
+
+paths:
+  /customers/{customerId}:
+    get:
+      tags:
+        - Customers
+      summary: Get customer details
+      description: |
+        Returns customer/trader master data including name, type, and address.
+      operationId: getCustomer
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "CUST789"
+      responses:
+        '200':
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+              examples:
+                organization:
+                  $ref: '#/components/examples/OrganizationCustomer'
+                individual:
+                  $ref: '#/components/examples/IndividualCustomer'
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Customer:
+      type: object
+      required:
+        - customerId
+        - name
+        - type
+      properties:
+        customerId:
+          type: string
+          description: Unique customer identifier
+          example: "CUST789"
+        name:
+          type: string
+          description: Customer/trader name
+          example: "Example Vapes Ltd"
+        type:
+          type: string
+          enum: [ORG, INDIVIDUAL]
+          description: Customer type
+          example: "ORG"
+        registeredAddress:
+          $ref: '#/components/schemas/Address'
+        contactDetails:
+          type: object
+          properties:
+            email:
+              type: string
+              format: email
+              example: "contact@examplevapes.co.uk"
+            phone:
+              type: string
+              example: "+44 20 7946 0958"
+
+    Address:
+      type: object
+      properties:
+        line1:
+          type: string
+          example: "123 High Street"
+        line2:
+          type: string
+          example: "Suite 100"
+        city:
+          type: string
+          example: "London"
+        county:
+          type: string
+          example: "Greater London"
+        postcode:
+          type: string
+          example: "AB1 2CD"
+        country:
+          type: string
+          example: "GB"
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: "NOT_FOUND"
+        message:
+          type: string
+          example: "Customer not found"
+
+  examples:
+    OrganizationCustomer:
+      summary: Organization customer
+      value:
+        customerId: "CUST789"
+        name: "Example Vapes Ltd"
+        type: "ORG"
+        registeredAddress:
+          line1: "123 High Street"
+          line2: "Suite 100"
+          city: "London"
+          county: "Greater London"
+          postcode: "AB1 2CD"
+          country: "GB"
+        contactDetails:
+          email: "contact@examplevapes.co.uk"
+          phone: "+44 20 7946 0958"
+
+    IndividualCustomer:
+      summary: Individual customer
+      value:
+        customerId: "CUST456"
+        name: "John Smith"
+        type: "INDIVIDUAL"
+        registeredAddress:
+          line1: "45 Oak Avenue"
+          city: "Manchester"
+          postcode: "M1 1AA"
+          country: "GB"
+        contactDetails:
+          email: "john.smith@example.com"
+          phone: "+44 161 123 4567"

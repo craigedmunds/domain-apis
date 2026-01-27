@@ -114,19 +114,24 @@
 <body>
     <div class="header">
         <h1>🚀 API Explorer</h1>
-        <p>Interactive API testing for Domain API POC</p>
+        <p>Interactive API testing for VPD Domain API POC</p>
     </div>
-    
+
     <div class="nav">
         <label for="api-select">Select API:</label>
         <select id="api-select">
-            <option value="taxpayer">Taxpayer API</option>
-            <option value="income-tax">Income Tax API</option>
-            <option value="payment">Payment API</option>
+            <optgroup label="Domain API">
+                <option value="vpd-platform">VPD Platform API (via Gateway)</option>
+            </optgroup>
+            <optgroup label="Backend Mocks">
+                <option value="excise">Excise Mock (:4010)</option>
+                <option value="customer">Customer Mock (:4011)</option>
+                <option value="tax-platform">Tax Platform Mock (:4012)</option>
+            </optgroup>
         </select>
         <a href="index.html">← Back to Documentation</a>
     </div>
-    
+
     <div class="info-banner">
         <h3>💡 How to use this explorer</h3>
         <p>
@@ -134,7 +139,7 @@
             2. Expand any endpoint to see details<br>
             3. Click "Try it out" to enable the request form<br>
             4. Fill in parameters and click "Execute" to invoke the API<br>
-            5. Mock servers are configured in the oas file for each service, you can invoke the API directly or via the gateway
+            5. Mock servers run on ports 4010-4012, platform API via gateway on 4566
         </p>
     </div>
     
@@ -144,16 +149,17 @@
     <script src="https://unpkg.com/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js"></script>
     <script>
         const specs = {
-            'taxpayer': '/specs/taxpayer/taxpayer-api.yaml',
-            'income-tax': '/specs/income-tax/income-tax-api.yaml',
-            'payment': '/specs/payment/payment-api.yaml'
+            'vpd-platform': '/specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml',
+            'excise': '/specs/vaping-duty/mocks/excise-api.yaml',
+            'customer': '/specs/vaping-duty/mocks/customer-api.yaml',
+            'tax-platform': '/specs/vaping-duty/mocks/tax-platform-api.yaml'
         };
-        
+
         let ui;
-        
+
         function loadSpec(apiName) {
             const spec = specs[apiName];
-            
+
             if (ui) {
                 // Update existing UI
                 ui.specActions.updateUrl(spec);
@@ -182,10 +188,10 @@
                 });
             }
         }
-        
-        // Get API from URL parameter or default to taxpayer
+
+        // Get API from URL parameter or default to excise
         const urlParams = new URLSearchParams(window.location.search);
-        const initialApi = urlParams.get('api') || 'taxpayer';
+        const initialApi = urlParams.get('api') || 'excise';
         
         // Set the dropdown to match
         document.getElementById('api-select').value = initialApi;

@@ -1,621 +1,262 @@
 import { describe, test, expect } from 'vitest';
 
 /**
- * Acceptance tests for Gateway API functionality
- * 
+ * Acceptance tests for VPD Domain API functionality
+ *
  * Requirements validated:
- * - 4.4: Include parameter support for embedding related resources
- * - 5.3: Cross-API resource traversal via URLs
- * - 9.1: Acceptance tests validate critical user journeys
- * - 9.5: Tests validate against running systems
- * - 9.7: All tests pass before POC is considered complete
- * 
- * These tests validate the API Gateway aggregation layer that sits between
- * clients and backend APIs, providing cross-API resource aggregation via
- * the ?include query parameter.
+ * - Submission endpoint orchestration
+ * - Returns endpoint orchestration with customer enrichment
+ * - Sparse fieldsets support
+ *
+ * These tests validate the VPD Domain API that orchestrates between
+ * backend services (excise, customer, tax-platform).
+ *
+ * NOTE: These tests are placeholders pending domain API implementation.
+ * They currently test against the backend mocks directly to validate
+ * the test infrastructure.
  */
 
-// Gateway configuration
-const GATEWAY_BASE_URL = process.env.GATEWAY_URL || 'http://domain-api.execute-api.localhost.localstack.cloud:4566/dev';
+// Domain API configuration (will be the Camel service when implemented)
+const DOMAIN_API_BASE_URL = process.env.DOMAIN_API_URL || 'http://localhost:8080';
 
-describe('Gateway API - Direct Access', () => {
-  test('should access Taxpayer API directly without include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'TP123456');
-    expect(data).toHaveProperty('type', 'taxpayer');
-    expect(data).toHaveProperty('nino');
-    expect(data).toHaveProperty('name');
-    expect(data).toHaveProperty('_links');
-    expect(data._links).toBeDefined();
-    expect(data._included).toBeUndefined();
-  });
+// Backend mock URLs for infrastructure validation
+const EXCISE_MOCK_URL = process.env.EXCISE_URL || 'http://localhost:4010';
+const CUSTOMER_MOCK_URL = process.env.CUSTOMER_URL || 'http://localhost:4011';
+const TAX_PLATFORM_MOCK_URL = process.env.TAX_PLATFORM_URL || 'http://localhost:4012';
 
-  test('should access Income Tax API directly without include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/tax-returns/TR20230001`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'TR20230001');
-    expect(data).toHaveProperty('type', 'tax-return');
-    expect(data).toHaveProperty('taxpayerId');
-    expect(data).toHaveProperty('_links');
-    expect(data._included).toBeUndefined();
-  });
+describe('VPD Backend Mocks - Infrastructure Validation', () => {
+  describe('Excise Mock', () => {
+    test('should return registration details', async () => {
+      const response = await fetch(`${EXCISE_MOCK_URL}/excise/vpd/registrations/VPD123456`);
 
-  test('should access Payment API directly without include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/payments/PM20230001`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'PM20230001');
-    expect(data).toHaveProperty('type', 'payment');
-    expect(data).toHaveProperty('taxpayerId');
-    expect(data).toHaveProperty('_links');
-    expect(data._included).toBeUndefined();
-  });
-});
-
-describe('Gateway API - Single Include Parameter', () => {
-  test('should include taxReturns when requested', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'TP123456');
-    expect(data).toHaveProperty('type', 'taxpayer');
-    expect(data).toHaveProperty('_links');
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(Array.isArray(data._included.taxReturns)).toBeTruthy();
-    
-    if (data._included.taxReturns.length > 0) {
-      const taxReturn = data._included.taxReturns[0];
-      expect(taxReturn).toHaveProperty('id');
-      expect(taxReturn).toHaveProperty('type', 'tax-return');
-      expect(taxReturn).toHaveProperty('taxpayerId', 'TP123456');
-    }
-  });
-
-  test('should include payments when requested', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=payments`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'TP123456');
-    expect(data).toHaveProperty('_links');
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('payments');
-    expect(Array.isArray(data._included.payments)).toBeTruthy();
-    
-    if (data._included.payments.length > 0) {
-      const payment = data._included.payments[0];
-      expect(payment).toHaveProperty('id');
-      expect(payment).toHaveProperty('type', 'payment');
-      expect(payment).toHaveProperty('taxpayerId', 'TP123456');
-    }
-  });
-});
-
-describe('Gateway API - Multiple Include Parameters', () => {
-  test('should include multiple relationships (taxReturns and payments)', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns,payments`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'TP123456');
-    expect(data).toHaveProperty('_links');
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included).toHaveProperty('payments');
-    expect(Array.isArray(data._included.taxReturns)).toBeTruthy();
-    expect(Array.isArray(data._included.payments)).toBeTruthy();
-  });
-
-  test('should handle include parameter with spaces', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns, payments`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included).toHaveProperty('payments');
-  });
-});
-
-describe('Gateway API - Cross-API Resource Traversal', () => {
-  test('should traverse from Taxpayer to Income Tax API via includes', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included.taxReturns.length).toBeGreaterThan(0);
-    
-    const taxReturn = data._included.taxReturns[0];
-    expect(taxReturn).toHaveProperty('taxpayerId', 'TP123456');
-    expect(taxReturn).toHaveProperty('id');
-    expect(taxReturn.type).toBe('tax-return');
-  });
-
-  test('should traverse from Taxpayer to Payment API via includes', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=payments`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    expect(data._included).toHaveProperty('payments');
-    expect(data._included.payments.length).toBeGreaterThan(0);
-    
-    const payment = data._included.payments[0];
-    expect(payment).toHaveProperty('taxpayerId', 'TP123456');
-    expect(payment).toHaveProperty('id');
-    expect(payment.type).toBe('payment');
-  });
-
-  test('should support multi-hop traversal across all three APIs', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns,payments`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    expect(data.type).toBe('taxpayer');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included).toHaveProperty('payments');
-    expect(Object.keys(data._included).length).toBeGreaterThanOrEqual(2);
-  });
-});
-
-describe('Gateway API - Error Handling', () => {
-  test('should handle invalid include parameter gracefully', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=nonExistentRelationship`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    expect(data).toHaveProperty('id', 'TP123456');
-    
-    if (data._included) {
-      expect(data._included.nonExistentRelationship).toBeUndefined();
-    }
-  });
-
-  test('should handle non-existent resource with 404 or 422', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/NONEXISTENT`);
-    // Prism returns 422 for invalid ID patterns, which is correct validation behavior
-    expect([404, 422]).toContain(response.status);
-  });
-
-  test('should handle partial include failures gracefully', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns,invalidRelation`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data).toHaveProperty('id', 'TP123456');
-  });
-
-  test('should handle empty include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('id', 'TP123456');
-    if (data._included) {
-      expect(Object.keys(data._included).length).toBe(0);
-    }
-  });
-});
-
-describe('Gateway API - URL Rewriting', () => {
-  test('should rewrite _links to use gateway paths', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    expect(data).toHaveProperty('_links');
-    expect(data._links).toBeDefined();
-    
-    if (data._links.self) {
-      const selfHref = typeof data._links.self === 'string' 
-        ? data._links.self 
-        : data._links.self.href;
-      
-      // Links should be path-only, starting with /dev/
-      expect(selfHref).toMatch(/^\/dev\//);
-      // Should not contain backend API ports
-      expect(selfHref).not.toContain(':8081');
-      expect(selfHref).not.toContain(':8082');
-      expect(selfHref).not.toContain(':8083');
-    }
-  });
-
-  test('should maintain gateway paths in cross-API relationships', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns,payments`);
-    
-    expect(response.ok).toBeTruthy();
-    const data = await response.json();
-    
-    for (const [key, link] of Object.entries(data._links || {})) {
-      const href = typeof link === 'string' ? link : (link as any)?.href;
-      
-      if (href) {
-        // Links should be path-only, starting with /dev/
-        expect(href).toMatch(/^\/dev\//);
-        // Should not contain backend API ports
-        expect(href).not.toContain(':8081');
-        expect(href).not.toContain(':8082');
-        expect(href).not.toContain(':8083');
-      }
-    }
-  });
-});
-
-describe('Gateway API - Collection with Includes', () => {
-  test('should support include parameter on collection endpoints', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    // Response has items array for collections
-    expect(data).toHaveProperty('items');
-    expect(Array.isArray(data.items)).toBeTruthy();
-    
-    // _included should be at the collection level, not in each item
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(Array.isArray(data._included.taxReturns)).toBeTruthy();
-    
-    // Items should NOT have _included
-    if (data.items.length > 0) {
-      const taxpayer = data.items[0];
-      expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).not.toHaveProperty('_included');
-    }
-  });
-
-  test('should support multiple includes on collection endpoints', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns,payments`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    // Response has items array for collections
-    expect(data).toHaveProperty('items');
-    expect(Array.isArray(data.items)).toBeTruthy();
-    
-    // _included should be at the collection level with all requested relationships
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included).toHaveProperty('payments');
-    expect(Array.isArray(data._included.taxReturns)).toBeTruthy();
-    expect(Array.isArray(data._included.payments)).toBeTruthy();
-    
-    // Items should NOT have _included
-    if (data.items.length > 0) {
-      const taxpayer = data.items[0];
-      expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).not.toHaveProperty('_included');
-    }
-  });
-});
-
-describe('Gateway API - Query String Search', () => {
-  test('should support query string search without include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?nino=AB123456C&lastName=Smith`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    // Response has items array for collections
-    expect(data).toHaveProperty('items');
-    expect(Array.isArray(data.items)).toBeTruthy();
-    if (data.items.length > 0) {
-      expect(data.items[0]).toHaveProperty('type', 'taxpayer');
-      expect(data.items[0]).toHaveProperty('nino');
-      expect(data.items[0]).toHaveProperty('_links');
-    }
-  });
-
-  test('should support query string search with include parameter', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns,payments`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    // Response has items array for collections
-    expect(data).toHaveProperty('items');
-    expect(Array.isArray(data.items)).toBeTruthy();
-    
-    // _included should be at collection level
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included).toHaveProperty('payments');
-    
-    // Items should NOT have _included
-    if (data.items.length > 0) {
-      const taxpayer = data.items[0];
-      expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).not.toHaveProperty('_included');
-    }
-  });
-
-  test('should support query string search with URL-encoded include parameter', async () => {
-    // This reproduces the exact curl command that's failing
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?nino=AB123456C&lastName=Smith&include=taxReturns%2Cpayments`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.status).toBe(200);
-    
-    const data = await response.json();
-    
-    // Response has items array for collections
-    expect(data).toHaveProperty('items');
-    expect(Array.isArray(data.items)).toBeTruthy();
-    
-    // _included should be at collection level
-    expect(data).toHaveProperty('_included');
-    expect(data._included).toHaveProperty('taxReturns');
-    expect(data._included).toHaveProperty('payments');
-    
-    // Items should NOT have _included
-    if (data.items.length > 0) {
-      const taxpayer = data.items[0];
-      expect(taxpayer).toHaveProperty('type', 'taxpayer');
-      expect(taxpayer).not.toHaveProperty('_included');
-    }
-  });
-});
-
-describe('Gateway API - CORS Support', () => {
-  test('should include CORS headers in responses', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);
-    
-    expect(response.ok).toBeTruthy();
-    expect(response.headers.get('access-control-allow-origin')).toBeDefined();
-    expect(response.headers.get('access-control-allow-methods')).toBeDefined();
-    expect(response.headers.get('access-control-allow-headers')).toBeDefined();
-  });
-
-  test('should handle OPTIONS preflight requests', async () => {
-    const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
-      method: 'OPTIONS'
-    });
-    
-    expect(response.status).toBe(200);
-    expect(response.headers.get('access-control-allow-origin')).toBeDefined();
-    expect(response.headers.get('access-control-allow-methods')).toBeDefined();
-    expect(response.headers.get('access-control-allow-headers')).toBeDefined();
-  });
-});
-
-describe('Gateway API - Content Negotiation', () => {
-  describe('Aggregated Mode (Default)', () => {
-    test('should return application/vnd.domain+json when no Accept header is provided', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`);
-      
       expect(response.ok).toBeTruthy();
       expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
-      
+
       const data = await response.json();
-      expect(data).toHaveProperty('id', 'TP123456');
-      expect(data).toHaveProperty('_links');
+
+      expect(data).toHaveProperty('vpdApprovalNumber');
+      expect(data).toHaveProperty('customerId');
+      expect(data).toHaveProperty('status');
     });
 
-    test('should return application/vnd.domain+json when Accept: application/vnd.domain+json', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
-        headers: { 'Accept': 'application/vnd.domain+json' }
+    test('should return period details', async () => {
+      const response = await fetch(`${EXCISE_MOCK_URL}/excise/vpd/periods/24A1`);
+
+      expect(response.ok).toBeTruthy();
+      expect(response.status).toBe(200);
+
+      const data = await response.json();
+
+      expect(data).toHaveProperty('periodKey');
+      expect(data).toHaveProperty('startDate');
+      expect(data).toHaveProperty('endDate');
+      expect(data).toHaveProperty('state');
+    });
+
+    test('should validate and calculate submission', async () => {
+      const response = await fetch(`${EXCISE_MOCK_URL}/excise/vpd/validate-and-calculate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vpdApprovalNumber: 'VPD123456',
+          periodKey: '24A1',
+          submission: {
+            basicInformation: { returnType: 'ORIGINAL' },
+            dutyProducts: [],
+          },
+        }),
       });
-      
+
       expect(response.ok).toBeTruthy();
       expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
-      
-      const data = await response.json();
-      expect(data).toHaveProperty('id', 'TP123456');
-    });
 
-    test('should process include parameter in aggregated mode', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`);
-      
-      expect(response.ok).toBeTruthy();
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
-      
       const data = await response.json();
-      expect(data).toHaveProperty('_included');
-      expect(data._included).toHaveProperty('taxReturns');
-    });
-  });
 
-  describe('Simple REST Mode', () => {
-    test('should return application/json when Accept: application/json', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      
-      expect(response.ok).toBeTruthy();
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/json');
-      expect(response.headers.get('content-type')).not.toContain('vnd.domain');
-      
-      const data = await response.json();
-      expect(data).toHaveProperty('id', 'TP123456');
-      expect(data).toHaveProperty('_links');
-    });
-
-    test('should ignore include parameter in simple REST mode', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      
-      expect(response.ok).toBeTruthy();
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('application/json');
-      
-      const data = await response.json();
-      expect(data).toHaveProperty('id', 'TP123456');
-      expect(data._included).toBeUndefined();
-    });
-
-    test('should rewrite URLs in simple REST mode', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      
-      expect(response.ok).toBeTruthy();
-      const data = await response.json();
-      
-      expect(data).toHaveProperty('_links');
-      if (data._links.self) {
-        const selfHref = typeof data._links.self === 'string' 
-          ? data._links.self 
-          : data._links.self.href;
-        
-        // Links should be path-only, starting with /dev/
-        expect(selfHref).toMatch(/^\/dev\//);
+      expect(data).toHaveProperty('valid');
+      expect(data).toHaveProperty('customerId');
+      if (data.valid) {
+        expect(data).toHaveProperty('calculations');
       }
     });
   });
 
-  describe('Pass-Through Mode', () => {
-    test('should return raw backend response when Accept: application/vnd.raw', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
-        headers: { 'Accept': 'application/vnd.raw' }
-      });
-      
+  describe('Customer Mock', () => {
+    test('should return customer details', async () => {
+      const response = await fetch(`${CUSTOMER_MOCK_URL}/customers/CUST789`);
+
       expect(response.ok).toBeTruthy();
       expect(response.status).toBe(200);
-      
-      // Content-Type should be from backend (typically application/json)
-      const contentType = response.headers.get('content-type');
-      expect(contentType).toBeDefined();
-      
-      const data = await response.json();
-      expect(data).toHaveProperty('id', 'TP123456');
-      expect(data).toHaveProperty('_links');
-      
-      // URLs should NOT be rewritten in pass-through mode
-      if (data._links.self) {
-        const selfHref = typeof data._links.self === 'string' 
-          ? data._links.self 
-          : data._links.self.href;
-        
-        // Links should be path-only WITHOUT /dev/ prefix (raw backend format)
-        expect(selfHref).not.toMatch(/^\/dev\//);
-        expect(selfHref).toMatch(/^\/taxpayers\//);
-      }
-    });
 
-    test('should ignore include parameter in pass-through mode', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456?include=taxReturns`, {
-        headers: { 'Accept': 'application/vnd.raw' }
-      });
-      
-      expect(response.ok).toBeTruthy();
-      expect(response.status).toBe(200);
-      
       const data = await response.json();
-      expect(data).toHaveProperty('id', 'TP123456');
-      expect(data._included).toBeUndefined();
-    });
 
-    test('should preserve backend Content-Type in pass-through mode', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers/TP123456`, {
-        headers: { 'Accept': 'application/vnd.raw' }
-      });
-      
-      expect(response.ok).toBeTruthy();
-      
-      // Content-Type should be from backend, not transformed
-      const contentType = response.headers.get('content-type');
-      expect(contentType).toBeDefined();
-      expect(contentType).not.toContain('vnd.domain');
+      expect(data).toHaveProperty('customerId');
+      expect(data).toHaveProperty('name');
+      expect(data).toHaveProperty('type');
     });
   });
 
-  describe('Content Negotiation with Collections', () => {
-    test('should support aggregated mode on collections', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns`);
-      
-      expect(response.ok).toBeTruthy();
-      expect(response.headers.get('content-type')).toContain('application/vnd.domain+json');
-      
+  describe('Tax Platform Mock', () => {
+    test('should store submission', async () => {
+      const response = await fetch(`${TAX_PLATFORM_MOCK_URL}/submissions/vpd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `test-${Date.now()}`,
+        },
+        body: JSON.stringify({
+          vpdApprovalNumber: 'VPD123456',
+          periodKey: '24A1',
+          customerId: 'CUST789',
+          submission: {},
+          calculations: {
+            totalDutyDue: { amount: 100, currency: 'GBP' },
+          },
+        }),
+      });
+
+      expect(response.status).toBe(201);
+
       const data = await response.json();
-      expect(data).toHaveProperty('items');
-      expect(data).toHaveProperty('_included');
+
+      expect(data).toHaveProperty('acknowledgementReference');
+      expect(data).toHaveProperty('storedAt');
     });
 
-    test('should support simple REST mode on collections', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers?include=taxReturns`, {
-        headers: { 'Accept': 'application/json' }
-      });
-      
+    test('should retrieve submission by acknowledgement', async () => {
+      const response = await fetch(
+        `${TAX_PLATFORM_MOCK_URL}/submissions/vpd/ACK-2026-01-26-000123`
+      );
+
       expect(response.ok).toBeTruthy();
-      expect(response.headers.get('content-type')).toContain('application/json');
-      expect(response.headers.get('content-type')).not.toContain('vnd.domain');
-      
+      expect(response.status).toBe(200);
+
       const data = await response.json();
-      expect(data).toHaveProperty('items');
-      expect(data._included).toBeUndefined();
+
+      expect(data).toHaveProperty('acknowledgementReference');
+      expect(data).toHaveProperty('vpdApprovalNumber');
+      expect(data).toHaveProperty('status');
     });
 
-    test('should support pass-through mode on collections', async () => {
-      const response = await fetch(`${GATEWAY_BASE_URL}/taxpayers`, {
-        headers: { 'Accept': 'application/vnd.raw' }
-      });
-      
+    test('should find submission by approval number and period', async () => {
+      const response = await fetch(
+        `${TAX_PLATFORM_MOCK_URL}/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1`
+      );
+
       expect(response.ok).toBeTruthy();
-      
+      expect(response.status).toBe(200);
+
       const data = await response.json();
-      expect(data).toHaveProperty('items');
-      expect(data._included).toBeUndefined();
-      
-      // URLs should NOT be rewritten
-      if (data.items.length > 0 && data.items[0]._links?.self) {
-        const selfHref = typeof data.items[0]._links.self === 'string' 
-          ? data.items[0]._links.self 
-          : data.items[0]._links.self.href;
-        
-        expect(selfHref).not.toMatch(/^\/dev\//);
-      }
+
+      expect(data).toHaveProperty('vpdApprovalNumber');
+      expect(data).toHaveProperty('periodKey');
     });
+  });
+});
+
+describe.skip('VPD Domain API - Submission Endpoint', () => {
+  // TODO: Implement when domain API is ready
+
+  test('should submit a VPD return', async () => {
+    const response = await fetch(`${DOMAIN_API_BASE_URL}/vpd/returns/submit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Correlation-Id': '550e8400-e29b-41d4-a716-446655440000',
+      },
+      body: JSON.stringify({
+        vpdApprovalNumber: 'VPD123456',
+        periodKey: '24A1',
+        submission: {
+          basicInformation: {
+            returnType: 'ORIGINAL',
+          },
+          dutyProducts: [],
+        },
+      }),
+    });
+
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(201);
+
+    const data = await response.json();
+
+    expect(data).toHaveProperty('acknowledgementReference');
+    expect(data).toHaveProperty('calculations');
+    expect(data).toHaveProperty('customer');
+  });
+
+  test('should validate submission before storing', async () => {
+    // Invalid submission should return validation errors
+    const response = await fetch(`${DOMAIN_API_BASE_URL}/vpd/returns/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vpdApprovalNumber: 'VPD999999', // Non-existent
+        periodKey: '24A1',
+        submission: {},
+      }),
+    });
+
+    // Should return validation error, not 500
+    expect(response.status).toBeLessThan(500);
+  });
+});
+
+describe.skip('VPD Domain API - Returns Endpoint', () => {
+  // TODO: Implement when domain API is ready
+
+  test('should retrieve return by acknowledgement', async () => {
+    const response = await fetch(
+      `${DOMAIN_API_BASE_URL}/vpd/returns/ACK-2026-01-26-000123`
+    );
+
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+
+    const data = await response.json();
+
+    expect(data).toHaveProperty('acknowledgementReference');
+    expect(data).toHaveProperty('submission');
+    expect(data).toHaveProperty('calculations');
+    expect(data).toHaveProperty('customer');
+    expect(data.customer).toHaveProperty('name');
+  });
+
+  test('should retrieve return by approval number and period', async () => {
+    const response = await fetch(
+      `${DOMAIN_API_BASE_URL}/vpd/returns?vpdApprovalNumber=VPD123456&periodKey=24A1`
+    );
+
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+
+    const data = await response.json();
+
+    expect(data).toHaveProperty('vpdApprovalNumber');
+    expect(data).toHaveProperty('customer');
+  });
+});
+
+describe.skip('VPD Domain API - Sparse Fieldsets', () => {
+  // TODO: Implement when domain API is ready
+
+  test('should support fields parameter to limit response fields', async () => {
+    const response = await fetch(
+      `${DOMAIN_API_BASE_URL}/vpd/returns/ACK-2026-01-26-000123?fields=acknowledgementReference,calculations.totalDutyDue`
+    );
+
+    expect(response.ok).toBeTruthy();
+    expect(response.status).toBe(200);
+
+    const data = await response.json();
+
+    // Only requested fields should be present
+    expect(data).toHaveProperty('acknowledgementReference');
+    expect(data).toHaveProperty('calculations');
+    expect(data.calculations).toHaveProperty('totalDutyDue');
+
+    // Non-requested fields should be absent
+    expect(data.submission).toBeUndefined();
+    expect(data.customer).toBeUndefined();
   });
 });

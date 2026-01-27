@@ -1,233 +1,241 @@
 /**
  * $ref Reference Resolution Validation Tests
- * 
- * Validates that all $ref references in OpenAPI specifications resolve correctly,
- * including cross-file references to shared components.
- * 
- * Validates: Requirements 8.1, 8.2
+ *
+ * Validates that all $ref references in OpenAPI specifications resolve correctly.
  */
 
 import { loadSpec, findRefs, validateRefs } from '../helpers/openapi-validator';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as yaml from 'js-yaml';
 
 describe('$ref Reference Resolution', () => {
-  describe('Taxpayer API', () => {
+  describe('Excise Duty System API', () => {
     let spec: any;
 
     beforeAll(() => {
-      spec = loadSpec('specs/taxpayer/taxpayer-api.yaml');
+      spec = loadSpec('specs/vaping-duty/mocks/excise-api.yaml');
     });
 
     it('should have all $ref references resolvable', () => {
       const result = validateRefs(spec);
-      
+
       if (!result.valid) {
         console.log('Reference resolution errors:', result.errors);
       }
-      
+
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
 
-    it('should resolve shared component references', () => {
+    it('should have internal component references', () => {
       const refs = findRefs(spec);
-      const sharedRefs = Array.from(refs).filter(ref => 
-        ref.includes('shared-components.yaml')
-      );
-      
-      expect(sharedRefs.length).toBeGreaterThan(0);
-      
-      // Load shared components and verify each reference exists
-      const sharedSpec = loadSpec('specs/shared/shared-components.yaml');
-      
-      for (const ref of sharedRefs) {
-        const [file, pointer] = ref.split('#');
-        expect(pointer).toBeDefined();
-        
-        // Navigate the pointer path
-        const pathParts = pointer.substring(1).split('/');
-        let current = sharedSpec;
-        
-        for (const part of pathParts) {
-          expect(current).toHaveProperty(part);
-          current = current[part];
-        }
-      }
+      const internalRefs = Array.from(refs).filter((ref) => ref.startsWith('#/'));
+
+      expect(internalRefs.length).toBeGreaterThan(0);
     });
 
-    it('should reference Address schema from shared components', () => {
+    it('should reference Registration schema', () => {
       const refs = findRefs(spec);
-      const addressRefs = Array.from(refs).filter(ref => 
-        ref.includes('Address')
-      );
-      
+      const registrationRefs = Array.from(refs).filter((ref) => ref.includes('Registration'));
+
+      expect(registrationRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference ValidationResponse schema', () => {
+      const refs = findRefs(spec);
+      const validationRefs = Array.from(refs).filter((ref) => ref.includes('ValidationResponse'));
+
+      expect(validationRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference Money schema', () => {
+      const refs = findRefs(spec);
+      const moneyRefs = Array.from(refs).filter((ref) => ref.includes('Money'));
+
+      expect(moneyRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference Error schema', () => {
+      const refs = findRefs(spec);
+      const errorRefs = Array.from(refs).filter((ref) => ref.includes('Error'));
+
+      expect(errorRefs.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Customer Master Data API', () => {
+    let spec: any;
+
+    beforeAll(() => {
+      spec = loadSpec('specs/vaping-duty/mocks/customer-api.yaml');
+    });
+
+    it('should have all $ref references resolvable', () => {
+      const result = validateRefs(spec);
+
+      if (!result.valid) {
+        console.log('Reference resolution errors:', result.errors);
+      }
+
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should have internal component references', () => {
+      const refs = findRefs(spec);
+      const internalRefs = Array.from(refs).filter((ref) => ref.startsWith('#/'));
+
+      expect(internalRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference Customer schema', () => {
+      const refs = findRefs(spec);
+      const customerRefs = Array.from(refs).filter((ref) => ref.includes('Customer'));
+
+      expect(customerRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference Address schema', () => {
+      const refs = findRefs(spec);
+      const addressRefs = Array.from(refs).filter((ref) => ref.includes('Address'));
+
       expect(addressRefs.length).toBeGreaterThan(0);
     });
-
-    it('should reference Links schema from shared components', () => {
-      const refs = findRefs(spec);
-      const linksRefs = Array.from(refs).filter(ref => 
-        ref.includes('Links')
-      );
-      
-      expect(linksRefs.length).toBeGreaterThan(0);
-    });
   });
 
-  describe('Income Tax API', () => {
+  describe('Tax Platform Submissions API', () => {
     let spec: any;
 
     beforeAll(() => {
-      spec = loadSpec('specs/income-tax/income-tax-api.yaml');
+      spec = loadSpec('specs/vaping-duty/mocks/tax-platform-api.yaml');
     });
 
     it('should have all $ref references resolvable', () => {
       const result = validateRefs(spec);
-      
+
       if (!result.valid) {
         console.log('Reference resolution errors:', result.errors);
       }
-      
+
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
 
-    it('should resolve shared component references', () => {
+    it('should have internal component references', () => {
       const refs = findRefs(spec);
-      const sharedRefs = Array.from(refs).filter(ref => 
-        ref.includes('shared-components.yaml')
-      );
-      
-      expect(sharedRefs.length).toBeGreaterThan(0);
-      
-      // Load shared components and verify each reference exists
-      const sharedSpec = loadSpec('specs/shared/shared-components.yaml');
-      
-      for (const ref of sharedRefs) {
-        const [file, pointer] = ref.split('#');
-        expect(pointer).toBeDefined();
-        
-        // Navigate the pointer path
-        const pathParts = pointer.substring(1).split('/');
-        let current = sharedSpec;
-        
-        for (const part of pathParts) {
-          expect(current).toHaveProperty(part);
-          current = current[part];
-        }
-      }
+      const internalRefs = Array.from(refs).filter((ref) => ref.startsWith('#/'));
+
+      expect(internalRefs.length).toBeGreaterThan(0);
     });
 
-    it('should reference Money schema from shared components', () => {
+    it('should reference StoreRequest schema', () => {
       const refs = findRefs(spec);
-      const moneyRefs = Array.from(refs).filter(ref => 
-        ref.includes('Money')
+      const storeRequestRefs = Array.from(refs).filter((ref) => ref.includes('StoreRequest'));
+
+      expect(storeRequestRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference StoreResponse schema', () => {
+      const refs = findRefs(spec);
+      const storeResponseRefs = Array.from(refs).filter((ref) => ref.includes('StoreResponse'));
+
+      expect(storeResponseRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference StoredSubmission schema', () => {
+      const refs = findRefs(spec);
+      const storedSubmissionRefs = Array.from(refs).filter((ref) =>
+        ref.includes('StoredSubmission')
       );
-      
+
+      expect(storedSubmissionRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference Money schema', () => {
+      const refs = findRefs(spec);
+      const moneyRefs = Array.from(refs).filter((ref) => ref.includes('Money'));
+
       expect(moneyRefs.length).toBeGreaterThan(0);
     });
 
-    it('should reference DateRange schema from shared components', () => {
+    it('should reference Warning schema', () => {
       const refs = findRefs(spec);
-      const dateRangeRefs = Array.from(refs).filter(ref => 
-        ref.includes('DateRange')
-      );
-      
-      expect(dateRangeRefs.length).toBeGreaterThan(0);
+      const warningRefs = Array.from(refs).filter((ref) => ref.includes('Warning'));
+
+      expect(warningRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference parameter components', () => {
+      const refs = findRefs(spec);
+      const parameterRefs = Array.from(refs).filter((ref) => ref.includes('parameters/'));
+
+      expect(parameterRefs.length).toBeGreaterThan(0);
+    });
+
+    it('should reference header components', () => {
+      const refs = findRefs(spec);
+      const headerRefs = Array.from(refs).filter((ref) => ref.includes('headers/'));
+
+      expect(headerRefs.length).toBeGreaterThan(0);
     });
   });
 
-  describe('Payment API', () => {
+  describe('VPD Domain API - Platform (when exists)', () => {
     let spec: any;
 
     beforeAll(() => {
-      spec = loadSpec('specs/payment/payment-api.yaml');
+      try {
+        spec = loadSpec('specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml');
+      } catch {
+        spec = null;
+      }
     });
 
-    it('should have all $ref references resolvable', () => {
+    it('should have all $ref references resolvable when it exists', () => {
+      if (!spec) return;
+
       const result = validateRefs(spec);
-      
+
       if (!result.valid) {
         console.log('Reference resolution errors:', result.errors);
       }
-      
+
       expect(result.valid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it('should resolve shared component references', () => {
-      const refs = findRefs(spec);
-      const sharedRefs = Array.from(refs).filter(ref => 
-        ref.includes('shared-components.yaml')
-      );
-      
-      expect(sharedRefs.length).toBeGreaterThan(0);
-      
-      // Load shared components and verify each reference exists
-      const sharedSpec = loadSpec('specs/shared/shared-components.yaml');
-      
-      for (const ref of sharedRefs) {
-        const [file, pointer] = ref.split('#');
-        expect(pointer).toBeDefined();
-        
-        // Navigate the pointer path
-        const pathParts = pointer.substring(1).split('/');
-        let current = sharedSpec;
-        
-        for (const part of pathParts) {
-          expect(current).toHaveProperty(part);
-          current = current[part];
-        }
-      }
-    });
-
-    it('should reference Money schema from shared components', () => {
-      const refs = findRefs(spec);
-      const moneyRefs = Array.from(refs).filter(ref => 
-        ref.includes('Money')
-      );
-      
-      expect(moneyRefs.length).toBeGreaterThan(0);
     });
   });
 
-  describe('Cross-file reference integrity', () => {
-    it('should have consistent shared component versions across all APIs', () => {
-      const taxpayerSpec = loadSpec('specs/taxpayer/taxpayer-api.yaml');
-      const incomeTaxSpec = loadSpec('specs/income-tax/income-tax-api.yaml');
-      const paymentSpec = loadSpec('specs/payment/payment-api.yaml');
-      
-      // All APIs should reference the same shared components file
-      const taxpayerRefs = findRefs(taxpayerSpec);
-      const incomeTaxRefs = findRefs(incomeTaxSpec);
-      const paymentRefs = findRefs(paymentSpec);
-      
-      const taxpayerSharedRefs = Array.from(taxpayerRefs).filter(ref => 
-        ref.includes('shared-components.yaml')
-      );
-      const incomeTaxSharedRefs = Array.from(incomeTaxRefs).filter(ref => 
-        ref.includes('shared-components.yaml')
-      );
-      const paymentSharedRefs = Array.from(paymentRefs).filter(ref => 
-        ref.includes('shared-components.yaml')
-      );
-      
-      // All should reference shared components
-      expect(taxpayerSharedRefs.length).toBeGreaterThan(0);
-      expect(incomeTaxSharedRefs.length).toBeGreaterThan(0);
-      expect(paymentSharedRefs.length).toBeGreaterThan(0);
-      
-      // All should use the same relative path
-      const getFilePath = (ref: string) => ref.split('#')[0];
-      const taxpayerPath = getFilePath(taxpayerSharedRefs[0]);
-      const incomeTaxPath = getFilePath(incomeTaxSharedRefs[0]);
-      const paymentPath = getFilePath(paymentSharedRefs[0]);
-      
-      expect(taxpayerPath).toContain('shared-components.yaml');
-      expect(incomeTaxPath).toContain('shared-components.yaml');
-      expect(paymentPath).toContain('shared-components.yaml');
+  describe('Cross-spec reference consistency', () => {
+    it('should use consistent schema naming patterns', () => {
+      const exciseSpec = loadSpec('specs/vaping-duty/mocks/excise-api.yaml');
+      const customerSpec = loadSpec('specs/vaping-duty/mocks/customer-api.yaml');
+      const taxPlatformSpec = loadSpec('specs/vaping-duty/mocks/tax-platform-api.yaml');
+
+      // All specs should have Error schema
+      expect(exciseSpec.components.schemas.Error).toBeDefined();
+      expect(customerSpec.components.schemas.Error).toBeDefined();
+      expect(taxPlatformSpec.components.schemas.Error).toBeDefined();
+
+      // Error schemas should have consistent structure
+      for (const spec of [exciseSpec, customerSpec, taxPlatformSpec]) {
+        const errorSchema = spec.components.schemas.Error;
+        expect(errorSchema.required).toContain('code');
+        expect(errorSchema.required).toContain('message');
+        expect(errorSchema.properties.code).toBeDefined();
+        expect(errorSchema.properties.message).toBeDefined();
+      }
+    });
+
+    it('should have consistent Money schema where used', () => {
+      const exciseSpec = loadSpec('specs/vaping-duty/mocks/excise-api.yaml');
+      const taxPlatformSpec = loadSpec('specs/vaping-duty/mocks/tax-platform-api.yaml');
+
+      // Both specs that use Money should have consistent structure
+      for (const spec of [exciseSpec, taxPlatformSpec]) {
+        const moneySchema = spec.components.schemas.Money;
+        expect(moneySchema).toBeDefined();
+        expect(moneySchema.required).toContain('amount');
+        expect(moneySchema.required).toContain('currency');
+        expect(moneySchema.properties.amount.type).toBe('number');
+        expect(moneySchema.properties.currency.type).toBe('string');
+      }
     });
   });
 });
