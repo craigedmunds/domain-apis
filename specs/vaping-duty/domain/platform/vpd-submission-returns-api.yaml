@@ -23,7 +23,6 @@ info:
     sparseFieldsets: true
     rateLimiting: true
     correlationId: true
-    etags: true
 servers:
 - url: http://localhost:8081
   description: Local Development (Docker via Camel JBang)
@@ -47,7 +46,7 @@ paths:
         2. Parallel: tax-platform stores + customer enriches response
 
 
-        Returns acknowledgement reference and ETag for optimistic locking.
+        Returns acknowledgement reference for tracking.
 
         '
       operationId: submitReturn
@@ -69,8 +68,6 @@ paths:
           headers:
             X-Correlation-Id:
               $ref: ../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Response
-            ETag:
-              $ref: ../fragments/headers/v1/oas.yaml#/ETag
           content:
             application/json:
               schema:
@@ -148,8 +145,6 @@ paths:
           headers:
             X-Correlation-Id:
               $ref: ../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Response
-            ETag:
-              $ref: ../fragments/headers/v1/oas.yaml#/ETag
           content:
             application/json:
               schema:

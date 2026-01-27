@@ -117,7 +117,6 @@ info:
     sparseFieldsets: true
     rateLimiting: true
     correlationId: true
-    etags: true
 ```
 
 ## Directory Structure

@@ -83,11 +83,6 @@
         - toD:
             uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
 
-        # Store ETag from backend response
-        - setProperty:
-            name: etag
-            simple: "${header.ETag}"
-
         # Set response headers
         - setHeader:
             name: Content-Type
@@ -95,9 +90,6 @@
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
-        - setHeader:
-            name: ETag
-            simple: "${exchangeProperty.etag}"
 
 # Route: Health check
 - route:

@@ -298,13 +298,6 @@ describe('VPD Backend API Integration Tests', () => {
       });
 
       expect(response.status).toBe(201);
-
-      // Check for ETag header in response
-      const etag = response.headers.get('ETag');
-      // ETag may or may not be present depending on Prism configuration
-      if (etag) {
-        expect(etag).toBeTruthy();
-      }
     });
   });
 });

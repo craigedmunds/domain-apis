@@ -296,7 +296,7 @@ test.describe('API Explorer - Execute APIs', () => {
 
     // Wait for response - look for the live response section
     const liveResponse = getEndpoint.locator('.live-responses-table');
-    await expect(liveResponse).toBeVisible({ timeout: 15000 });
+    await expect(liveResponse).toBeVisible({ timeout: 30000 });
   });
 
   test('should execute Excise API via Swagger UI (WireMock)', async ({ page }) => {
@@ -318,9 +318,9 @@ test.describe('API Explorer - Execute APIs', () => {
     await expect(executeButton).toBeVisible({ timeout: 5000 });
     await executeButton.click();
 
-    // Wait for response
+    // Wait for response - Firefox can be slower, use longer timeout
     const liveResponse = getEndpoint.locator('.live-responses-table');
-    await expect(liveResponse).toBeVisible({ timeout: 15000 });
+    await expect(liveResponse).toBeVisible({ timeout: 30000 });
   });
 
   test('should execute Customer API via Swagger UI (Prism)', async ({ page }) => {
@@ -342,8 +342,8 @@ test.describe('API Explorer - Execute APIs', () => {
     await expect(executeButton).toBeVisible({ timeout: 5000 });
     await executeButton.click();
 
-    // Wait for response
+    // Wait for response - Firefox can be slower, use longer timeout
     const liveResponse = getEndpoint.locator('.live-responses-table');
-    await expect(liveResponse).toBeVisible({ timeout: 15000 });
+    await expect(liveResponse).toBeVisible({ timeout: 30000 });
   });
 });

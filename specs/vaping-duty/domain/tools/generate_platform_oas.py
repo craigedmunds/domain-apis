@@ -244,8 +244,7 @@ class PlatformOASGenerator:
         platform_oas['info']['x-platform-features'] = {
             'sparseFieldsets': True,
             'rateLimiting': True,
-            'correlationId': True,
-            'etags': True
+            'correlationId': True
         }
         platform_oas['info']['description'] = (
             platform_oas['info'].get('description', '') +

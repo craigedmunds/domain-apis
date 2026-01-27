@@ -7,7 +7,7 @@ Producer and platform OAS specifications for the VPD Submission Returns Domain A
 ```
 domain/
 ├── fragments/                            # Centrally-versioned YAML fragments
-│   ├── headers/v1/oas.yaml               # Common headers (X-Correlation-Id, ETag, etc.)
+│   ├── headers/v1/oas.yaml               # Common headers (X-Correlation-Id, etc.)
 │   ├── schemas/v1/oas.yaml               # Common schemas (Money, Address, Error, etc.)
 │   ├── responses/v1/oas.yaml             # Common responses (400, 404, 500, etc.)
 │   └── parameters/v1/oas.yaml            # Common parameters (pagination, sorting)
@@ -43,8 +43,8 @@ paths:
       responses:
         '200':
           headers:
-            ETag:
-              $ref: '../fragments/headers/v1/oas.yaml#/ETag'
+            X-Correlation-Id:
+              $ref: '../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Response'
           content:
             application/json:
               schema:
@@ -77,7 +77,6 @@ paths:
 Request and response headers:
 - `X-Correlation-Id` - Request tracing
 - `X-Idempotency-Key` - Safe retries
-- `ETag` - Optimistic locking
 - `X-RateLimit-*` - Rate limiting info
 
 ### schemas/v1/oas.yaml
@@ -162,7 +161,7 @@ GET /duty/vpd/submission-returns/v1?acknowledgementReference=ACK-123&fields[:sub
 
 2. **Use versioned common fragments:**
    ```yaml
-   $ref: '../fragments/headers/v1/oas.yaml#/ETag'
+   $ref: '../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Response'
    ```
 
 3. **Validate:**

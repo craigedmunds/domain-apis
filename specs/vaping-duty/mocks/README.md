@@ -26,7 +26,7 @@ OpenAPI specifications for the three backend systems that the VPD Submission Ret
 
 ### tax-platform-api.yaml
 **System:** Tax Platform Submissions
-**System of Record For:** Submission records, acknowledgement references, ETags
+**System of Record For:** Submission records, acknowledgement references
 
 **Key Endpoints:**
 - `POST /submissions/vpd` - Stores submission idempotently (X-Idempotency-Key)

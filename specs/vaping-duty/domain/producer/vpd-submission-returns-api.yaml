@@ -30,7 +30,7 @@ paths:
         1. excise: Validates submission and calculates duty/VAT
         2. Parallel: tax-platform stores + customer enriches response
 
-        Returns acknowledgement reference and ETag for optimistic locking.
+        Returns acknowledgement reference for tracking.
       operationId: submitReturn
       parameters:
         - $ref: '../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Header'
@@ -50,8 +50,6 @@ paths:
           headers:
             X-Correlation-Id:
               $ref: '../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Response'
-            ETag:
-              $ref: '../fragments/headers/v1/oas.yaml#/ETag'
           content:
             application/json:
               schema:
@@ -100,8 +98,6 @@ paths:
           headers:
             X-Correlation-Id:
               $ref: '../fragments/headers/v1/oas.yaml#/X-Correlation-Id-Response'
-            ETag:
-              $ref: '../fragments/headers/v1/oas.yaml#/ETag'
           content:
             application/json:
               schema:

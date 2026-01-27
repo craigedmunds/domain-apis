@@ -8,7 +8,6 @@ info:
     **System of Record For:**
     - VPD submission records
     - Acknowledgement references
-    - ETags for optimistic locking
     - Idempotency key tracking
 
 servers:
@@ -60,8 +59,6 @@ paths:
         '201':
           description: Submission stored successfully
           headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
             X-Correlation-Id:
               $ref: '#/components/headers/X-Correlation-Id'
           content:
@@ -110,8 +107,6 @@ paths:
         '200':
           description: Submission found
           headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
             X-Correlation-Id:
               $ref: '#/components/headers/X-Correlation-Id'
           content:
@@ -148,8 +143,6 @@ paths:
         '200':
           description: Submission found
           headers:
-            ETag:
-              $ref: '#/components/headers/ETag'
             X-Correlation-Id:
               $ref: '#/components/headers/X-Correlation-Id'
           content:
@@ -190,12 +183,6 @@ components:
         example: "550e8400-e29b-41d4-a716-446655440000"
 
   headers:
-    ETag:
-      description: Entity tag for optimistic locking
-      schema:
-        type: string
-        example: "W/3-6b1f"
-
     X-Correlation-Id:
       description: Correlation ID echoed from request
       schema:
