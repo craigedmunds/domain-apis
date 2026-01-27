@@ -40,20 +40,6 @@ X-Correlation-Id-Response:
     format: uuid
     example: "550e8400-e29b-41d4-a716-446655440000"
 
-ETag:
-  description: |
-    Entity tag for optimistic locking (RFC 7232).
-
-    Use in conditional requests:
-    - If-Match: Require ETag to match (for updates)
-    - If-None-Match: Require ETag to NOT match (for caching)
-
-    Format: W/"<version>-<hash>" (weak ETag)
-  schema:
-    type: string
-    pattern: '^W/"[\w-]+"$'
-    example: 'W/"3-6b1f"'
-
 Cache-Control:
   description: Cache control directives
   schema:

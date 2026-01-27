@@ -88,18 +88,6 @@ describe('VPD Domain API', () => {
       expect(response.headers.get('x-correlation-id')).toBe(correlationId);
     });
 
-    it('should return ETag header', async () => {
-      if (!apiAvailable) return;
-
-      const response = await fetch(
-        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
-      );
-
-      // Prism may randomly return 422, but ETag should still be present
-      expect([200, 422]).toContain(response.status);
-      expect(response.headers.get('etag')).toBeDefined();
-    });
-
     it('should include CORS headers', async () => {
       if (!apiAvailable) return;
 

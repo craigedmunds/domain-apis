@@ -61,7 +61,7 @@ static_resources:
                           - prefix: "*"
                         allow_methods: "GET, POST, PUT, DELETE, OPTIONS"
                         allow_headers: "content-type, x-correlation-id, x-idempotency-key, accept, traceparent, tracestate, x-envoy-fault-delay-request, x-envoy-fault-abort-request"
-                        expose_headers: "content-type, etag, x-correlation-id"
+                        expose_headers: "content-type, x-correlation-id"
                         max_age: "86400"
                       routes:
                         - match:

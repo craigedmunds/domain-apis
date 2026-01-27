@@ -146,20 +146,6 @@ describe('VPD Backend Orchestration Patterns', () => {
     });
   });
 
-  describe('ETag Handling Pattern', () => {
-    test('should return ETag in submission response', async () => {
-      const response = await fetch(
-        `${TAX_PLATFORM_MOCK_URL}/submissions/vpd/ACK-2026-01-26-000123`
-      );
-
-      expect(response.ok).toBeTruthy();
-
-      // ETag header may be present
-      const etag = response.headers.get('ETag');
-      // Prism may or may not include ETag based on spec definition
-      // This is informational - the domain API will handle ETags properly
-    });
-  });
 });
 
 describe('VPD Error Handling Patterns', () => {
