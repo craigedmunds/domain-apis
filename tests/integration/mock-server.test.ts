@@ -22,8 +22,9 @@ describe('Mock Server Unit Tests', () => {
   // Track active servers for cleanup
   let activeServers: MockServerInstance[] = [];
 
-  afterEach(async () => {
-    // Clean up any active servers after each test
+  // Final cleanup - each nested describe manages its own server lifecycle
+  afterAll(async () => {
+    // Clean up any remaining servers as a safety net
     activeServers.forEach(stopMockServer);
     activeServers = [];
     // Give processes time to clean up
@@ -38,8 +39,8 @@ describe('Mock Server Unit Tests', () => {
 
         expect(server).toBeDefined();
         expect(server.name).toBe('Excise Duty System API');
-        expect(server.port).toBe(4010);
-        expect(server.baseUrl).toBe('http://localhost:4010');
+        expect(server.port).toBe(5010);
+        expect(server.baseUrl).toBe('http://localhost:5010');
 
         const isHealthy = await healthCheck(server);
         expect(isHealthy).toBe(true);
@@ -61,8 +62,8 @@ describe('Mock Server Unit Tests', () => {
 
         expect(server).toBeDefined();
         expect(server.name).toBe('Customer Master Data API');
-        expect(server.port).toBe(4011);
-        expect(server.baseUrl).toBe('http://localhost:4011');
+        expect(server.port).toBe(5011);
+        expect(server.baseUrl).toBe('http://localhost:5011');
 
         const isHealthy = await healthCheck(server);
         expect(isHealthy).toBe(true);
@@ -84,8 +85,8 @@ describe('Mock Server Unit Tests', () => {
 
         expect(server).toBeDefined();
         expect(server.name).toBe('Tax Platform Submissions API');
-        expect(server.port).toBe(4012);
-        expect(server.baseUrl).toBe('http://localhost:4012');
+        expect(server.port).toBe(5012);
+        expect(server.baseUrl).toBe('http://localhost:5012');
 
         const isHealthy = await healthCheck(server);
         expect(isHealthy).toBe(true);
