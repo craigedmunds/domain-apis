@@ -4,6 +4,7 @@
 # - Request/response logging
 # - Trace context propagation (W3C Trace Context via OTLP)
 # - CORS support
+# - Fault injection (5% error rate, 5% delay rate)
 #
 # Upstream: customer-mock-internal (Prism) on port 4010
 
@@ -73,6 +74,19 @@ static_resources:
                   - name: envoy.filters.http.cors
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  - name: envoy.filters.http.fault
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+                      abort:
+                        http_status: 503
+                        percentage:
+                          numerator: 5
+                          denominator: HUNDRED
+                      delay:
+                        fixed_delay: 1s
+                        percentage:
+                          numerator: 5
+                          denominator: HUNDRED
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
