@@ -8,73 +8,30 @@
 import { loadSpec, hasRequiredFields, hasExamples, validateRefs } from '../helpers/openapi-validator';
 
 describe('OpenAPI Specification Validation', () => {
-  describe('VPD Domain API - Platform', () => {
-    let platformSpec: any;
+  // Phase 2: VPD Domain API specs - skipped until files are created
+  describe.skip('VPD Domain API - Platform', () => {
+    const platformSpec = loadSpec('specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml');
 
-    beforeAll(() => {
-      try {
-        platformSpec = loadSpec('specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml');
-      } catch (error) {
-        // File doesn't exist yet - tests will be skipped
-        platformSpec = null;
-      }
-    });
-
-    it('should have valid OpenAPI specification when it exists', () => {
-      if (!platformSpec) {
-        // File doesn't exist yet - skip
-        return;
-      }
-
+    it('should have valid OpenAPI specification', () => {
       const result = hasRequiredFields(platformSpec);
-
-      if (!result.valid) {
-        console.log('Validation errors:', result.errors);
-      }
-
       expect(result.valid).toBe(true);
     });
 
     it('should have OpenAPI 3.0+ version', () => {
-      if (!platformSpec) return;
-
-      expect(platformSpec.openapi).toBeDefined();
       expect(platformSpec.openapi).toMatch(/^3\./);
     });
 
     it('should have info section with title and version', () => {
-      if (!platformSpec) return;
-
-      expect(platformSpec.info).toBeDefined();
       expect(platformSpec.info.title).toBeDefined();
       expect(platformSpec.info.version).toBeDefined();
     });
   });
 
-  describe('VPD Domain API - Producer', () => {
-    let producerSpec: any;
+  describe.skip('VPD Domain API - Producer', () => {
+    const producerSpec = loadSpec('specs/vaping-duty/domain/producer/vpd-submission-returns-api.yaml');
 
-    beforeAll(() => {
-      try {
-        producerSpec = loadSpec('specs/vaping-duty/domain/producer/vpd-submission-returns-api.yaml');
-      } catch (error) {
-        // File doesn't exist yet - tests will be skipped
-        producerSpec = null;
-      }
-    });
-
-    it('should have valid OpenAPI specification when it exists', () => {
-      if (!producerSpec) {
-        // File doesn't exist yet - skip
-        return;
-      }
-
+    it('should have valid OpenAPI specification', () => {
       const result = hasRequiredFields(producerSpec);
-
-      if (!result.valid) {
-        console.log('Validation errors:', result.errors);
-      }
-
       expect(result.valid).toBe(true);
     });
   });

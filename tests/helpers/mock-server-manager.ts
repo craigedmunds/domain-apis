@@ -26,23 +26,29 @@ export interface MockServerInstance {
 /**
  * Default configurations for the VPD backend mock APIs
  */
+/**
+ * Port offset for unit tests to avoid conflicts with Docker compose
+ * Docker uses 4010-4012, unit tests use 5010-5012
+ */
+const UNIT_TEST_PORT_OFFSET = 1000;
+
 export const API_CONFIGS: Record<string, MockServerConfig> = {
   excise: {
     name: 'Excise Duty System API',
     specPath: 'specs/vaping-duty/mocks/excise-api.yaml',
-    port: 4010,
+    port: 4010 + UNIT_TEST_PORT_OFFSET,
     healthCheckPath: '/excise/vpd/registrations/VPD123456',
   },
   customer: {
     name: 'Customer Master Data API',
     specPath: 'specs/vaping-duty/mocks/customer-api.yaml',
-    port: 4011,
+    port: 4011 + UNIT_TEST_PORT_OFFSET,
     healthCheckPath: '/customers/CUST789',
   },
   'tax-platform': {
     name: 'Tax Platform Submissions API',
     specPath: 'specs/vaping-duty/mocks/tax-platform-api.yaml',
-    port: 4012,
+    port: 4012 + UNIT_TEST_PORT_OFFSET,
     healthCheckPath: '/submissions/vpd?vpdApprovalNumber=VPD123456&periodKey=24A1',
   },
 };

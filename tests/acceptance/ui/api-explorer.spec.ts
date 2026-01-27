@@ -153,6 +153,12 @@ test.describe('API Explorer', () => {
     // Wait for Swagger UI to fully load
     await page.waitForSelector('#swagger-ui', { timeout: 10000 });
     await page.waitForSelector('.information-container', { timeout: 30000 });
+
+    // Select excise mock API (has simple endpoints that don't require parameters)
+    const apiSelect = page.locator('#api-select');
+    await apiSelect.selectOption('excise');
+
+    // Wait for the new spec to load
     await page.waitForSelector('.opblock', { timeout: 10000 });
 
     // Find a GET endpoint
@@ -265,5 +271,79 @@ test.describe('API Explorer', () => {
     await expect(infoBanner).toContainText('How to use this explorer');
     await expect(infoBanner).toContainText('Try it out');
     await expect(infoBanner).toContainText('Execute');
+  });
+});
+
+test.describe('API Explorer - Execute APIs', () => {
+  test('should execute Domain API via Swagger UI', async ({ page }) => {
+    // Navigate directly to domain API
+    await page.goto('/explorer.html?api=domain-api');
+
+    // Wait for Swagger UI to fully load
+    await page.waitForSelector('#swagger-ui', { timeout: 10000 });
+    await page.waitForSelector('.information-container', { timeout: 30000 });
+    await page.waitForSelector('.opblock-get', { timeout: 10000 });
+
+    // Expand the GET endpoint
+    const getEndpoint = page.locator('.opblock-get').first();
+    await getEndpoint.locator('.opblock-summary').click();
+    await expect(getEndpoint.locator('.opblock-body')).toBeVisible({ timeout: 5000 });
+
+    // Swagger UI pre-fills parameters with examples - just click Execute
+    const executeButton = getEndpoint.locator('button.execute');
+    await expect(executeButton).toBeVisible({ timeout: 5000 });
+    await executeButton.click();
+
+    // Wait for response - look for the live response section
+    const liveResponse = getEndpoint.locator('.live-responses-table');
+    await expect(liveResponse).toBeVisible({ timeout: 15000 });
+  });
+
+  test('should execute Excise API via Swagger UI (WireMock)', async ({ page }) => {
+    // Navigate directly to excise API
+    await page.goto('/explorer.html?api=excise');
+
+    // Wait for Swagger UI to fully load
+    await page.waitForSelector('#swagger-ui', { timeout: 10000 });
+    await page.waitForSelector('.information-container', { timeout: 30000 });
+    await page.waitForSelector('.opblock-get', { timeout: 10000 });
+
+    // Expand the first GET endpoint
+    const getEndpoint = page.locator('.opblock-get').first();
+    await getEndpoint.locator('.opblock-summary').click();
+    await expect(getEndpoint.locator('.opblock-body')).toBeVisible({ timeout: 5000 });
+
+    // Swagger UI pre-fills path params with examples - click Execute
+    const executeButton = getEndpoint.locator('button.execute');
+    await expect(executeButton).toBeVisible({ timeout: 5000 });
+    await executeButton.click();
+
+    // Wait for response
+    const liveResponse = getEndpoint.locator('.live-responses-table');
+    await expect(liveResponse).toBeVisible({ timeout: 15000 });
+  });
+
+  test('should execute Customer API via Swagger UI (Prism)', async ({ page }) => {
+    // Navigate directly to customer API
+    await page.goto('/explorer.html?api=customer');
+
+    // Wait for Swagger UI to fully load
+    await page.waitForSelector('#swagger-ui', { timeout: 10000 });
+    await page.waitForSelector('.information-container', { timeout: 30000 });
+    await page.waitForSelector('.opblock-get', { timeout: 10000 });
+
+    // Expand the GET endpoint
+    const getEndpoint = page.locator('.opblock-get').first();
+    await getEndpoint.locator('.opblock-summary').click();
+    await expect(getEndpoint.locator('.opblock-body')).toBeVisible({ timeout: 5000 });
+
+    // Swagger UI pre-fills path params with examples - click Execute
+    const executeButton = getEndpoint.locator('button.execute');
+    await expect(executeButton).toBeVisible({ timeout: 5000 });
+    await executeButton.click();
+
+    // Wait for response
+    const liveResponse = getEndpoint.locator('.live-responses-table');
+    await expect(liveResponse).toBeVisible({ timeout: 15000 });
   });
 });

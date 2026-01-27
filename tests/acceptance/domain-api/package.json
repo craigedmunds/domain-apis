@@ -1,0 +1,23 @@
+{
+  "name": "vpd-domain-api-acceptance-tests",
+  "version": "1.0.0",
+  "description": "VPD Domain API acceptance tests",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "keywords": [
+    "acceptance-tests",
+    "api-testing",
+    "domain-api",
+    "vpd"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "vitest": "^1.0.0"
+  }
+}

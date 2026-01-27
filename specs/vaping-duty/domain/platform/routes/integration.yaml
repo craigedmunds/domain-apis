@@ -1,0 +1,112 @@
+# VPD Domain API - Camel YAML DSL Routes
+#
+# Phase 7a: Simple pass-through to validate JBang + Camel YAML DSL setup
+#
+# Demonstrates GET submission by acknowledgement reference pass-through.
+# Dependencies inferred automatically by apache/camel-jbang image.
+#
+# Fault Injection:
+#   Controlled via Envoy proxies. Pass these headers through to enable:
+#   - x-envoy-fault-delay-request: delay in ms (e.g., "500")
+#   - x-envoy-fault-abort-request: HTTP error status (e.g., "503")
+#   Envoy proxies are configured to apply faults when these headers are present.
+
+# camel-jbang dependency annotations (auto-resolved)
+# //DEPS org.apache.camel:camel-http
+# //DEPS org.apache.camel:camel-jackson
+# //DEPS org.apache.camel:camel-platform-http
+
+# REST configuration
+- restConfiguration:
+    component: platform-http
+    bindingMode: off
+    port: 8080
+
+# REST endpoints
+- rest:
+    path: /duty/vpd/submission-returns/v1
+    get:
+      - to: direct:getSubmission
+
+# Health endpoint
+- rest:
+    path: /health
+    get:
+      - to: direct:health
+
+# Route: Get submission by acknowledgement reference
+- route:
+    id: getSubmission
+    from:
+      uri: direct:getSubmission
+      steps:
+        # Store incoming headers and query params
+        - setProperty:
+            name: ackRef
+            simple: "${header.acknowledgementReference}"
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        # Store fault injection headers if present (pass-through to Envoy)
+        - setProperty:
+            name: faultDelay
+            simple: "${header.x-envoy-fault-delay-request}"
+        - setProperty:
+            name: faultAbort
+            simple: "${header.x-envoy-fault-abort-request}"
+
+        # Clear Camel HTTP headers before making outbound call
+        - removeHeaders:
+            pattern: "CamelHttp*"
+
+        # Set headers for backend call
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        # Pass through fault injection headers to Envoy proxy
+        - choice:
+            when:
+              - simple: "${exchangeProperty.faultDelay} != null"
+                steps:
+                  - setHeader:
+                      name: x-envoy-fault-delay-request
+                      simple: "${exchangeProperty.faultDelay}"
+        - choice:
+            when:
+              - simple: "${exchangeProperty.faultAbort} != null"
+                steps:
+                  - setHeader:
+                      name: x-envoy-fault-abort-request
+                      simple: "${exchangeProperty.faultAbort}"
+
+        # Call tax-platform backend via Envoy proxy
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
+
+        # Store ETag from backend response
+        - setProperty:
+            name: etag
+            simple: "${header.ETag}"
+
+        # Set response headers
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setHeader:
+            name: ETag
+            simple: "${exchangeProperty.etag}"
+
+# Route: Health check
+- route:
+    id: health
+    from:
+      uri: direct:health
+      steps:
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setBody:
+            constant: '{"status": "UP"}'

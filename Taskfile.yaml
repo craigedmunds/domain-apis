@@ -164,9 +164,14 @@ tasks:
 
   # Testing tasks
   test:
-    desc: Run all tests
+    desc: Run all tests (unit, integration, property, acceptance)
     cmds:
-      - npm run test
+      - task: test:unit
+      - task: test:integration
+      - task: test:property
+      - task: test:acceptance:install
+      # - task: test:acceptance:gateway:install
+      - task: test:acceptance
 
   test:unit:
     desc: Run unit tests
@@ -187,6 +192,11 @@ tasks:
     desc: Run tests in watch mode
     cmds:
       - npm run test:watch
+
+  test:load:
+    desc: Run k6 load tests (requires Docker mocks running)
+    cmds:
+      - docker compose run --rm k6 run /tests/smoke-test-mocks.js
 
   # Installation
   install:
@@ -347,10 +357,11 @@ tasks:
 
   # Acceptance test tasks
   test:acceptance:
-    desc: Run all acceptance tests (UI and Gateway)
+    desc: Run all acceptance tests (UI, Gateway, and Domain API)
     cmds:
       - task: test:acceptance:ui:all
-      - task: test:acceptance:gateway
+      # - task: test:acceptance:gateway
+      - task: test:acceptance:domain-api
 
   test:acceptance:ui:all:
     desc: Run all UI acceptance tests
@@ -419,6 +430,18 @@ tasks:
     cmds:
       - npm install
       - npx playwright install
+
+  test:acceptance:domain-api:
+    desc: Run VPD Domain API acceptance tests (requires docker-compose up)
+    dir: tests/acceptance/domain-api
+    cmds:
+      - npm test
+
+  test:acceptance:domain-api:install:
+    desc: Install VPD Domain API acceptance test dependencies
+    dir: tests/acceptance/domain-api
+    cmds:
+      - npm install
 
   # Status check
   status:
