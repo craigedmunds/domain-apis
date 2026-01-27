@@ -27,19 +27,23 @@ services:
   domain-api-internal:
     image: apache/camel-jbang:4.16.0
     container_name: vpd-domain-api-internal
-    command: ["run", "/routes/integration.yaml"]
+    command: >
+      run /routes/integration.yaml
+      --dep=org.apache.camel:camel-jacksonxml
     volumes:
       - ./specs/vaping-duty/domain/platform/routes:/routes:ro
     networks:
       - domain-api-network
     depends_on:
+      - excise-proxy
+      - customer-proxy
       - tax-platform-proxy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 60s
+      start_period: 90s
 
   # =============================================================================
   # Domain API Proxy (Envoy) - CORS, logging, tracing

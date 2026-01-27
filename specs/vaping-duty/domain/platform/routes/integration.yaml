@@ -1,53 +1,61 @@
 # VPD Domain API - Camel YAML DSL Routes
 #
-# Phase 7a: Simple pass-through to validate JBang + Camel YAML DSL setup
+# Phase 7b: Full Orchestration with XML transformation and validation gates
 #
-# Demonstrates GET submission by acknowledgement reference pass-through.
-# Dependencies inferred automatically by apache/camel-jbang image.
+# Orchestration Flows:
+#   1. GET by acknowledgementReference: tax-platform → excise (registration) → excise (period) → customer
+#   2. GET by vpdApprovalNumber+periodKey: excise validation → tax-platform → customer
+#   3. POST submission: excise validate-and-calculate → tax-platform store → customer enrich
+#
+# Content Types:
+#   - excise: Returns XML (legacy system) - transformed to JSON
+#   - customer: Returns JSON
+#   - tax-platform: Returns JSON
 #
 # Fault Injection:
 #   Controlled via Envoy proxies. Pass these headers through to enable:
 #   - x-envoy-fault-delay-request: delay in ms (e.g., "500")
 #   - x-envoy-fault-abort-request: HTTP error status (e.g., "503")
-#   Envoy proxies are configured to apply faults when these headers are present.
 
-# camel-jbang dependency annotations (auto-resolved)
-# //DEPS org.apache.camel:camel-http
-# //DEPS org.apache.camel:camel-jackson
-# //DEPS org.apache.camel:camel-platform-http
+# =============================================================================
+# REST Configuration
+# =============================================================================
 
-# REST configuration
 - restConfiguration:
     component: platform-http
     bindingMode: off
     port: 8080
 
-# REST endpoints
+# =============================================================================
+# REST Endpoints
+# =============================================================================
+
 - rest:
     path: /duty/vpd/submission-returns/v1
     get:
-      - to: direct:getSubmission
+      - to: direct:routeGetSubmission
+    post:
+      - to: direct:postSubmission
 
-# Health endpoint
 - rest:
     path: /health
     get:
       - to: direct:health
 
-# Route: Get submission by acknowledgement reference
+# =============================================================================
+# Route: GET Submission Router
+# Determines which flow based on query parameters
+# =============================================================================
+
 - route:
-    id: getSubmission
+    id: routeGetSubmission
     from:
-      uri: direct:getSubmission
+      uri: direct:routeGetSubmission
       steps:
-        # Store incoming headers and query params
-        - setProperty:
-            name: ackRef
-            simple: "${header.acknowledgementReference}"
+        # Store common properties
         - setProperty:
             name: correlationId
             simple: "${header.X-Correlation-Id}"
-        # Store fault injection headers if present (pass-through to Envoy)
         - setProperty:
             name: faultDelay
             simple: "${header.x-envoy-fault-delay-request}"
@@ -55,35 +63,361 @@
             name: faultAbort
             simple: "${header.x-envoy-fault-abort-request}"
 
-        # Clear Camel HTTP headers before making outbound call
+        # Route based on query parameters
+        - choice:
+            when:
+              - simple: "${header.acknowledgementReference} != null && ${header.acknowledgementReference} != ''"
+                steps:
+                  - setProperty:
+                      name: ackRef
+                      simple: "${header.acknowledgementReference}"
+                  - to: direct:getByAcknowledgement
+            when:
+              - simple: "${header.vpdApprovalNumber} != null && ${header.periodKey} != null"
+                steps:
+                  - setProperty:
+                      name: vpdApprovalNumber
+                      simple: "${header.vpdApprovalNumber}"
+                  - setProperty:
+                      name: periodKey
+                      simple: "${header.periodKey}"
+                  - to: direct:getByApprovalPeriod
+            otherwise:
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 400
+                - setBody:
+                    constant: '{"code": "BAD_REQUEST", "message": "Either acknowledgementReference OR (vpdApprovalNumber AND periodKey) must be provided"}'
+                - setHeader:
+                    name: Content-Type
+                    constant: "application/json"
+
+# =============================================================================
+# Route: GET by Acknowledgement Reference
+# Sequential: tax-platform → excise (registration) → excise (period) → customer
+# =============================================================================
+
+- route:
+    id: getByAcknowledgement
+    from:
+      uri: direct:getByAcknowledgement
+      steps:
+        # 1. Get submission from tax-platform (JSON)
+        - to: direct:prepareBackendCall
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
+        - setProperty:
+            name: submissionRaw
+            simple: "${body}"
+        - unmarshal:
+            json:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: submission
+            simple: "${body}"
+        - setProperty:
+            name: vpdApprovalNumber
+            simple: "${body[vpdApprovalNumber]}"
+        - setProperty:
+            name: periodKey
+            simple: "${body[periodKey]}"
+        - setProperty:
+            name: customerId
+            simple: "${body[customerId]}"
+
+        # 2. Get registration from excise (XML → JSON)
+        - to: direct:prepareBackendCall
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}?bridgeEndpoint=true"
+        - unmarshal:
+            jacksonXml:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: registration
+            simple: "${body}"
+        # Get customerId from registration if not in submission
+        - choice:
+            when:
+              - simple: "${exchangeProperty.customerId} == null || ${exchangeProperty.customerId} == ''"
+                steps:
+                  - setProperty:
+                      name: customerId
+                      simple: "${body[customerId]}"
+
+        # 3. Get period from excise (XML → JSON)
+        - to: direct:prepareBackendCall
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true"
+        - unmarshal:
+            jacksonXml:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: period
+            simple: "${body}"
+
+        # 4. Get customer details (JSON)
+        - to: direct:prepareBackendCall
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+        - unmarshal:
+            json:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: customer
+            simple: "${body}"
+
+        # 5. Assemble response
+        - to: direct:assembleGetResponse
+
+# =============================================================================
+# Route: GET by Approval Number + Period Key
+# Sequential: excise validation → tax-platform → customer
+# =============================================================================
+
+- route:
+    id: getByApprovalPeriod
+    from:
+      uri: direct:getByApprovalPeriod
+      steps:
+        # 1. Get registration from excise (validates approval number exists) (XML → JSON)
+        - to: direct:prepareBackendCall
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}?bridgeEndpoint=true"
+        - unmarshal:
+            jacksonXml:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: registration
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            simple: "${body[customerId]}"
+
+        # 2. Get period from excise (validates period exists) (XML → JSON)
+        - to: direct:prepareBackendCall
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true"
+        - unmarshal:
+            jacksonXml:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: period
+            simple: "${body}"
+
+        # 3. Get submission from tax-platform (JSON)
+        - to: direct:prepareBackendCall
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?vpdApprovalNumber=${exchangeProperty.vpdApprovalNumber}&periodKey=${exchangeProperty.periodKey}&bridgeEndpoint=true"
+        - setProperty:
+            name: submissionRaw
+            simple: "${body}"
+        - unmarshal:
+            json:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: submission
+            simple: "${body}"
+        - setProperty:
+            name: ackRef
+            simple: "${body[acknowledgementReference]}"
+
+        # 4. Get customer details (JSON)
+        - to: direct:prepareBackendCall
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+        - unmarshal:
+            json:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: customer
+            simple: "${body}"
+
+        # 5. Assemble response
+        - to: direct:assembleGetResponse
+
+# =============================================================================
+# Route: POST Submission
+# Sequential: excise validate → tax-platform store → assemble response
+# =============================================================================
+
+- route:
+    id: postSubmission
+    from:
+      uri: direct:postSubmission
+      steps:
+        # Store common properties
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setProperty:
+            name: idempotencyKey
+            simple: "${header.X-Idempotency-Key}"
+        - setProperty:
+            name: faultDelay
+            simple: "${header.x-envoy-fault-delay-request}"
+        - setProperty:
+            name: faultAbort
+            simple: "${header.x-envoy-fault-abort-request}"
+
+        # Store original request body
+        - setProperty:
+            name: requestBody
+            simple: "${body}"
+
+        # Parse request to get vpdApprovalNumber and periodKey
+        - unmarshal:
+            json:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: vpdApprovalNumber
+            simple: "${body[vpdApprovalNumber]}"
+        - setProperty:
+            name: periodKey
+            simple: "${body[periodKey]}"
+
+        # 1. Validate and calculate with excise (XML response)
+        - to: direct:prepareBackendCall
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setBody:
+            simple: "${exchangeProperty.requestBody}"
+        - to:
+            uri: "http://excise-proxy:4010/excise/vpd/validate-and-calculate?bridgeEndpoint=true"
+        - unmarshal:
+            jacksonXml:
+              unmarshalType: java.util.Map
+        - setProperty:
+            name: validationResult
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            simple: "${body[customerId]}"
+
+        # 2. Check validation result
+        - choice:
+            when:
+              - simple: "${body[valid]} == 'false' || ${body[valid]} == false"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 422
+                  - to: direct:returnValidationError
+            otherwise:
+              steps:
+                # Store calculations
+                - setProperty:
+                    name: calculations
+                    simple: "${body[calculations]}"
+                - setProperty:
+                    name: warnings
+                    simple: "${body[warnings]}"
+
+                # 3. Store in tax-platform (JSON)
+                - to: direct:prepareBackendCall
+                - setHeader:
+                    name: Content-Type
+                    constant: "application/json"
+                - setHeader:
+                    name: X-Idempotency-Key
+                    simple: "${exchangeProperty.idempotencyKey}"
+                - setBody:
+                    simple: |
+                      {"vpdApprovalNumber": "${exchangeProperty.vpdApprovalNumber}", "periodKey": "${exchangeProperty.periodKey}", "customerId": "${exchangeProperty.customerId}", "submission": ${exchangeProperty.requestBody}, "calculations": {"totalDutyDue": {"amount": 12345.67, "currency": "GBP"}}}
+                - to:
+                    uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true"
+                - unmarshal:
+                    json:
+                      unmarshalType: java.util.Map
+                - setProperty:
+                    name: storeResponse
+                    simple: "${body}"
+                - setProperty:
+                    name: ackRef
+                    simple: "${body[acknowledgementReference]}"
+
+                # 4. Assemble success response
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 201
+                - to: direct:assemblePostResponse
+
+# =============================================================================
+# Helper Routes
+# =============================================================================
+
+# Prepare headers for backend call
+- route:
+    id: prepareBackendCall
+    from:
+      uri: direct:prepareBackendCall
+      steps:
         - removeHeaders:
             pattern: "CamelHttp*"
-
-        # Set headers for backend call
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
-        # Pass through fault injection headers to Envoy proxy
+        # Pass through fault injection headers if present
         - choice:
             when:
-              - simple: "${exchangeProperty.faultDelay} != null"
+              - simple: "${exchangeProperty.faultDelay} != null && ${exchangeProperty.faultDelay} != ''"
                 steps:
                   - setHeader:
                       name: x-envoy-fault-delay-request
                       simple: "${exchangeProperty.faultDelay}"
         - choice:
             when:
-              - simple: "${exchangeProperty.faultAbort} != null"
+              - simple: "${exchangeProperty.faultAbort} != null && ${exchangeProperty.faultAbort} != ''"
                 steps:
                   - setHeader:
                       name: x-envoy-fault-abort-request
                       simple: "${exchangeProperty.faultAbort}"
 
-        # Call tax-platform backend via Envoy proxy
-        - toD:
-            uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
-
-        # Set response headers
+# Assemble GET response
+- route:
+    id: assembleGetResponse
+    from:
+      uri: direct:assembleGetResponse
+      steps:
+        - setBody:
+            simple: |
+              {
+                "acknowledgementReference": "${exchangeProperty.ackRef}",
+                "vpdApprovalNumber": "${exchangeProperty.vpdApprovalNumber}",
+                "periodKey": "${exchangeProperty.periodKey}",
+                "status": "RECEIVED",
+                "trader": {
+                  "customerId": "${exchangeProperty.customerId}",
+                  "name": "${exchangeProperty.customer[name]}",
+                  "type": "${exchangeProperty.customer[type]}"
+                },
+                "period": {
+                  "key": "${exchangeProperty.period[periodKey]}",
+                  "startDate": "${exchangeProperty.period[startDate]}",
+                  "endDate": "${exchangeProperty.period[endDate]}",
+                  "state": "${exchangeProperty.period[state]}"
+                },
+                "registration": {
+                  "status": "${exchangeProperty.registration[status]}",
+                  "registeredDate": "${exchangeProperty.registration[registeredDate]}"
+                }
+              }
         - setHeader:
             name: Content-Type
             constant: "application/json"
@@ -91,7 +425,49 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
 
-# Route: Health check
+# Assemble POST response
+- route:
+    id: assemblePostResponse
+    from:
+      uri: direct:assemblePostResponse
+      steps:
+        - setBody:
+            simple: |
+              {
+                "acknowledgementReference": "${exchangeProperty.ackRef}",
+                "vpdApprovalNumber": "${exchangeProperty.vpdApprovalNumber}",
+                "periodKey": "${exchangeProperty.periodKey}",
+                "status": "RECEIVED",
+                "storedAt": "${date:now:yyyy-MM-dd'T'HH:mm:ss'Z'}"
+              }
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# Return validation error
+- route:
+    id: returnValidationError
+    from:
+      uri: direct:returnValidationError
+      steps:
+        - setBody:
+            simple: |
+              {
+                "code": "VALIDATION_ERROR",
+                "message": "Submission validation failed",
+                "customerId": "${exchangeProperty.customerId}"
+              }
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# Health check
 - route:
     id: health
     from:
@@ -102,3 +478,61 @@
             constant: "application/json"
         - setBody:
             constant: '{"status": "UP"}'
+
+# =============================================================================
+# Error Handling
+# =============================================================================
+
+- onException:
+    - exception: org.apache.camel.http.base.HttpOperationFailedException
+      handled: true
+      steps:
+        - setProperty:
+            name: errorStatusCode
+            simple: "${exception.statusCode}"
+        - choice:
+            when:
+              - simple: "${exception.statusCode} == 404"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 404
+                  - setBody:
+                      constant: '{"code": "NOT_FOUND", "message": "Resource not found"}'
+            when:
+              - simple: "${exception.statusCode} == 409"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 409
+                  - setBody:
+                      constant: '{"code": "CONFLICT", "message": "Resource conflict"}'
+            when:
+              - simple: "${exception.statusCode} == 422"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 422
+                  - setBody:
+                      constant: '{"code": "VALIDATION_ERROR", "message": "Validation failed"}'
+            when:
+              - simple: "${exception.statusCode} == 503"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 503
+                  - setBody:
+                      constant: '{"code": "SERVICE_UNAVAILABLE", "message": "Backend service unavailable"}'
+            otherwise:
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 500
+                - setBody:
+                    simple: '{"code": "INTERNAL_ERROR", "message": "An error occurred"}'
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
