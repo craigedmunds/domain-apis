@@ -289,12 +289,20 @@ test.describe('API Explorer - Execute APIs', () => {
     await getEndpoint.locator('.opblock-summary').click();
     await expect(getEndpoint.locator('.opblock-body')).toBeVisible({ timeout: 5000 });
 
-    // Swagger UI pre-fills parameters with examples - just click Execute
-    const executeButton = getEndpoint.locator('button.execute');
+    // tryItOutEnabled: true means Execute button should already be visible
+    const executeButton = getEndpoint.locator('button:has-text("Execute")');
     await expect(executeButton).toBeVisible({ timeout: 5000 });
+
+    // Fill in the acknowledgementReference input (has example pre-filled but we confirm it)
+    const ackRefInput = getEndpoint.locator('input[placeholder="acknowledgementReference"]');
+    if (await ackRefInput.isVisible()) {
+      await ackRefInput.fill('ACK-2026-01-26-000123');
+    }
+
+    // Click Execute
     await executeButton.click();
 
-    // Wait for response - look for the live response section
+    // Verify we get a live response (look for the live response section)
     const liveResponse = getEndpoint.locator('.live-responses-table');
     await expect(liveResponse).toBeVisible({ timeout: 30000 });
   });
