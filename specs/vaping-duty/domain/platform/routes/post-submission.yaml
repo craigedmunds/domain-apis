@@ -1,0 +1,300 @@
+# VPD Domain API - POST Submission
+#
+# Full orchestration flow:
+# 1. excise -> validate-and-calculate (XML) - returns customerId, calculations
+# 2. If valid == false: return 422
+# 3. tax-platform -> store submission
+# 4. customer -> get trader details (for response enrichment)
+# 5. Return acknowledgement with enriched data
+
+- route:
+    id: postSubmission
+    from:
+      uri: direct:postSubmission
+      steps:
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setProperty:
+            name: idempotencyKey
+            simple: "${header.X-Idempotency-Key}"
+        # Convert body to String to ensure it can be reused later
+        - setProperty:
+            name: requestBody
+            groovy: |
+              def bodyObj = body
+              if (bodyObj instanceof byte[]) {
+                return new String(bodyObj, 'UTF-8')
+              } else if (bodyObj instanceof InputStream) {
+                def bytes = bodyObj.bytes
+                return new String(bytes, 'UTF-8')
+              }
+              return bodyObj.toString()
+
+        # Extract vpdApprovalNumber and periodKey from request body
+        - setProperty:
+            name: vpdApprovalNumber
+            jsonpath:
+              expression: "$.vpdApprovalNumber"
+              suppressExceptions: true
+        - setProperty:
+            name: periodKey
+            jsonpath:
+              expression: "$.periodKey"
+              suppressExceptions: true
+
+        - log:
+            message: "POST submission - approval: ${exchangeProperty.vpdApprovalNumber}, period: ${exchangeProperty.periodKey}"
+            loggingLevel: INFO
+
+        # Step 1: Call excise to validate and calculate (XML response)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setBody:
+            simple: "${exchangeProperty.requestBody}"
+        - to:
+            uri: "http://excise-proxy:4010/excise/vpd/validate-and-calculate?bridgeEndpoint=true&throwExceptionOnFailure=false"
+
+        # Store response code and check for errors from excise
+        - setProperty:
+            name: exciseResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${exchangeProperty.exciseResponseCode} != 200"
+                steps:
+                  - log:
+                      message: "Excise returned error: ${exchangeProperty.exciseResponseCode}"
+                      loggingLevel: WARN
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      simple: "${exchangeProperty.exciseResponseCode}"
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - setHeader:
+                      name: X-Correlation-Id
+                      simple: "${exchangeProperty.correlationId}"
+                  - setBody:
+                      simple: '{"code": "EXCISE_ERROR", "message": "Excise validation service returned an error"}'
+                  - stop: {}
+
+        # Parse XML validation response (only reached if excise returned 200)
+        - setProperty:
+            name: exciseValidationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseValidationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def validation = [
+                valid: xml.valid.text() == 'true',
+                customerId: xml.customerId.text(),
+                calculations: [
+                  totalDutyDue: [
+                    amount: xml.calculations.totalDutyDue.text() ?: '0',
+                    currency: xml.calculations.totalDutyDue.@currency.text() ?: 'GBP'
+                  ],
+                  vat: [
+                    amount: xml.calculations.vat.text() ?: '0',
+                    rate: xml.calculations.vat.@rate.text() ?: '0.20'
+                  ],
+                  calculationHash: xml.calculations.calculationHash.text()
+                ],
+                warnings: []
+              ]
+
+              // Parse warnings
+              xml.warnings.warning.each { warning ->
+                validation.warnings << [
+                  code: warning.@code.text(),
+                  text: warning.text()
+                ]
+              }
+
+              return JsonOutput.toJson(validation)
+        - setProperty:
+            name: exciseValidationResponse
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            jsonpath:
+              expression: "$.customerId"
+              suppressExceptions: true
+        - setProperty:
+            name: validationValid
+            jsonpath:
+              expression: "$.valid"
+              suppressExceptions: true
+
+        - log:
+            message: "Excise validation result - valid: ${exchangeProperty.validationValid}, customerId: ${exchangeProperty.customerId}"
+            loggingLevel: INFO
+
+        # Step 2: Check validation result - short circuit if invalid
+        - choice:
+            when:
+              - simple: "${exchangeProperty.validationValid} == false"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 422
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        import groovy.json.JsonOutput
+
+                        def slurper = new JsonSlurper()
+                        def validation = slurper.parseText(exchange.getProperty('exciseValidationResponse', String))
+
+                        def error = [
+                          code: 'VALIDATION_FAILED',
+                          message: 'Submission failed validation',
+                          warnings: validation.warnings
+                        ]
+
+                        return JsonOutput.toJson(error)
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - setHeader:
+                      name: X-Correlation-Id
+                      simple: "${exchangeProperty.correlationId}"
+                  - stop: {}
+
+        # Step 3: Store submission in tax-platform (validation passed)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setHeader:
+            name: X-Idempotency-Key
+            simple: "${exchangeProperty.idempotencyKey}"
+        # Build the full store request with calculations from excise
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+              def originalRequest = slurper.parseText(exchange.getProperty('requestBody', String))
+              def validation = slurper.parseText(exchange.getProperty('exciseValidationResponse', String))
+
+              def storeRequest = [
+                vpdApprovalNumber: originalRequest.vpdApprovalNumber,
+                periodKey: originalRequest.periodKey,
+                customerId: validation.customerId,
+                submission: originalRequest,
+                calculations: validation.calculations,
+                warnings: validation.warnings
+              ]
+
+              return JsonOutput.toJson(storeRequest)
+        - to:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true&throwExceptionOnFailure=false"
+
+        # Store tax-platform response
+        - setProperty:
+            name: taxPlatformResponse
+            simple: "${body}"
+
+        - log:
+            message: "Tax-platform submission stored"
+            loggingLevel: INFO
+
+        # Step 4: Call customer service to get trader details (for response enrichment)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+
+        # Store customer response
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+
+        - log:
+            message: "Customer response received"
+            loggingLevel: INFO
+
+        # Step 5: Build enriched acknowledgement response
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+              def taxPlatformText = exchange.getProperty('taxPlatformResponse')
+              if (taxPlatformText instanceof byte[]) {
+                taxPlatformText = new String(taxPlatformText, 'UTF-8')
+              }
+              def storeResult = slurper.parseText(taxPlatformText.toString())
+
+              def customerText = exchange.getProperty('customerResponse')
+              if (customerText instanceof byte[]) {
+                customerText = new String(customerText, 'UTF-8')
+              }
+              def customer = slurper.parseText(customerText.toString())
+
+              def validation = slurper.parseText(exchange.getProperty('exciseValidationResponse', String))
+
+              def response = [
+                acknowledgementReference: storeResult.acknowledgementReference,
+                vpdApprovalNumber: exchange.getProperty('vpdApprovalNumber'),
+                periodKey: exchange.getProperty('periodKey'),
+                status: 'RECEIVED',
+                storedAt: storeResult.storedAt,
+                trader: [
+                  name: customer.name,
+                  type: customer.type
+                ],
+                calculations: validation.calculations,
+                warnings: validation.warnings
+              ]
+
+              return JsonOutput.toJson(response)
+
+        - setHeader:
+            name: CamelHttpResponseCode
+            constant: 201
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"

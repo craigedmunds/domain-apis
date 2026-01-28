@@ -28,10 +28,15 @@ services:
     image: apache/camel-jbang:4.16.0
     container_name: vpd-domain-api-internal
     command: >
-      run /routes/integration.yaml
+      run /routes/rest-config.yaml
+          /routes/get-by-ack.yaml
+          /routes/get-by-approval.yaml
+          /routes/post-submission.yaml
+          /routes/common.yaml
       --dep=org.apache.camel:camel-jacksonxml
       --dep=org.apache.camel:camel-groovy
       --dep=org.apache.groovy:groovy-json:4.0.29
+      --dep=org.apache.groovy:groovy-xml:4.0.29
     volumes:
       - ./specs/vaping-duty/domain/platform/routes:/routes:ro
     networks:
