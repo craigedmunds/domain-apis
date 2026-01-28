@@ -10,7 +10,6 @@
 #
 # Sparse Fieldsets:
 #   - Query parameter: fields[submission-returns]=field1,field2,field3
-#   - Alternative: fields[:submission-returns]=field1,field2,field3
 #   - Filters response to only include requested fields
 #   - Returns 400 if invalid field names are requested
 #   - Applied after orchestration (all backends called regardless)
@@ -52,8 +51,6 @@
         # Remove problematic query parameter headers immediately to prevent response header issues
         - removeHeader:
             name: "fields[submission-returns]"
-        - removeHeader:
-            name: "fields[:submission-returns]"
         
         # Log all incoming headers and query parameters for debugging
         - log:
@@ -88,15 +85,10 @@
                 return null
               }
               
-              // Parse query string for fields[submission-returns] or fields[:submission-returns]
+              // Parse query string for fields[submission-returns]
               def params = rawQuery.split('&')
               for (param in params) {
                 if (param.startsWith('fields%5Bsubmission-returns%5D=') || param.startsWith('fields[submission-returns]=')) {
-                  // URL decode and extract value
-                  def value = param.split('=', 2)[1]
-                  return java.net.URLDecoder.decode(value, 'UTF-8')
-                }
-                if (param.startsWith('fields%5B%3Asubmission-returns%5D=') || param.startsWith('fields[:submission-returns]=')) {
                   // URL decode and extract value
                   def value = param.split('=', 2)[1]
                   return java.net.URLDecoder.decode(value, 'UTF-8')
@@ -129,11 +121,13 @@
                     constant: "application/json"
 
 # =============================================================================
-# Route: GET by Acknowledgement Reference - ORCHESTRATED
-# 1. tax-platform -> get submission
-# 2. customer -> get trader details
-# 3. Combine into enriched response
-# 4. Apply sparse fieldsets if requested
+# Route: GET by Acknowledgement Reference - FULL ORCHESTRATION
+# 1. tax-platform -> get submission (includes vpdApprovalNumber, periodKey, customerId)
+# 2. excise -> get registration (XML) -> transform to JSON
+# 3. excise -> get period (XML) -> transform to JSON
+# 4. customer -> get trader details
+# 5. Combine into enriched response
+# 6. Apply sparse fieldsets if requested
 # =============================================================================
 
 - route:
@@ -153,7 +147,7 @@
         - toD:
             uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
 
-        # Store submission response and extract customerId
+        # Store submission response and extract keys
         - setProperty:
             name: taxPlatformResponse
             simple: "${body}"
@@ -162,13 +156,112 @@
             jsonpath:
               expression: "$.customerId"
               suppressExceptions: true
+        - setProperty:
+            name: vpdApprovalNumber
+            jsonpath:
+              expression: "$.vpdApprovalNumber"
+              suppressExceptions: true
+        - setProperty:
+            name: periodKey
+            jsonpath:
+              expression: "$.periodKey"
+              suppressExceptions: true
 
-        # Log for debugging
         - log:
-            message: "Tax-platform response received, customerId: ${exchangeProperty.customerId}"
+            message: "Tax-platform response received - customerId: ${exchangeProperty.customerId}, approval: ${exchangeProperty.vpdApprovalNumber}, period: ${exchangeProperty.periodKey}"
             loggingLevel: INFO
 
-        # Step 2: Call customer service to get trader details
+        # Step 2: Call excise to get registration (XML response)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}?bridgeEndpoint=true"
+
+        # Parse XML registration response to JSON
+        - setProperty:
+            name: exciseRegistrationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseRegistrationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def registration = [
+                vpdApprovalNumber: xml.vpdApprovalNumber.text(),
+                customerId: xml.customerId.text(),
+                status: xml.status.text(),
+                registeredDate: xml.registeredDate.text()
+              ]
+
+              return JsonOutput.toJson(registration)
+        - setProperty:
+            name: exciseRegistrationResponse
+            simple: "${body}"
+
+        - log:
+            message: "Excise registration received (XML->JSON)"
+            loggingLevel: INFO
+
+        # Step 3: Call excise to get period (XML response)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true"
+
+        # Parse XML period response to JSON
+        - setProperty:
+            name: excisePeriodXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('excisePeriodXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def period = [
+                periodKey: xml.periodKey.text(),
+                startDate: xml.startDate.text(),
+                endDate: xml.endDate.text(),
+                state: xml.state.text(),
+                dutyRates: [
+                  standardRate: xml.dutyRates.standardRate.text(),
+                  reducedRate: xml.dutyRates.reducedRate.text()
+                ]
+              ]
+
+              return JsonOutput.toJson(period)
+        - setProperty:
+            name: excisePeriodResponse
+            simple: "${body}"
+
+        - log:
+            message: "Excise period received (XML->JSON)"
+            loggingLevel: INFO
+
+        # Step 4: Call customer service to get trader details
         - removeHeaders:
             pattern: "CamelHttp*"
         - setHeader:
@@ -189,7 +282,7 @@
             message: "Customer response received"
             loggingLevel: INFO
 
-        # Step 3: Combine responses using Groovy
+        # Step 5: Combine all responses using Groovy
         - setBody:
             groovy: |
               import groovy.json.JsonSlurper
@@ -198,116 +291,38 @@
               def slurper = new JsonSlurper()
               def submission = slurper.parseText(exchange.getProperty('taxPlatformResponse', String))
               def customer = slurper.parseText(exchange.getProperty('customerResponse', String))
+              def registration = slurper.parseText(exchange.getProperty('exciseRegistrationResponse', String))
+              def period = slurper.parseText(exchange.getProperty('excisePeriodResponse', String))
 
-              // Add trader field from customer data
+              // Enrich with trader from customer data
               submission.trader = [
                 name: customer.name,
                 type: customer.type,
                 address: customer.registeredAddress
               ]
 
+              // Enrich with registration details from excise
+              submission.registration = [
+                status: registration.status,
+                registeredDate: registration.registeredDate
+              ]
+
+              // Enrich with period details from excise
+              submission.period = [
+                startDate: period.startDate,
+                endDate: period.endDate,
+                state: period.state,
+                dutyRates: period.dutyRates
+              ]
+
               return JsonOutput.toJson(submission)
 
-        # Step 4: Apply sparse fieldsets if requested
-        - choice:
-            when:
-              - simple: "${exchangeProperty.fieldsParam} != null && ${exchangeProperty.fieldsParam} != ''"
-                steps:
-                  - setBody:
-                      groovy: |
-                        import groovy.json.JsonSlurper
-                        import groovy.json.JsonOutput
-
-                        def slurper = new JsonSlurper()
-                        def response = slurper.parseText(body)
-                        def fieldsParam = exchange.getProperty('fieldsParam', String)
-                        
-                        // Parse requested fields (comma-separated)
-                        def requestedFields = fieldsParam.split(',').collect { it.trim() }
-                        
-                        // Helper function to get nested value from object using dot notation
-                        def getNestedValue(obj, path) {
-                          def parts = path.split('\\.')
-                          def current = obj
-                          for (part in parts) {
-                            if (current == null || !(current instanceof Map) || !current.containsKey(part)) {
-                              return null
-                            }
-                            current = current[part]
-                          }
-                          return current
-                        }
-                        
-                        // Helper function to set nested value in object using dot notation
-                        def setNestedValue(obj, path, value) {
-                          def parts = path.split('\\.')
-                          def current = obj
-                          for (int i = 0; i < parts.size() - 1; i++) {
-                            def part = parts[i]
-                            if (!current.containsKey(part)) {
-                              current[part] = [:]
-                            }
-                            current = current[part]
-                          }
-                          current[parts[-1]] = value
-                        }
-                        
-                        // Validate all requested fields exist in response
-                        def invalidFields = []
-                        for (field in requestedFields) {
-                          def value = getNestedValue(response, field)
-                          if (value == null) {
-                            // Check if it's a top-level field that exists
-                            if (!field.contains('.') && response.containsKey(field)) {
-                              continue
-                            }
-                            invalidFields.add(field)
-                          }
-                        }
-                        
-                        if (invalidFields) {
-                          exchange.setProperty('invalidFields', invalidFields.join(', '))
-                          exchange.setProperty('sparseFieldsetError', true)
-                          return body // Will be replaced by error response
-                        }
-                        
-                        // Build filtered response with nested structure
-                        def filtered = [:]
-                        for (field in requestedFields) {
-                          if (field.contains('.')) {
-                            // Nested field - reconstruct the path
-                            def value = getNestedValue(response, field)
-                            setNestedValue(filtered, field, value)
-                          } else {
-                            // Top-level field
-                            if (response.containsKey(field)) {
-                              filtered[field] = response[field]
-                            }
-                          }
-                        }
-                        
-                        return JsonOutput.toJson(filtered)
-
-        # Handle sparse fieldset validation errors
-        - choice:
-            when:
-              - simple: "${exchangeProperty.sparseFieldsetError} == true"
-                steps:
-                  - setHeader:
-                      name: CamelHttpResponseCode
-                      constant: 400
-                  - setBody:
-                      simple: '{"code": "INVALID_FIELDS", "message": "Unknown fields requested: ${exchangeProperty.invalidFields}"}'
-                  - setHeader:
-                      name: Content-Type
-                      constant: "application/json"
-                  - stop: {}
+        # Step 6: Apply sparse fieldsets if requested
+        - to: direct:applySparseFieldsets
 
         # Remove problematic query parameter headers before response
         - removeHeader:
             name: "fields[submission-returns]"
-        - removeHeader:
-            name: "fields[:submission-returns]"
 
         # Set response headers
         - setHeader:
@@ -318,9 +333,13 @@
             simple: "${exchangeProperty.correlationId}"
 
 # =============================================================================
-# Route: GET by Approval Number + Period Key
-# Simple pass-through for now (orchestration can be added later)
-# Apply sparse fieldsets if requested
+# Route: GET by Approval Number + Period Key - FULL ORCHESTRATION
+# 1. excise -> get registration (XML) - validation + get customerId
+# 2. excise -> get period (XML)
+# 3. tax-platform -> find submission by approval+period
+# 4. customer -> get trader details
+# 5. Combine into enriched response
+# 6. Apply sparse fieldsets if requested
 # =============================================================================
 
 - route:
@@ -328,116 +347,196 @@
     from:
       uri: direct:getByApprovalAndPeriod
       steps:
+        # Step 1: Call excise to get registration (XML response) - validates approval number
         - removeHeaders:
             pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.approvalNumber}?bridgeEndpoint=true"
+
+        # Parse XML registration response to JSON
+        - setProperty:
+            name: exciseRegistrationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseRegistrationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def registration = [
+                vpdApprovalNumber: xml.vpdApprovalNumber.text(),
+                customerId: xml.customerId.text(),
+                status: xml.status.text(),
+                registeredDate: xml.registeredDate.text()
+              ]
+
+              return JsonOutput.toJson(registration)
+        - setProperty:
+            name: exciseRegistrationResponse
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            jsonpath:
+              expression: "$.customerId"
+              suppressExceptions: true
+
+        - log:
+            message: "Excise registration received - customerId: ${exchangeProperty.customerId}"
+            loggingLevel: INFO
+
+        # Step 2: Call excise to get period (XML response)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true"
+
+        # Parse XML period response to JSON
+        - setProperty:
+            name: excisePeriodXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('excisePeriodXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def period = [
+                periodKey: xml.periodKey.text(),
+                startDate: xml.startDate.text(),
+                endDate: xml.endDate.text(),
+                state: xml.state.text(),
+                dutyRates: [
+                  standardRate: xml.dutyRates.standardRate.text(),
+                  reducedRate: xml.dutyRates.reducedRate.text()
+                ]
+              ]
+
+              return JsonOutput.toJson(period)
+        - setProperty:
+            name: excisePeriodResponse
+            simple: "${body}"
+
+        - log:
+            message: "Excise period received (XML->JSON)"
+            loggingLevel: INFO
+
+        # Step 3: Call tax-platform to find submission
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
             uri: "http://tax-platform-proxy:4010/submissions/vpd?vpdApprovalNumber=${exchangeProperty.approvalNumber}&periodKey=${exchangeProperty.periodKey}&bridgeEndpoint=true"
 
-        # Apply sparse fieldsets if requested
-        - choice:
-            when:
-              - simple: "${exchangeProperty.fieldsParam} != null && ${exchangeProperty.fieldsParam} != ''"
-                steps:
-                  - setBody:
-                      groovy: |
-                        import groovy.json.JsonSlurper
-                        import groovy.json.JsonOutput
+        # Store submission response
+        - setProperty:
+            name: taxPlatformResponse
+            simple: "${body}"
 
-                        def slurper = new JsonSlurper()
-                        // Convert body to String if it's a byte array
-                        def bodyText = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
-                        def response = slurper.parseText(bodyText)
-                        def fieldsParam = exchange.getProperty('fieldsParam', String)
-                        
-                        // Parse requested fields (comma-separated)
-                        def requestedFields = fieldsParam.split(',').collect { it.trim() }
-                        
-                        // Helper function to get nested value from object using dot notation
-                        def getNestedValue(obj, path) {
-                          def parts = path.split('\\.')
-                          def current = obj
-                          for (part in parts) {
-                            if (current == null || !(current instanceof Map) || !current.containsKey(part)) {
-                              return null
-                            }
-                            current = current[part]
-                          }
-                          return current
-                        }
-                        
-                        // Helper function to set nested value in object using dot notation
-                        def setNestedValue(obj, path, value) {
-                          def parts = path.split('\\.')
-                          def current = obj
-                          for (int i = 0; i < parts.size() - 1; i++) {
-                            def part = parts[i]
-                            if (!current.containsKey(part)) {
-                              current[part] = [:]
-                            }
-                            current = current[part]
-                          }
-                          current[parts[-1]] = value
-                        }
-                        
-                        // Validate all requested fields exist in response
-                        def invalidFields = []
-                        for (field in requestedFields) {
-                          def value = getNestedValue(response, field)
-                          if (value == null) {
-                            // Check if it's a top-level field that exists
-                            if (!field.contains('.') && response.containsKey(field)) {
-                              continue
-                            }
-                            invalidFields.add(field)
-                          }
-                        }
-                        
-                        if (invalidFields) {
-                          exchange.setProperty('invalidFields', invalidFields.join(', '))
-                          exchange.setProperty('sparseFieldsetError', true)
-                          return bodyText // Will be replaced by error response
-                        }
-                        
-                        // Build filtered response with nested structure
-                        def filtered = [:]
-                        for (field in requestedFields) {
-                          if (field.contains('.')) {
-                            // Nested field - reconstruct the path
-                            def value = getNestedValue(response, field)
-                            setNestedValue(filtered, field, value)
-                          } else {
-                            // Top-level field
-                            if (response.containsKey(field)) {
-                              filtered[field] = response[field]
-                            }
-                          }
-                        }
-                        
-                        return JsonOutput.toJson(filtered)
+        - log:
+            message: "Tax-platform submission found"
+            loggingLevel: INFO
 
-        # Handle sparse fieldset validation errors
-        - choice:
-            when:
-              - simple: "${exchangeProperty.sparseFieldsetError} == true"
-                steps:
-                  - setHeader:
-                      name: CamelHttpResponseCode
-                      constant: 400
-                  - setBody:
-                      simple: '{"code": "INVALID_FIELDS", "message": "Unknown fields requested: ${exchangeProperty.invalidFields}"}'
-                  - setHeader:
-                      name: Content-Type
-                      constant: "application/json"
-                  - stop: {}
+        # Step 4: Call customer service to get trader details
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+
+        # Store customer response
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+
+        - log:
+            message: "Customer response received"
+            loggingLevel: INFO
+
+        # Step 5: Combine all responses using Groovy
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+
+              // Convert body to String if it's a byte array
+              def taxPlatformText = exchange.getProperty('taxPlatformResponse')
+              if (taxPlatformText instanceof byte[]) {
+                taxPlatformText = new String(taxPlatformText, 'UTF-8')
+              }
+              def submission = slurper.parseText(taxPlatformText.toString())
+
+              def customerText = exchange.getProperty('customerResponse')
+              if (customerText instanceof byte[]) {
+                customerText = new String(customerText, 'UTF-8')
+              }
+              def customer = slurper.parseText(customerText.toString())
+
+              def registration = slurper.parseText(exchange.getProperty('exciseRegistrationResponse', String))
+              def period = slurper.parseText(exchange.getProperty('excisePeriodResponse', String))
+
+              // Enrich with trader from customer data
+              submission.trader = [
+                name: customer.name,
+                type: customer.type,
+                address: customer.registeredAddress
+              ]
+
+              // Enrich with registration details from excise
+              submission.registration = [
+                status: registration.status,
+                registeredDate: registration.registeredDate
+              ]
+
+              // Enrich with period details from excise
+              submission.period = [
+                startDate: period.startDate,
+                endDate: period.endDate,
+                state: period.state,
+                dutyRates: period.dutyRates
+              ]
+
+              return JsonOutput.toJson(submission)
+
+        # Step 6: Apply sparse fieldsets if requested
+        - to: direct:applySparseFieldsets
 
         # Remove problematic query parameter headers before response
         - removeHeader:
             name: "fields[submission-returns]"
-        - removeHeader:
-            name: "fields[:submission-returns]"
 
         - setHeader:
             name: Content-Type
@@ -447,7 +546,12 @@
             simple: "${exchangeProperty.correlationId}"
 
 # =============================================================================
-# Route: POST Submission - Pass-through
+# Route: POST Submission - FULL ORCHESTRATION
+# 1. excise -> validate-and-calculate (XML) - returns customerId, calculations
+# 2. If valid == false: return 422
+# 3. tax-platform -> store submission
+# 4. customer -> get trader details (for response enrichment)
+# 5. Return acknowledgement with enriched data
 # =============================================================================
 
 - route:
@@ -464,27 +568,350 @@
         - setProperty:
             name: requestBody
             simple: "${body}"
+
+        # Extract vpdApprovalNumber and periodKey from request body
+        - setProperty:
+            name: vpdApprovalNumber
+            jsonpath:
+              expression: "$.vpdApprovalNumber"
+              suppressExceptions: true
+        - setProperty:
+            name: periodKey
+            jsonpath:
+              expression: "$.periodKey"
+              suppressExceptions: true
+
+        - log:
+            message: "POST submission - approval: ${exchangeProperty.vpdApprovalNumber}, period: ${exchangeProperty.periodKey}"
+            loggingLevel: INFO
+
+        # Step 1: Call excise to validate and calculate (XML response)
         - removeHeaders:
             pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setBody:
+            simple: "${exchangeProperty.requestBody}"
+        - to:
+            uri: "http://excise-proxy:4010/excise/vpd/validate-and-calculate?bridgeEndpoint=true"
+
+        # Parse XML validation response
+        - setProperty:
+            name: exciseValidationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseValidationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def validation = [
+                valid: xml.valid.text() == 'true',
+                customerId: xml.customerId.text(),
+                calculations: [
+                  totalDutyDue: [
+                    amount: xml.calculations.totalDutyDue.text() ?: '0',
+                    currency: xml.calculations.totalDutyDue.@currency.text() ?: 'GBP'
+                  ],
+                  vat: [
+                    amount: xml.calculations.vat.text() ?: '0',
+                    rate: xml.calculations.vat.@rate.text() ?: '0.20'
+                  ],
+                  calculationHash: xml.calculations.calculationHash.text()
+                ],
+                warnings: []
+              ]
+
+              // Parse warnings
+              xml.warnings.warning.each { warning ->
+                validation.warnings << [
+                  code: warning.@code.text(),
+                  text: warning.text()
+                ]
+              }
+
+              return JsonOutput.toJson(validation)
+        - setProperty:
+            name: exciseValidationResponse
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            jsonpath:
+              expression: "$.customerId"
+              suppressExceptions: true
+        - setProperty:
+            name: validationValid
+            jsonpath:
+              expression: "$.valid"
+              suppressExceptions: true
+
+        - log:
+            message: "Excise validation result - valid: ${exchangeProperty.validationValid}, customerId: ${exchangeProperty.customerId}"
+            loggingLevel: INFO
+
+        # Step 2: Check validation result - short circuit if invalid
+        - choice:
+            when:
+              - simple: "${exchangeProperty.validationValid} == false"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 422
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        import groovy.json.JsonOutput
+
+                        def slurper = new JsonSlurper()
+                        def validation = slurper.parseText(exchange.getProperty('exciseValidationResponse', String))
+
+                        def error = [
+                          code: 'VALIDATION_FAILED',
+                          message: 'Submission failed validation',
+                          warnings: validation.warnings
+                        ]
+
+                        return JsonOutput.toJson(error)
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - setHeader:
+                      name: X-Correlation-Id
+                      simple: "${exchangeProperty.correlationId}"
+                  - stop: {}
+
+        # Step 3: Store submission in tax-platform (validation passed)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - setHeader:
             name: X-Idempotency-Key
             simple: "${exchangeProperty.idempotencyKey}"
-        - setHeader:
-            name: Content-Type
-            constant: "application/json"
+        # Build the full store request with calculations from excise
         - setBody:
-            simple: "${exchangeProperty.requestBody}"
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+              def originalRequest = slurper.parseText(exchange.getProperty('requestBody', String))
+              def validation = slurper.parseText(exchange.getProperty('exciseValidationResponse', String))
+
+              def storeRequest = [
+                vpdApprovalNumber: originalRequest.vpdApprovalNumber,
+                periodKey: originalRequest.periodKey,
+                customerId: validation.customerId,
+                submission: originalRequest,
+                calculations: validation.calculations,
+                warnings: validation.warnings
+              ]
+
+              return JsonOutput.toJson(storeRequest)
         - to:
             uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true"
+
+        # Store tax-platform response
+        - setProperty:
+            name: taxPlatformResponse
+            simple: "${body}"
+
+        - log:
+            message: "Tax-platform submission stored"
+            loggingLevel: INFO
+
+        # Step 4: Call customer service to get trader details (for response enrichment)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+
+        # Store customer response
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+
+        - log:
+            message: "Customer response received"
+            loggingLevel: INFO
+
+        # Step 5: Build enriched acknowledgement response
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+              def taxPlatformText = exchange.getProperty('taxPlatformResponse')
+              if (taxPlatformText instanceof byte[]) {
+                taxPlatformText = new String(taxPlatformText, 'UTF-8')
+              }
+              def storeResult = slurper.parseText(taxPlatformText.toString())
+
+              def customerText = exchange.getProperty('customerResponse')
+              if (customerText instanceof byte[]) {
+                customerText = new String(customerText, 'UTF-8')
+              }
+              def customer = slurper.parseText(customerText.toString())
+
+              def validation = slurper.parseText(exchange.getProperty('exciseValidationResponse', String))
+
+              def response = [
+                acknowledgementReference: storeResult.acknowledgementReference,
+                vpdApprovalNumber: exchange.getProperty('vpdApprovalNumber'),
+                periodKey: exchange.getProperty('periodKey'),
+                status: 'RECEIVED',
+                storedAt: storeResult.storedAt,
+                trader: [
+                  name: customer.name,
+                  type: customer.type
+                ],
+                calculations: validation.calculations,
+                warnings: validation.warnings
+              ]
+
+              return JsonOutput.toJson(response)
+
+        - setHeader:
+            name: CamelHttpResponseCode
+            constant: 201
         - setHeader:
             name: Content-Type
             constant: "application/json"
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
+
+# =============================================================================
+# Reusable Route: Apply Sparse Fieldsets
+# Filters response body to only include requested fields
+# =============================================================================
+
+- route:
+    id: applySparseFieldsets
+    from:
+      uri: direct:applySparseFieldsets
+      steps:
+        - choice:
+            when:
+              - simple: "${exchangeProperty.fieldsParam} != null && ${exchangeProperty.fieldsParam} != ''"
+                steps:
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        import groovy.json.JsonOutput
+
+                        def slurper = new JsonSlurper()
+                        // Convert body to String if it's a byte array
+                        def bodyText = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        def response = slurper.parseText(bodyText)
+                        def fieldsParam = exchange.getProperty('fieldsParam', String)
+
+                        // Parse requested fields (comma-separated)
+                        def requestedFields = fieldsParam.split(',').collect { it.trim() }
+
+                        // Helper function to get nested value from object using dot notation
+                        def getNestedValue(obj, path) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (part in parts) {
+                            if (current == null || !(current instanceof Map) || !current.containsKey(part)) {
+                              return null
+                            }
+                            current = current[part]
+                          }
+                          return current
+                        }
+
+                        // Helper function to set nested value in object using dot notation
+                        def setNestedValue(obj, path, value) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (int i = 0; i < parts.size() - 1; i++) {
+                            def part = parts[i]
+                            if (!current.containsKey(part)) {
+                              current[part] = [:]
+                            }
+                            current = current[part]
+                          }
+                          current[parts[-1]] = value
+                        }
+
+                        // Validate all requested fields exist in response
+                        def invalidFields = []
+                        for (field in requestedFields) {
+                          def value = getNestedValue(response, field)
+                          if (value == null) {
+                            // Check if it's a top-level field that exists
+                            if (!field.contains('.') && response.containsKey(field)) {
+                              continue
+                            }
+                            invalidFields.add(field)
+                          }
+                        }
+
+                        if (invalidFields) {
+                          exchange.setProperty('invalidFields', invalidFields.join(', '))
+                          exchange.setProperty('sparseFieldsetError', true)
+                          return bodyText // Will be replaced by error response
+                        }
+
+                        // Build filtered response with nested structure
+                        def filtered = [:]
+                        for (field in requestedFields) {
+                          if (field.contains('.')) {
+                            // Nested field - reconstruct the path
+                            def value = getNestedValue(response, field)
+                            setNestedValue(filtered, field, value)
+                          } else {
+                            // Top-level field
+                            if (response.containsKey(field)) {
+                              filtered[field] = response[field]
+                            }
+                          }
+                        }
+
+                        return JsonOutput.toJson(filtered)
+
+        # Handle sparse fieldset validation errors
+        - choice:
+            when:
+              - simple: "${exchangeProperty.sparseFieldsetError} == true"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      simple: '{"code": "INVALID_FIELDS", "message": "Unknown fields requested: ${exchangeProperty.invalidFields}"}'
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - stop: {}
 
 # =============================================================================
 # Health check

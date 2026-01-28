@@ -115,6 +115,45 @@ describe('VPD Domain API', () => {
       }
     }, TIMEOUT_MS);
 
+    it('should include registration details from excise service (XML transformed)', async () => {
+      if (!apiAvailable) return;
+
+      const response = await fetch(
+        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
+      );
+
+      if (response.status === 200) {
+        const body = await response.json();
+        // Orchestrated: registration field is enriched from excise service (XML→JSON)
+        expect(body.registration).toBeDefined();
+        expect(body.registration.status).toBeDefined();
+        expect(['ACTIVE', 'SUSPENDED', 'DEREGISTERED']).toContain(body.registration.status);
+        expect(body.registration.registeredDate).toBeDefined();
+      }
+    }, TIMEOUT_MS);
+
+    it('should include period details from excise service (XML transformed)', async () => {
+      if (!apiAvailable) return;
+
+      const response = await fetch(
+        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
+      );
+
+      if (response.status === 200) {
+        const body = await response.json();
+        // Orchestrated: period field is enriched from excise service (XML→JSON)
+        expect(body.period).toBeDefined();
+        expect(body.period.startDate).toBeDefined();
+        expect(body.period.endDate).toBeDefined();
+        expect(body.period.state).toBeDefined();
+        expect(['OPEN', 'FILED', 'CLOSED']).toContain(body.period.state);
+        // Duty rates should be included
+        if (body.period.dutyRates) {
+          expect(body.period.dutyRates.standardRate).toBeDefined();
+        }
+      }
+    }, TIMEOUT_MS);
+
     it('should propagate X-Correlation-Id header', async () => {
       if (!apiAvailable) return;
 
@@ -177,11 +216,62 @@ describe('VPD Domain API', () => {
         expect(['RECEIVED', 'VALIDATED', 'REJECTED']).toContain(body.status);
       }
     }, TIMEOUT_MS);
+
+    it('should include registration details from excise service (XML transformed)', async () => {
+      if (!apiAvailable) return;
+
+      const response = await fetch(
+        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
+      );
+
+      if (response.status === 200) {
+        const body = await response.json();
+        // Orchestrated: registration field is enriched from excise service (XML→JSON)
+        expect(body.registration).toBeDefined();
+        expect(body.registration.status).toBeDefined();
+        expect(['ACTIVE', 'SUSPENDED', 'DEREGISTERED']).toContain(body.registration.status);
+      }
+    }, TIMEOUT_MS);
+
+    it('should include period details from excise service (XML transformed)', async () => {
+      if (!apiAvailable) return;
+
+      const response = await fetch(
+        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
+      );
+
+      if (response.status === 200) {
+        const body = await response.json();
+        // Orchestrated: period field is enriched from excise service (XML→JSON)
+        expect(body.period).toBeDefined();
+        expect(body.period.startDate).toBeDefined();
+        expect(body.period.endDate).toBeDefined();
+        expect(body.period.state).toBeDefined();
+        expect(['OPEN', 'FILED', 'CLOSED']).toContain(body.period.state);
+      }
+    }, TIMEOUT_MS);
+
+    it('should include trader details from customer service (orchestrated)', async () => {
+      if (!apiAvailable) return;
+
+      const response = await fetch(
+        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
+      );
+
+      if (response.status === 200) {
+        const body = await response.json();
+        // Orchestrated: trader field is enriched from customer service
+        expect(body.trader).toBeDefined();
+        expect(body.trader.name).toBeDefined();
+        expect(body.trader.type).toBeDefined();
+        expect(['ORG', 'INDIVIDUAL']).toContain(body.trader.type);
+      }
+    }, TIMEOUT_MS);
   });
 
   // ==========================================================================
   // POST Submission
-  // Orchestration: excise validate → tax-platform store
+  // Orchestration: excise validate → tax-platform store → customer enrich
   // ==========================================================================
 
   describe('POST /duty/vpd/submission-returns/v1', () => {
@@ -271,6 +361,50 @@ describe('VPD Domain API', () => {
       expect([200, 201, 400, 422]).toContain(response.status);
       // Correlation ID should be echoed back regardless of status
       expect(response.headers.get('x-correlation-id')).toBe(correlationId);
+    }, TIMEOUT_MS);
+
+    it('should include calculations from excise validation in response (orchestrated)', async () => {
+      if (!apiAvailable) return;
+
+      const idempotencyKey = `test-calc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      // Simple submission payload - Domain API will call excise to validate and get calculations
+      const submission = {
+        vpdApprovalNumber: 'VPD123456',
+        periodKey: '24A1',
+        basicInformation: {
+          returnType: 'ORIGINAL',
+          submittedBy: {
+            type: 'ORG',
+            name: 'Example Vapes Ltd',
+          },
+        },
+        dutyProducts: [],
+      };
+
+      const response = await fetch(
+        `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+            'X-Correlation-Id': `test-calc-${Date.now()}`,
+          },
+          body: JSON.stringify(submission),
+        }
+      );
+
+      // Accept 201 (created) or other statuses from mock variation
+      if (response.status === 201) {
+        const body = await response.json();
+        // Orchestrated: calculations should be enriched from excise validate-and-calculate
+        expect(body.calculations).toBeDefined();
+        expect(body.calculations.totalDutyDue).toBeDefined();
+        // Trader should be enriched from customer service
+        expect(body.trader).toBeDefined();
+        expect(body.trader.name).toBeDefined();
+      }
     }, TIMEOUT_MS);
   });
 
