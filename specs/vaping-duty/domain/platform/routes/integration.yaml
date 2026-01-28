@@ -1,11 +1,19 @@
 # VPD Domain API - Camel YAML DSL Routes
 #
-# Phase 7b: Full Orchestration
+# Phase 7b: Full Orchestration + Sparse Fieldsets
 #
 # GET by acknowledgementReference orchestration:
 #   1. Call tax-platform to get submission (includes customerId)
 #   2. Call customer service to get trader details (using customerId)
 #   3. Combine into enriched response with trader field
+#   4. Apply sparse fieldsets if fields[submission-returns] parameter provided
+#
+# Sparse Fieldsets:
+#   - Query parameter: fields[submission-returns]=field1,field2,field3
+#   - Alternative: fields[:submission-returns]=field1,field2,field3
+#   - Filters response to only include requested fields
+#   - Returns 400 if invalid field names are requested
+#   - Applied after orchestration (all backends called regardless)
 
 # =============================================================================
 # REST Configuration
@@ -41,6 +49,23 @@
     from:
       uri: direct:getSubmission
       steps:
+        # Remove problematic query parameter headers immediately to prevent response header issues
+        - removeHeader:
+            name: "fields[submission-returns]"
+        - removeHeader:
+            name: "fields[:submission-returns]"
+        
+        # Log all incoming headers and query parameters for debugging
+        - log:
+            message: "=== INCOMING REQUEST DEBUG ==="
+            loggingLevel: INFO
+        - log:
+            message: "All Headers: ${headers}"
+            loggingLevel: INFO
+        - log:
+            message: "Query String: ${header.CamelHttpQuery}"
+            loggingLevel: INFO
+        
         # Store correlation ID and query params
         - setProperty:
             name: correlationId
@@ -54,6 +79,34 @@
         - setProperty:
             name: periodKey
             simple: "${header.periodKey}"
+        # Extract fields[submission-returns] parameter from raw query string
+        - setProperty:
+            name: fieldsParam
+            groovy: |
+              def rawQuery = exchange.in.getHeader('CamelHttpRawQuery', String)
+              if (!rawQuery) {
+                return null
+              }
+              
+              // Parse query string for fields[submission-returns] or fields[:submission-returns]
+              def params = rawQuery.split('&')
+              for (param in params) {
+                if (param.startsWith('fields%5Bsubmission-returns%5D=') || param.startsWith('fields[submission-returns]=')) {
+                  // URL decode and extract value
+                  def value = param.split('=', 2)[1]
+                  return java.net.URLDecoder.decode(value, 'UTF-8')
+                }
+                if (param.startsWith('fields%5B%3Asubmission-returns%5D=') || param.startsWith('fields[:submission-returns]=')) {
+                  // URL decode and extract value
+                  def value = param.split('=', 2)[1]
+                  return java.net.URLDecoder.decode(value, 'UTF-8')
+                }
+              }
+              return null
+        
+        - log:
+            message: "Extracted fieldsParam: ${exchangeProperty.fieldsParam}"
+            loggingLevel: INFO
 
         # Route based on query parameters
         - choice:
@@ -80,6 +133,7 @@
 # 1. tax-platform -> get submission
 # 2. customer -> get trader details
 # 3. Combine into enriched response
+# 4. Apply sparse fieldsets if requested
 # =============================================================================
 
 - route:
@@ -154,6 +208,107 @@
 
               return JsonOutput.toJson(submission)
 
+        # Step 4: Apply sparse fieldsets if requested
+        - choice:
+            when:
+              - simple: "${exchangeProperty.fieldsParam} != null && ${exchangeProperty.fieldsParam} != ''"
+                steps:
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        import groovy.json.JsonOutput
+
+                        def slurper = new JsonSlurper()
+                        def response = slurper.parseText(body)
+                        def fieldsParam = exchange.getProperty('fieldsParam', String)
+                        
+                        // Parse requested fields (comma-separated)
+                        def requestedFields = fieldsParam.split(',').collect { it.trim() }
+                        
+                        // Helper function to get nested value from object using dot notation
+                        def getNestedValue(obj, path) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (part in parts) {
+                            if (current == null || !(current instanceof Map) || !current.containsKey(part)) {
+                              return null
+                            }
+                            current = current[part]
+                          }
+                          return current
+                        }
+                        
+                        // Helper function to set nested value in object using dot notation
+                        def setNestedValue(obj, path, value) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (int i = 0; i < parts.size() - 1; i++) {
+                            def part = parts[i]
+                            if (!current.containsKey(part)) {
+                              current[part] = [:]
+                            }
+                            current = current[part]
+                          }
+                          current[parts[-1]] = value
+                        }
+                        
+                        // Validate all requested fields exist in response
+                        def invalidFields = []
+                        for (field in requestedFields) {
+                          def value = getNestedValue(response, field)
+                          if (value == null) {
+                            // Check if it's a top-level field that exists
+                            if (!field.contains('.') && response.containsKey(field)) {
+                              continue
+                            }
+                            invalidFields.add(field)
+                          }
+                        }
+                        
+                        if (invalidFields) {
+                          exchange.setProperty('invalidFields', invalidFields.join(', '))
+                          exchange.setProperty('sparseFieldsetError', true)
+                          return body // Will be replaced by error response
+                        }
+                        
+                        // Build filtered response with nested structure
+                        def filtered = [:]
+                        for (field in requestedFields) {
+                          if (field.contains('.')) {
+                            // Nested field - reconstruct the path
+                            def value = getNestedValue(response, field)
+                            setNestedValue(filtered, field, value)
+                          } else {
+                            // Top-level field
+                            if (response.containsKey(field)) {
+                              filtered[field] = response[field]
+                            }
+                          }
+                        }
+                        
+                        return JsonOutput.toJson(filtered)
+
+        # Handle sparse fieldset validation errors
+        - choice:
+            when:
+              - simple: "${exchangeProperty.sparseFieldsetError} == true"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      simple: '{"code": "INVALID_FIELDS", "message": "Unknown fields requested: ${exchangeProperty.invalidFields}"}'
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - stop: {}
+
+        # Remove problematic query parameter headers before response
+        - removeHeader:
+            name: "fields[submission-returns]"
+        - removeHeader:
+            name: "fields[:submission-returns]"
+
         # Set response headers
         - setHeader:
             name: Content-Type
@@ -165,6 +320,7 @@
 # =============================================================================
 # Route: GET by Approval Number + Period Key
 # Simple pass-through for now (orchestration can be added later)
+# Apply sparse fieldsets if requested
 # =============================================================================
 
 - route:
@@ -179,6 +335,110 @@
             simple: "${exchangeProperty.correlationId}"
         - toD:
             uri: "http://tax-platform-proxy:4010/submissions/vpd?vpdApprovalNumber=${exchangeProperty.approvalNumber}&periodKey=${exchangeProperty.periodKey}&bridgeEndpoint=true"
+
+        # Apply sparse fieldsets if requested
+        - choice:
+            when:
+              - simple: "${exchangeProperty.fieldsParam} != null && ${exchangeProperty.fieldsParam} != ''"
+                steps:
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        import groovy.json.JsonOutput
+
+                        def slurper = new JsonSlurper()
+                        // Convert body to String if it's a byte array
+                        def bodyText = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        def response = slurper.parseText(bodyText)
+                        def fieldsParam = exchange.getProperty('fieldsParam', String)
+                        
+                        // Parse requested fields (comma-separated)
+                        def requestedFields = fieldsParam.split(',').collect { it.trim() }
+                        
+                        // Helper function to get nested value from object using dot notation
+                        def getNestedValue(obj, path) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (part in parts) {
+                            if (current == null || !(current instanceof Map) || !current.containsKey(part)) {
+                              return null
+                            }
+                            current = current[part]
+                          }
+                          return current
+                        }
+                        
+                        // Helper function to set nested value in object using dot notation
+                        def setNestedValue(obj, path, value) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (int i = 0; i < parts.size() - 1; i++) {
+                            def part = parts[i]
+                            if (!current.containsKey(part)) {
+                              current[part] = [:]
+                            }
+                            current = current[part]
+                          }
+                          current[parts[-1]] = value
+                        }
+                        
+                        // Validate all requested fields exist in response
+                        def invalidFields = []
+                        for (field in requestedFields) {
+                          def value = getNestedValue(response, field)
+                          if (value == null) {
+                            // Check if it's a top-level field that exists
+                            if (!field.contains('.') && response.containsKey(field)) {
+                              continue
+                            }
+                            invalidFields.add(field)
+                          }
+                        }
+                        
+                        if (invalidFields) {
+                          exchange.setProperty('invalidFields', invalidFields.join(', '))
+                          exchange.setProperty('sparseFieldsetError', true)
+                          return bodyText // Will be replaced by error response
+                        }
+                        
+                        // Build filtered response with nested structure
+                        def filtered = [:]
+                        for (field in requestedFields) {
+                          if (field.contains('.')) {
+                            // Nested field - reconstruct the path
+                            def value = getNestedValue(response, field)
+                            setNestedValue(filtered, field, value)
+                          } else {
+                            // Top-level field
+                            if (response.containsKey(field)) {
+                              filtered[field] = response[field]
+                            }
+                          }
+                        }
+                        
+                        return JsonOutput.toJson(filtered)
+
+        # Handle sparse fieldset validation errors
+        - choice:
+            when:
+              - simple: "${exchangeProperty.sparseFieldsetError} == true"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      simple: '{"code": "INVALID_FIELDS", "message": "Unknown fields requested: ${exchangeProperty.invalidFields}"}'
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - stop: {}
+
+        # Remove problematic query parameter headers before response
+        - removeHeader:
+            name: "fields[submission-returns]"
+        - removeHeader:
+            name: "fields[:submission-returns]"
+
         - setHeader:
             name: Content-Type
             constant: "application/json"

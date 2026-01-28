@@ -1,8 +1,9 @@
 /**
- * VPD Domain API Acceptance Tests - Phase 7b
+ * VPD Domain API Acceptance Tests - Phase 7b + Sparse Fieldsets
  *
  * Tests for the VPD Submission Returns Domain API running on Camel JBang.
- * Validates full orchestration flows including XML transformation.
+ * Validates full orchestration flows including XML transformation and
+ * sparse fieldsets (soft filtering) functionality.
  * Requires docker-compose stack to be running.
  *
  * Run with:
@@ -347,6 +348,412 @@ describe('VPD Domain API', () => {
       // In production this would be 404, but mock returns example data
       expect([200, 404, 422]).toContain(response.status);
     }, TIMEOUT_MS);
+  });
+
+  // ==========================================================================
+  // Sparse Fieldsets (Soft Filtering)
+  // ==========================================================================
+
+  describe('Sparse Fieldsets', () => {
+    const validAckRef = 'ACK-2026-01-26-000123';
+    const validApproval = 'VPD123456';
+    const validPeriod = '24A1';
+
+    describe('GET by acknowledgementReference with field filtering', () => {
+      it('should return only requested fields when fields[submission-returns] is provided', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference,customerId`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Should only contain requested fields
+          expect(body.acknowledgementReference).toBeDefined();
+          expect(body.customerId).toBeDefined();
+          
+          // Should NOT contain other fields
+          expect(body.vpdApprovalNumber).toBeUndefined();
+          expect(body.periodKey).toBeUndefined();
+          expect(body.status).toBeUndefined();
+          expect(body.trader).toBeUndefined();
+          
+          // Verify only 2 fields are present
+          expect(Object.keys(body).length).toBe(2);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return single field when only one field requested', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          expect(body.acknowledgementReference).toBeDefined();
+          expect(Object.keys(body).length).toBe(1);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return trader field when requested (orchestrated data)', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader,vpdApprovalNumber`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Trader is orchestrated from customer service
+          expect(body.trader).toBeDefined();
+          expect(body.trader.name).toBeDefined();
+          expect(body.vpdApprovalNumber).toBeDefined();
+          
+          // Should not contain other fields
+          expect(body.acknowledgementReference).toBeUndefined();
+          expect(body.customerId).toBeUndefined();
+          expect(body.status).toBeUndefined();
+          
+          expect(Object.keys(body).length).toBe(2);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return 400 for invalid field names', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=invalidField,anotherBadField`
+        );
+
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body.code).toBe('INVALID_FIELDS');
+        expect(body.message).toContain('invalidField');
+        expect(body.message).toContain('anotherBadField');
+      }, TIMEOUT_MS);
+
+      it('should return 400 when mixing valid and invalid fields', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference,invalidField`
+        );
+
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body.code).toBe('INVALID_FIELDS');
+        expect(body.message).toContain('invalidField');
+      }, TIMEOUT_MS);
+
+      it('should handle whitespace in field list', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference, customerId, vpdApprovalNumber`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          expect(body.acknowledgementReference).toBeDefined();
+          expect(body.customerId).toBeDefined();
+          expect(body.vpdApprovalNumber).toBeDefined();
+          expect(Object.keys(body).length).toBe(3);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return full response when fields parameter is empty', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Should return full response (no filtering)
+          expect(body.acknowledgementReference).toBeDefined();
+          expect(body.vpdApprovalNumber).toBeDefined();
+          expect(body.periodKey).toBeDefined();
+          expect(Object.keys(body).length).toBeGreaterThan(3);
+        }
+      }, TIMEOUT_MS);
+    });
+
+    describe('GET by vpdApprovalNumber + periodKey with field filtering', () => {
+      it('should return only requested fields', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}&fields[submission-returns]=vpdApprovalNumber,periodKey,status`
+        );
+
+        // Prism may return 422 randomly, accept both
+        expect([200, 422]).toContain(response.status);
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          expect(body.vpdApprovalNumber).toBeDefined();
+          expect(body.periodKey).toBeDefined();
+          expect(body.status).toBeDefined();
+          
+          // Should not contain other fields
+          expect(body.acknowledgementReference).toBeUndefined();
+          expect(body.customerId).toBeUndefined();
+          
+          expect(Object.keys(body).length).toBe(3);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return 400 for invalid field names', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}&fields[submission-returns]=nonExistentField`
+        );
+
+        // Prism may return 422 randomly, or 400 for invalid fields
+        expect([400, 422]).toContain(response.status);
+        
+        if (response.status === 400) {
+          const body = await response.json();
+          expect(body.code).toBe('INVALID_FIELDS');
+          expect(body.message).toContain('nonExistentField');
+        }
+      }, TIMEOUT_MS);
+    });
+
+    describe('Sparse fieldsets with correlation ID', () => {
+      it('should propagate X-Correlation-Id with sparse fieldsets', async () => {
+        if (!apiAvailable) return;
+
+        const correlationId = `test-sparse-${Date.now()}`;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference`,
+          {
+            headers: {
+              'X-Correlation-Id': correlationId,
+            },
+          }
+        );
+
+        if (response.status === 200) {
+          expect(response.headers.get('x-correlation-id')).toBe(correlationId);
+        }
+      }, TIMEOUT_MS);
+
+      it('should propagate X-Correlation-Id even on validation errors', async () => {
+        if (!apiAvailable) return;
+
+        const correlationId = `test-sparse-error-${Date.now()}`;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=invalidField`,
+          {
+            headers: {
+              'X-Correlation-Id': correlationId,
+            },
+          }
+        );
+
+        // Prism may return 422 randomly, or 400 for invalid fields
+        expect([400, 422]).toContain(response.status);
+        expect(response.headers.get('x-correlation-id')).toBe(correlationId);
+      }, TIMEOUT_MS);
+    });
+
+    describe('Performance - all backends called regardless of field selection', () => {
+      it('should call all backends even when requesting minimal fields', async () => {
+        if (!apiAvailable) return;
+
+        // Request only one field - but all backends should still be called
+        // This is verified by the fact that we can request the 'trader' field
+        // which comes from customer service orchestration
+        const startTime = Date.now();
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader`
+        );
+
+        const elapsed = Date.now() - startTime;
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Trader field is only available if customer service was called
+          expect(body.trader).toBeDefined();
+          expect(body.trader.name).toBeDefined();
+          
+          // Response time should be similar to full request
+          // (no optimization of backend calls in POC)
+          // This is a soft check - just verify it completes
+          expect(elapsed).toBeLessThan(TIMEOUT_MS);
+        }
+      }, TIMEOUT_MS);
+    });
+
+    describe('Nested field filtering', () => {
+      it('should return nested object when requesting with dot notation', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=submission.basicInformation`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Should contain submission object with only basicInformation
+          expect(body.submission).toBeDefined();
+          expect(body.submission.basicInformation).toBeDefined();
+          expect(body.submission.basicInformation.returnType).toBeDefined();
+          expect(body.submission.basicInformation.submittedBy).toBeDefined();
+          
+          // Should not contain dutyProducts
+          expect(body.submission.dutyProducts).toBeUndefined();
+          
+          // Should not contain other top-level fields
+          expect(body.acknowledgementReference).toBeUndefined();
+          expect(body.trader).toBeUndefined();
+          
+          // Only submission should be present at top level
+          expect(Object.keys(body).length).toBe(1);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return deeply nested field', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=submission.basicInformation.submittedBy.name`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Should reconstruct the path to the nested field
+          expect(body.submission).toBeDefined();
+          expect(body.submission.basicInformation).toBeDefined();
+          expect(body.submission.basicInformation.submittedBy).toBeDefined();
+          expect(body.submission.basicInformation.submittedBy.name).toBeDefined();
+          expect(typeof body.submission.basicInformation.submittedBy.name).toBe('string');
+          
+          // Should not contain other fields at the same level
+          expect(body.submission.basicInformation.returnType).toBeUndefined();
+          expect(body.submission.basicInformation.submittedBy.type).toBeUndefined();
+        }
+      }, TIMEOUT_MS);
+
+      it('should support mixing top-level and nested fields', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference,submission.basicInformation,trader.name`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          // Top-level field
+          expect(body.acknowledgementReference).toBeDefined();
+          
+          // Nested field in submission
+          expect(body.submission).toBeDefined();
+          expect(body.submission.basicInformation).toBeDefined();
+          expect(body.submission.dutyProducts).toBeUndefined();
+          
+          // Nested field in trader
+          expect(body.trader).toBeDefined();
+          expect(body.trader.name).toBeDefined();
+          expect(body.trader.type).toBeUndefined();
+          expect(body.trader.address).toBeUndefined();
+          
+          // Should have 3 top-level fields
+          expect(Object.keys(body).length).toBe(3);
+        }
+      }, TIMEOUT_MS);
+
+      it('should return 400 for invalid nested field paths', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=submission.nonExistentField`
+        );
+
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body.code).toBe('INVALID_FIELDS');
+        expect(body.message).toContain('submission.nonExistentField');
+      }, TIMEOUT_MS);
+
+      it('should return 400 when nested path does not exist', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader.address.invalidField`
+        );
+
+        expect(response.status).toBe(400);
+        const body = await response.json();
+        expect(body.code).toBe('INVALID_FIELDS');
+        expect(body.message).toContain('trader.address.invalidField');
+      }, TIMEOUT_MS);
+
+      it('should handle multiple nested fields from same parent', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader.name,trader.type`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          expect(body.trader).toBeDefined();
+          expect(body.trader.name).toBeDefined();
+          expect(body.trader.type).toBeDefined();
+          
+          // Should not include address
+          expect(body.trader.address).toBeUndefined();
+          
+          // Only trader at top level
+          expect(Object.keys(body).length).toBe(1);
+          // Only name and type in trader
+          expect(Object.keys(body.trader).length).toBe(2);
+        }
+      }, TIMEOUT_MS);
+
+      it('should handle nested array access', async () => {
+        if (!apiAvailable) return;
+
+        const response = await fetch(
+          `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=calculations.totalDutyDue.amount`
+        );
+
+        if (response.status === 200) {
+          const body = await response.json();
+          
+          expect(body.calculations).toBeDefined();
+          expect(body.calculations.totalDutyDue).toBeDefined();
+          expect(body.calculations.totalDutyDue.amount).toBeDefined();
+          expect(typeof body.calculations.totalDutyDue.amount).toBe('number');
+          
+          // Should not include currency
+          expect(body.calculations.totalDutyDue.currency).toBeUndefined();
+          // Should not include vat
+          expect(body.calculations.vat).toBeUndefined();
+        }
+      }, TIMEOUT_MS);
+    });
   });
 
   // ==========================================================================
