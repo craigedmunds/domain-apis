@@ -30,6 +30,8 @@ services:
     command: >
       run /routes/integration.yaml
       --dep=org.apache.camel:camel-jacksonxml
+      --dep=org.apache.camel:camel-groovy
+      --dep=org.apache.groovy:groovy-json:4.0.29
     volumes:
       - ./specs/vaping-duty/domain/platform/routes:/routes:ro
     networks:
