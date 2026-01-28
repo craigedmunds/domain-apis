@@ -155,6 +155,9 @@
             name: Content-Type
             constant: "application/json"
         - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - setHeader:
@@ -198,6 +201,9 @@
         - setHeader:
             name: CamelHttpMethod
             constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
