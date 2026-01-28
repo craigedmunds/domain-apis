@@ -18,9 +18,18 @@
         - setProperty:
             name: idempotencyKey
             simple: "${header.X-Idempotency-Key}"
+        # Convert body to String to ensure it can be reused later
         - setProperty:
             name: requestBody
-            simple: "${body}"
+            groovy: |
+              def bodyObj = body
+              if (bodyObj instanceof byte[]) {
+                return new String(bodyObj, 'UTF-8')
+              } else if (bodyObj instanceof InputStream) {
+                def bytes = bodyObj.bytes
+                return new String(bytes, 'UTF-8')
+              }
+              return bodyObj.toString()
 
         # Extract vpdApprovalNumber and periodKey from request body
         - setProperty:
@@ -56,9 +65,33 @@
         - setBody:
             simple: "${exchangeProperty.requestBody}"
         - to:
-            uri: "http://excise-proxy:4010/excise/vpd/validate-and-calculate?bridgeEndpoint=true"
+            uri: "http://excise-proxy:4010/excise/vpd/validate-and-calculate?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
-        # Parse XML validation response
+        # Store response code and check for errors from excise
+        - setProperty:
+            name: exciseResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${exchangeProperty.exciseResponseCode} != 200"
+                steps:
+                  - log:
+                      message: "Excise returned error: ${exchangeProperty.exciseResponseCode}"
+                      loggingLevel: WARN
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      simple: "${exchangeProperty.exciseResponseCode}"
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - setHeader:
+                      name: X-Correlation-Id
+                      simple: "${exchangeProperty.correlationId}"
+                  - setBody:
+                      simple: '{"code": "EXCISE_ERROR", "message": "Excise validation service returned an error"}'
+                  - stop: {}
+
+        # Parse XML validation response (only reached if excise returned 200)
         - setProperty:
             name: exciseValidationXml
             simple: "${body}"
@@ -184,7 +217,7 @@
 
               return JsonOutput.toJson(storeRequest)
         - to:
-            uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true"
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
         # Store tax-platform response
         - setProperty:
@@ -208,7 +241,7 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
         # Store customer response
         - setProperty:

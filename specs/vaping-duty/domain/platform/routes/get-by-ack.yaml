@@ -26,7 +26,7 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
+            uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
         # Store submission response and extract keys
         - setProperty:
@@ -65,7 +65,7 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}?bridgeEndpoint=true"
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
         # Parse XML registration response to JSON
         - setProperty:
@@ -108,7 +108,7 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true"
+            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
         # Parse XML period response to JSON
         - setProperty:
@@ -155,7 +155,7 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true&throwExceptionOnFailure=false"
 
         # Store customer response
         - setProperty:
