@@ -1,0 +1,104 @@
+# VPD Domain API - REST Configuration and Entry Point
+#
+# This file contains:
+# - REST configuration (port, binding mode)
+# - REST endpoint definitions
+# - Entry point routing (getSubmission)
+#
+# Other routes are in separate files:
+# - get-by-ack.yaml - GET by acknowledgementReference
+# - get-by-approval.yaml - GET by vpdApprovalNumber+periodKey
+# - post-submission.yaml - POST submission
+# - common.yaml - Health check, sparse fieldsets
+
+# =============================================================================
+# REST Configuration
+# =============================================================================
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: off
+    port: 8080
+
+# =============================================================================
+# REST Endpoints
+# =============================================================================
+
+- rest:
+    path: /duty/vpd/submission-returns/v1
+    get:
+      - to: direct:getSubmission
+    post:
+      - to: direct:postSubmission
+
+- rest:
+    path: /health
+    get:
+      - to: direct:health
+
+# =============================================================================
+# Route: GET Submission - Entry point
+# Routes to appropriate handler based on query parameters
+# =============================================================================
+
+- route:
+    id: getSubmission
+    from:
+      uri: direct:getSubmission
+      steps:
+        # Remove problematic query parameter headers immediately
+        - removeHeader:
+            name: "fields[submission-returns]"
+
+        # Store correlation ID and query params
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setProperty:
+            name: ackRef
+            simple: "${header.acknowledgementReference}"
+        - setProperty:
+            name: approvalNumber
+            simple: "${header.vpdApprovalNumber}"
+        - setProperty:
+            name: periodKey
+            simple: "${header.periodKey}"
+
+        # Extract fields[submission-returns] parameter from raw query string
+        - setProperty:
+            name: fieldsParam
+            groovy: |
+              def rawQuery = exchange.in.getHeader('CamelHttpRawQuery', String)
+              if (!rawQuery) {
+                return null
+              }
+
+              // Parse query string for fields[submission-returns]
+              def params = rawQuery.split('&')
+              for (param in params) {
+                if (param.startsWith('fields%5Bsubmission-returns%5D=') || param.startsWith('fields[submission-returns]=')) {
+                  def value = param.split('=', 2)[1]
+                  return java.net.URLDecoder.decode(value, 'UTF-8')
+                }
+              }
+              return null
+
+        # Route based on query parameters
+        - choice:
+            when:
+              - simple: "${exchangeProperty.ackRef} != null"
+                steps:
+                  - to: direct:getByAcknowledgement
+              - simple: "${exchangeProperty.approvalNumber} != null && ${exchangeProperty.periodKey} != null"
+                steps:
+                  - to: direct:getByApprovalAndPeriod
+            otherwise:
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 400
+                - setBody:
+                    constant: '{"code": "BAD_REQUEST", "message": "Either acknowledgementReference OR (vpdApprovalNumber AND periodKey) query parameters are required"}'
+                - setHeader:
+                    name: Content-Type
+                    constant: "application/json"

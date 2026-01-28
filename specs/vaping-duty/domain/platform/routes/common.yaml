@@ -1,0 +1,126 @@
+# VPD Domain API - Common/Shared Routes
+#
+# This file contains:
+# - Sparse fieldsets route (applySparseFieldsets)
+# - Health check route
+
+# =============================================================================
+# Reusable Route: Apply Sparse Fieldsets
+# Filters response body to only include requested fields
+# =============================================================================
+
+- route:
+    id: applySparseFieldsets
+    from:
+      uri: direct:applySparseFieldsets
+      steps:
+        - choice:
+            when:
+              - simple: "${exchangeProperty.fieldsParam} != null && ${exchangeProperty.fieldsParam} != ''"
+                steps:
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        import groovy.json.JsonOutput
+
+                        def slurper = new JsonSlurper()
+                        // Convert body to String if it's a byte array
+                        def bodyText = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        def response = slurper.parseText(bodyText)
+                        def fieldsParam = exchange.getProperty('fieldsParam', String)
+
+                        // Parse requested fields (comma-separated)
+                        def requestedFields = fieldsParam.split(',').collect { it.trim() }
+
+                        // Helper function to get nested value from object using dot notation
+                        def getNestedValue(obj, path) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (part in parts) {
+                            if (current == null || !(current instanceof Map) || !current.containsKey(part)) {
+                              return null
+                            }
+                            current = current[part]
+                          }
+                          return current
+                        }
+
+                        // Helper function to set nested value in object using dot notation
+                        def setNestedValue(obj, path, value) {
+                          def parts = path.split('\\.')
+                          def current = obj
+                          for (int i = 0; i < parts.size() - 1; i++) {
+                            def part = parts[i]
+                            if (!current.containsKey(part)) {
+                              current[part] = [:]
+                            }
+                            current = current[part]
+                          }
+                          current[parts[-1]] = value
+                        }
+
+                        // Validate all requested fields exist in response
+                        def invalidFields = []
+                        for (field in requestedFields) {
+                          def value = getNestedValue(response, field)
+                          if (value == null) {
+                            // Check if it's a top-level field that exists
+                            if (!field.contains('.') && response.containsKey(field)) {
+                              continue
+                            }
+                            invalidFields.add(field)
+                          }
+                        }
+
+                        if (invalidFields) {
+                          exchange.setProperty('invalidFields', invalidFields.join(', '))
+                          exchange.setProperty('sparseFieldsetError', true)
+                          return bodyText // Will be replaced by error response
+                        }
+
+                        // Build filtered response with nested structure
+                        def filtered = [:]
+                        for (field in requestedFields) {
+                          if (field.contains('.')) {
+                            // Nested field - reconstruct the path
+                            def value = getNestedValue(response, field)
+                            setNestedValue(filtered, field, value)
+                          } else {
+                            // Top-level field
+                            if (response.containsKey(field)) {
+                              filtered[field] = response[field]
+                            }
+                          }
+                        }
+
+                        return JsonOutput.toJson(filtered)
+
+        # Handle sparse fieldset validation errors
+        - choice:
+            when:
+              - simple: "${exchangeProperty.sparseFieldsetError} == true"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      simple: '{"code": "INVALID_FIELDS", "message": "Unknown fields requested: ${exchangeProperty.invalidFields}"}'
+                  - setHeader:
+                      name: Content-Type
+                      constant: "application/json"
+                  - stop: {}
+
+# =============================================================================
+# Health check
+# =============================================================================
+
+- route:
+    id: health
+    from:
+      uri: direct:health
+      steps:
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setBody:
+            constant: '{"status": "UP"}'

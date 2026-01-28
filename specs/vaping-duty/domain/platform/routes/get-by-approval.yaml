@@ -1,0 +1,212 @@
+# VPD Domain API - GET by Approval Number + Period Key
+#
+# Full orchestration flow:
+# 1. excise -> get registration (XML) - validation + get customerId
+# 2. excise -> get period (XML)
+# 3. tax-platform -> find submission by approval+period
+# 4. customer -> get trader details
+# 5. Combine into enriched response
+# 6. Apply sparse fieldsets if requested
+
+- route:
+    id: getByApprovalAndPeriod
+    from:
+      uri: direct:getByApprovalAndPeriod
+      steps:
+        # Step 1: Call excise to get registration (XML response) - validates approval number
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/${exchangeProperty.approvalNumber}?bridgeEndpoint=true"
+
+        # Parse XML registration response to JSON
+        - setProperty:
+            name: exciseRegistrationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseRegistrationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def registration = [
+                vpdApprovalNumber: xml.vpdApprovalNumber.text(),
+                customerId: xml.customerId.text(),
+                status: xml.status.text(),
+                registeredDate: xml.registeredDate.text()
+              ]
+
+              return JsonOutput.toJson(registration)
+        - setProperty:
+            name: exciseRegistrationResponse
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            jsonpath:
+              expression: "$.customerId"
+              suppressExceptions: true
+
+        - log:
+            message: "Excise registration received - customerId: ${exchangeProperty.customerId}"
+            loggingLevel: INFO
+
+        # Step 2: Call excise to get period (XML response)
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/periods/${exchangeProperty.periodKey}?bridgeEndpoint=true"
+
+        # Parse XML period response to JSON
+        - setProperty:
+            name: excisePeriodXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('excisePeriodXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def period = [
+                periodKey: xml.periodKey.text(),
+                startDate: xml.startDate.text(),
+                endDate: xml.endDate.text(),
+                state: xml.state.text(),
+                dutyRates: [
+                  standardRate: xml.dutyRates.standardRate.text(),
+                  reducedRate: xml.dutyRates.reducedRate.text()
+                ]
+              ]
+
+              return JsonOutput.toJson(period)
+        - setProperty:
+            name: excisePeriodResponse
+            simple: "${body}"
+
+        - log:
+            message: "Excise period received (XML->JSON)"
+            loggingLevel: INFO
+
+        # Step 3: Call tax-platform to find submission
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?vpdApprovalNumber=${exchangeProperty.approvalNumber}&periodKey=${exchangeProperty.periodKey}&bridgeEndpoint=true"
+
+        # Store submission response
+        - setProperty:
+            name: taxPlatformResponse
+            simple: "${body}"
+
+        - log:
+            message: "Tax-platform submission found"
+            loggingLevel: INFO
+
+        # Step 4: Call customer service to get trader details
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+
+        # Store customer response
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+
+        - log:
+            message: "Customer response received"
+            loggingLevel: INFO
+
+        # Step 5: Combine all responses using Groovy
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+
+              // Convert body to String if it's a byte array
+              def taxPlatformText = exchange.getProperty('taxPlatformResponse')
+              if (taxPlatformText instanceof byte[]) {
+                taxPlatformText = new String(taxPlatformText, 'UTF-8')
+              }
+              def submission = slurper.parseText(taxPlatformText.toString())
+
+              def customerText = exchange.getProperty('customerResponse')
+              if (customerText instanceof byte[]) {
+                customerText = new String(customerText, 'UTF-8')
+              }
+              def customer = slurper.parseText(customerText.toString())
+
+              def registration = slurper.parseText(exchange.getProperty('exciseRegistrationResponse', String))
+              def period = slurper.parseText(exchange.getProperty('excisePeriodResponse', String))
+
+              // Enrich with trader from customer data
+              submission.trader = [
+                name: customer.name,
+                type: customer.type,
+                address: customer.registeredAddress
+              ]
+
+              // Enrich with registration details from excise
+              submission.registration = [
+                status: registration.status,
+                registeredDate: registration.registeredDate
+              ]
+
+              // Enrich with period details from excise
+              submission.period = [
+                startDate: period.startDate,
+                endDate: period.endDate,
+                state: period.state,
+                dutyRates: period.dutyRates
+              ]
+
+              return JsonOutput.toJson(submission)
+
+        # Step 6: Apply sparse fieldsets if requested
+        - to: direct:applySparseFieldsets
+
+        # Remove problematic query parameter headers before response
+        - removeHeader:
+            name: "fields[submission-returns]"
+
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
