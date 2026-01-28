@@ -484,55 +484,57 @@
 # =============================================================================
 
 - onException:
-    - exception: org.apache.camel.http.base.HttpOperationFailedException
-      handled: true
-      steps:
-        - setProperty:
-            name: errorStatusCode
-            simple: "${exception.statusCode}"
-        - choice:
-            when:
-              - simple: "${exception.statusCode} == 404"
-                steps:
-                  - setHeader:
-                      name: CamelHttpResponseCode
-                      constant: 404
-                  - setBody:
-                      constant: '{"code": "NOT_FOUND", "message": "Resource not found"}'
-            when:
-              - simple: "${exception.statusCode} == 409"
-                steps:
-                  - setHeader:
-                      name: CamelHttpResponseCode
-                      constant: 409
-                  - setBody:
-                      constant: '{"code": "CONFLICT", "message": "Resource conflict"}'
-            when:
-              - simple: "${exception.statusCode} == 422"
-                steps:
-                  - setHeader:
-                      name: CamelHttpResponseCode
-                      constant: 422
-                  - setBody:
-                      constant: '{"code": "VALIDATION_ERROR", "message": "Validation failed"}'
-            when:
-              - simple: "${exception.statusCode} == 503"
-                steps:
-                  - setHeader:
-                      name: CamelHttpResponseCode
-                      constant: 503
-                  - setBody:
-                      constant: '{"code": "SERVICE_UNAVAILABLE", "message": "Backend service unavailable"}'
-            otherwise:
+    exception:
+      - org.apache.camel.http.base.HttpOperationFailedException
+    handled:
+      constant: true
+    steps:
+      - setProperty:
+          name: errorStatusCode
+          simple: "${exception.statusCode}"
+      - choice:
+          when:
+            - simple: "${exception.statusCode} == 404"
               steps:
                 - setHeader:
                     name: CamelHttpResponseCode
-                    constant: 500
+                    constant: 404
                 - setBody:
-                    simple: '{"code": "INTERNAL_ERROR", "message": "An error occurred"}'
-        - setHeader:
-            name: Content-Type
-            constant: "application/json"
-        - setHeader:
-            name: X-Correlation-Id
-            simple: "${exchangeProperty.correlationId}"
+                    constant: '{"code": "NOT_FOUND", "message": "Resource not found"}'
+          when:
+            - simple: "${exception.statusCode} == 409"
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 409
+                - setBody:
+                    constant: '{"code": "CONFLICT", "message": "Resource conflict"}'
+          when:
+            - simple: "${exception.statusCode} == 422"
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 422
+                - setBody:
+                    constant: '{"code": "VALIDATION_ERROR", "message": "Validation failed"}'
+          when:
+            - simple: "${exception.statusCode} == 503"
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 503
+                - setBody:
+                    constant: '{"code": "SERVICE_UNAVAILABLE", "message": "Backend service unavailable"}'
+          otherwise:
+            steps:
+              - setHeader:
+                  name: CamelHttpResponseCode
+                  constant: 500
+              - setBody:
+                  simple: '{"code": "INTERNAL_ERROR", "message": "An error occurred"}'
+      - setHeader:
+          name: Content-Type
+          constant: "application/json"
+      - setHeader:
+          name: X-Correlation-Id
+          simple: "${exchangeProperty.correlationId}"
