@@ -1,87 +1,158 @@
 # VPD Domain API - Camel YAML DSL Routes
 #
-# Phase 7a: Simple pass-through to validate JBang + Camel YAML DSL setup
+# Phase 7b: Full Orchestration
 #
-# Demonstrates GET submission by acknowledgement reference pass-through.
-# Dependencies inferred automatically by apache/camel-jbang image.
-#
-# Fault Injection:
-#   Controlled via Envoy proxies. Pass these headers through to enable:
-#   - x-envoy-fault-delay-request: delay in ms (e.g., "500")
-#   - x-envoy-fault-abort-request: HTTP error status (e.g., "503")
-#   Envoy proxies are configured to apply faults when these headers are present.
+# GET by acknowledgementReference orchestration:
+#   1. Call tax-platform to get submission (includes customerId)
+#   2. Call customer service to get trader details (using customerId)
+#   3. Combine into enriched response with trader field
 
-# camel-jbang dependency annotations (auto-resolved)
-# //DEPS org.apache.camel:camel-http
-# //DEPS org.apache.camel:camel-jackson
-# //DEPS org.apache.camel:camel-platform-http
+# =============================================================================
+# REST Configuration
+# =============================================================================
 
-# REST configuration
 - restConfiguration:
     component: platform-http
     bindingMode: off
     port: 8080
 
-# REST endpoints
+# =============================================================================
+# REST Endpoints
+# =============================================================================
+
 - rest:
     path: /duty/vpd/submission-returns/v1
     get:
       - to: direct:getSubmission
+    post:
+      - to: direct:postSubmission
 
-# Health endpoint
 - rest:
     path: /health
     get:
       - to: direct:health
 
-# Route: Get submission by acknowledgement reference
+# =============================================================================
+# Route: GET Submission - Entry point
+# =============================================================================
+
 - route:
     id: getSubmission
     from:
       uri: direct:getSubmission
       steps:
-        # Store incoming headers and query params
+        # Store correlation ID and query params
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
         - setProperty:
             name: ackRef
             simple: "${header.acknowledgementReference}"
         - setProperty:
-            name: correlationId
-            simple: "${header.X-Correlation-Id}"
-        # Store fault injection headers if present (pass-through to Envoy)
+            name: approvalNumber
+            simple: "${header.vpdApprovalNumber}"
         - setProperty:
-            name: faultDelay
-            simple: "${header.x-envoy-fault-delay-request}"
-        - setProperty:
-            name: faultAbort
-            simple: "${header.x-envoy-fault-abort-request}"
+            name: periodKey
+            simple: "${header.periodKey}"
 
-        # Clear Camel HTTP headers before making outbound call
+        # Route based on query parameters
+        - choice:
+            when:
+              - simple: "${exchangeProperty.ackRef} != null"
+                steps:
+                  - to: direct:getByAcknowledgement
+              - simple: "${exchangeProperty.approvalNumber} != null && ${exchangeProperty.periodKey} != null"
+                steps:
+                  - to: direct:getByApprovalAndPeriod
+            otherwise:
+              steps:
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: 400
+                - setBody:
+                    constant: '{"code": "BAD_REQUEST", "message": "Either acknowledgementReference OR (vpdApprovalNumber AND periodKey) query parameters are required"}'
+                - setHeader:
+                    name: Content-Type
+                    constant: "application/json"
+
+# =============================================================================
+# Route: GET by Acknowledgement Reference - ORCHESTRATED
+# 1. tax-platform -> get submission
+# 2. customer -> get trader details
+# 3. Combine into enriched response
+# =============================================================================
+
+- route:
+    id: getByAcknowledgement
+    from:
+      uri: direct:getByAcknowledgement
+      steps:
+        # Step 1: Call tax-platform to get submission
         - removeHeaders:
             pattern: "CamelHttp*"
-
-        # Set headers for backend call
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
-        # Pass through fault injection headers to Envoy proxy
-        - choice:
-            when:
-              - simple: "${exchangeProperty.faultDelay} != null"
-                steps:
-                  - setHeader:
-                      name: x-envoy-fault-delay-request
-                      simple: "${exchangeProperty.faultDelay}"
-        - choice:
-            when:
-              - simple: "${exchangeProperty.faultAbort} != null"
-                steps:
-                  - setHeader:
-                      name: x-envoy-fault-abort-request
-                      simple: "${exchangeProperty.faultAbort}"
-
-        # Call tax-platform backend via Envoy proxy
         - toD:
             uri: "http://tax-platform-proxy:4010/submissions/vpd/${exchangeProperty.ackRef}?bridgeEndpoint=true"
+
+        # Store submission response and extract customerId
+        - setProperty:
+            name: taxPlatformResponse
+            simple: "${body}"
+        - setProperty:
+            name: customerId
+            jsonpath:
+              expression: "$.customerId"
+              suppressExceptions: true
+
+        # Log for debugging
+        - log:
+            message: "Tax-platform response received, customerId: ${exchangeProperty.customerId}"
+            loggingLevel: INFO
+
+        # Step 2: Call customer service to get trader details
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true"
+
+        # Store customer response
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+
+        - log:
+            message: "Customer response received"
+            loggingLevel: INFO
+
+        # Step 3: Combine responses using Groovy
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+              def submission = slurper.parseText(exchange.getProperty('taxPlatformResponse', String))
+              def customer = slurper.parseText(exchange.getProperty('customerResponse', String))
+
+              // Add trader field from customer data
+              submission.trader = [
+                name: customer.name,
+                type: customer.type,
+                address: customer.registeredAddress
+              ]
+
+              return JsonOutput.toJson(submission)
 
         # Set response headers
         - setHeader:
@@ -91,7 +162,74 @@
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
 
-# Route: Health check
+# =============================================================================
+# Route: GET by Approval Number + Period Key
+# Simple pass-through for now (orchestration can be added later)
+# =============================================================================
+
+- route:
+    id: getByApprovalAndPeriod
+    from:
+      uri: direct:getByApprovalAndPeriod
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?vpdApprovalNumber=${exchangeProperty.approvalNumber}&periodKey=${exchangeProperty.periodKey}&bridgeEndpoint=true"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# =============================================================================
+# Route: POST Submission - Pass-through
+# =============================================================================
+
+- route:
+    id: postSubmission
+    from:
+      uri: direct:postSubmission
+      steps:
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setProperty:
+            name: idempotencyKey
+            simple: "${header.X-Idempotency-Key}"
+        - setProperty:
+            name: requestBody
+            simple: "${body}"
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setHeader:
+            name: X-Idempotency-Key
+            simple: "${exchangeProperty.idempotencyKey}"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setBody:
+            simple: "${exchangeProperty.requestBody}"
+        - to:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# =============================================================================
+# Health check
+# =============================================================================
+
 - route:
     id: health
     from:
