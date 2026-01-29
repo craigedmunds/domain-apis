@@ -65,7 +65,7 @@
             constant: "GET"
         - setHeader:
             name: Accept
-            groovy: "exchange.getProperty('backendAccept', 'application/json')"
+            groovy: "exchange.getProperty('backendAccept') ?: 'application/json'"
         - setHeader:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
