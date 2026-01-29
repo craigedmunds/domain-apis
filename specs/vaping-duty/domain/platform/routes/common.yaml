@@ -1,8 +1,345 @@
 # VPD Domain API - Common/Shared Routes
 #
 # This file contains:
+# - Header extraction/injection routes (extractStandardHeaders, injectResponseHeaders)
 # - Sparse fieldsets route (applySparseFieldsets)
+# - Response assembly route (assembleGetResponse)
 # - Health check route
+
+# =============================================================================
+# Reusable Route: Extract Standard Headers
+# Call at the start of each route to extract correlation ID, idempotency key, etc.
+# =============================================================================
+
+- route:
+    id: extractStandardHeaders
+    from:
+      uri: direct:extractStandardHeaders
+      steps:
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setProperty:
+            name: idempotencyKey
+            simple: "${header.X-Idempotency-Key}"
+        - log:
+            message: "Request correlationId=${exchangeProperty.correlationId}"
+            loggingLevel: DEBUG
+
+# =============================================================================
+# Reusable Route: Inject Response Headers
+# Call before returning response to set standard headers
+# =============================================================================
+
+- route:
+    id: injectResponseHeaders
+    from:
+      uri: direct:injectResponseHeaders
+      steps:
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - removeHeader:
+            name: "fields[submission-returns]"
+        - removeHeader:
+            name: "CamelHttpQuery"
+
+# =============================================================================
+# Reusable Route: Prepare GET Request
+# Prepares headers for a GET request to a backend service
+# Expects: exchangeProperty.correlationId, exchangeProperty.backendAccept (default: application/json)
+# =============================================================================
+
+- route:
+    id: prepareGetRequest
+    from:
+      uri: direct:prepareGetRequest
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            groovy: "exchange.getProperty('backendAccept') ?: 'application/json'"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# =============================================================================
+# Reusable Route: Prepare POST Request
+# Prepares headers for a POST request to a backend service
+# Expects: exchangeProperty.correlationId, exchangeProperty.idempotencyKey
+# =============================================================================
+
+- route:
+    id: preparePostRequest
+    from:
+      uri: direct:preparePostRequest
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setHeader:
+            name: X-Idempotency-Key
+            simple: "${exchangeProperty.idempotencyKey}"
+
+# =============================================================================
+# Reusable Route: Prepare XML GET Request
+# Prepares headers for a GET request expecting XML response (for excise service)
+# =============================================================================
+
+- route:
+    id: prepareXmlGetRequest
+    from:
+      uri: direct:prepareXmlGetRequest
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# =============================================================================
+# Reusable Route: Parse Excise Registration XML
+# Transforms excise registration XML response to JSON
+# Expects: body contains XML
+# Sets: exciseRegistrationResponse property, customerId property (for subsequent calls)
+# =============================================================================
+
+- route:
+    id: parseExciseRegistrationXml
+    from:
+      uri: direct:parseExciseRegistrationXml
+      steps:
+        - setProperty:
+            name: exciseRegistrationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseRegistrationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              // Also set customerId property for subsequent calls
+              def customerId = xml.customerId.text()
+              if (customerId && !exchange.getProperty('customerId')) {
+                exchange.setProperty('customerId', customerId)
+              }
+
+              def registration = [
+                vpdApprovalNumber: xml.vpdApprovalNumber.text(),
+                customerId: customerId,
+                status: xml.status.text(),
+                registeredDate: xml.registeredDate.text()
+              ]
+
+              return JsonOutput.toJson(registration)
+        - setProperty:
+            name: exciseRegistrationResponse
+            simple: "${body}"
+
+# =============================================================================
+# Reusable Route: Prepare POST Request expecting XML Response
+# For excise validate-and-calculate which accepts JSON, returns XML
+# =============================================================================
+
+- route:
+    id: preparePostXmlRequest
+    from:
+      uri: direct:preparePostXmlRequest
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+
+# =============================================================================
+# Reusable Route: Parse Excise Validation XML
+# Transforms excise validate-and-calculate XML response to JSON
+# Expects: body contains XML
+# Sets: exciseValidationResponse property, customerId, validationValid
+# =============================================================================
+
+- route:
+    id: parseExciseValidationXml
+    from:
+      uri: direct:parseExciseValidationXml
+      steps:
+        - setProperty:
+            name: exciseValidationXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('exciseValidationXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def isValid = xml.valid.text() == 'true'
+              def customerId = xml.customerId.text()
+
+              // Set properties for subsequent use
+              exchange.setProperty('validationValid', isValid)
+              exchange.setProperty('customerId', customerId)
+
+              def validation = [
+                valid: isValid,
+                customerId: customerId,
+                calculations: [
+                  totalDutyDue: [
+                    amount: xml.calculations.totalDutyDue.text() ?: '0',
+                    currency: xml.calculations.totalDutyDue.@currency.text() ?: 'GBP'
+                  ],
+                  vat: [
+                    amount: xml.calculations.vat.text() ?: '0',
+                    rate: xml.calculations.vat.@rate.text() ?: '0.20'
+                  ],
+                  calculationHash: xml.calculations.calculationHash.text()
+                ],
+                warnings: []
+              ]
+
+              // Parse warnings
+              xml.warnings.warning.each { warning ->
+                validation.warnings << [
+                  code: warning.@code.text(),
+                  text: warning.text()
+                ]
+              }
+
+              return JsonOutput.toJson(validation)
+        - setProperty:
+            name: exciseValidationResponse
+            simple: "${body}"
+
+# =============================================================================
+# Reusable Route: Parse Excise Period XML
+# Transforms excise period XML response to JSON
+# Expects: body contains XML, sets excisePeriodResponse property
+# =============================================================================
+
+- route:
+    id: parseExcisePeriodXml
+    from:
+      uri: direct:parseExcisePeriodXml
+      steps:
+        - setProperty:
+            name: excisePeriodXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('excisePeriodXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def period = [
+                periodKey: xml.periodKey.text(),
+                startDate: xml.startDate.text(),
+                endDate: xml.endDate.text(),
+                state: xml.state.text(),
+                dutyRates: [
+                  standardRate: xml.dutyRates.standardRate.text(),
+                  reducedRate: xml.dutyRates.reducedRate.text()
+                ]
+              ]
+
+              return JsonOutput.toJson(period)
+        - setProperty:
+            name: excisePeriodResponse
+            simple: "${body}"
+
+# =============================================================================
+# Reusable Route: Assemble GET Response
+# Combines data from all backend responses into the final enriched response
+# =============================================================================
+
+- route:
+    id: assembleGetResponse
+    from:
+      uri: direct:assembleGetResponse
+      steps:
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def slurper = new JsonSlurper()
+
+              // Parse all backend responses
+              def submission = exchange.getProperty('taxPlatformResponse') ?
+                  slurper.parseText(exchange.getProperty('taxPlatformResponse', String)) : [:]
+              def customer = exchange.getProperty('customerResponse') ?
+                  slurper.parseText(exchange.getProperty('customerResponse', String)) : [:]
+              def registration = exchange.getProperty('exciseRegistrationResponse') ?
+                  slurper.parseText(exchange.getProperty('exciseRegistrationResponse', String)) : [:]
+              def period = exchange.getProperty('excisePeriodResponse') ?
+                  slurper.parseText(exchange.getProperty('excisePeriodResponse', String)) : [:]
+
+              // Enrich with trader from customer data
+              if (customer) {
+                submission.trader = [
+                  name: customer.name,
+                  type: customer.type,
+                  address: customer.registeredAddress
+                ]
+              }
+
+              // Enrich with registration details from excise
+              if (registration) {
+                submission.registration = [
+                  status: registration.status,
+                  registeredDate: registration.registeredDate
+                ]
+              }
+
+              // Enrich with period details from excise
+              if (period) {
+                submission.period = [
+                  startDate: period.startDate,
+                  endDate: period.endDate,
+                  state: period.state,
+                  dutyRates: period.dutyRates
+                ]
+              }
+
+              return JsonOutput.toJson(submission)
 
 # =============================================================================
 # Reusable Route: Apply Sparse Fieldsets
