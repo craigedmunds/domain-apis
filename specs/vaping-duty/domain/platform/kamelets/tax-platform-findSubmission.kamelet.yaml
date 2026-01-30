@@ -1,0 +1,51 @@
+# Generated from: mocks/tax-platform-api.yaml
+# Operation: findSubmission
+# GET /submissions/vpd?vpdApprovalNumber={approvalNumber}&periodKey={periodKey}
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: tax-platform-findSubmission
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Tax Platform - Find Submission
+    description: Find submission by approval number and period key
+    required:
+      - vpdApprovalNumber
+      - periodKey
+    properties:
+      vpdApprovalNumber:
+        title: VPD Approval Number
+        description: The VPD approval number
+        type: string
+      periodKey:
+        title: Period Key
+        description: The accounting period key
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?vpdApprovalNumber={{vpdApprovalNumber}}&periodKey={{periodKey}}&bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: taxPlatformResponse
+            simple: "${body}"
+        # Extract customerId for subsequent calls
+        - setProperty:
+            name: customerId
+            jsonpath:
+              expression: "$.customerId"
+              suppressExceptions: true

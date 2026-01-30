@@ -1,0 +1,65 @@
+# Generated from: mocks/excise-api.yaml
+# Operation: getPeriod
+# GET /excise/vpd/periods/{periodKey}
+# Response: application/xml -> transformed to JSON
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: excise-getPeriod
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Excise - Get Period
+    description: Retrieve VPD period by period key (XML response transformed to JSON)
+    required:
+      - periodKey
+    properties:
+      periodKey:
+        title: Period Key
+        description: The accounting period key
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/periods/{{periodKey}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        # Transform XML to JSON
+        - setProperty:
+            name: excisePeriodXml
+            simple: "${body}"
+        - setBody:
+            groovy: |
+              import groovy.xml.XmlSlurper
+              import groovy.json.JsonOutput
+
+              def xmlText = exchange.getProperty('excisePeriodXml', String)
+              def xml = new XmlSlurper().parseText(xmlText)
+
+              def period = [
+                periodKey: xml.periodKey.text(),
+                startDate: xml.startDate.text(),
+                endDate: xml.endDate.text(),
+                state: xml.state.text(),
+                dutyRates: [
+                  standardRate: xml.dutyRates.standardRate.text(),
+                  reducedRate: xml.dutyRates.reducedRate.text()
+                ]
+              ]
+
+              return JsonOutput.toJson(period)
+        - setProperty:
+            name: excisePeriodResponse
+            simple: "${body}"

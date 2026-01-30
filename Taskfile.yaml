@@ -443,6 +443,24 @@ tasks:
     cmds:
       - npm install
 
+  # VPD Domain API Library tasks
+  vpd:lib:build:
+    desc: Build VPD Domain API Groovy library JAR
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}/specs/vaping-duty/domain/platform/lib:/build" -w /build gradle:8.11-jdk21 gradle jar --no-daemon
+      - echo "✓ Library JAR built at specs/vaping-duty/domain/platform/lib/build/libs/domain-api-lib-1.0.0.jar"
+
+  vpd:lib:test:
+    desc: Run VPD Domain API library unit tests
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}/specs/vaping-duty/domain/platform/lib:/build" -w /build gradle:8.11-jdk21 gradle test --no-daemon
+
+  vpd:lib:clean:
+    desc: Clean VPD Domain API library build artifacts
+    cmds:
+      - rm -rf specs/vaping-duty/domain/platform/lib/build
+      - rm -rf specs/vaping-duty/domain/platform/lib/.gradle
+
   # Status check
   status:
     desc: Show project status

@@ -1,0 +1,69 @@
+# VPD Domain API - GET Submission Return by Acknowledgement Reference
+#
+# Refactored to use Kamelets for backend calls:
+# - tax-platform-getSubmission: Get submission by ack ref
+# - excise-getRegistration: Get registration (XML->JSON)
+# - excise-getPeriod: Get period (XML->JSON)
+# - customer-getCustomer: Get customer details
+#
+# Full orchestration flow:
+# 1. tax-platform -> get submission (extracts customerId, vpdApprovalNumber, periodKey)
+# 2. excise -> get registration (XML->JSON, extracts customerId)
+# 3. excise -> get period (XML->JSON)
+# 4. customer -> get trader details
+# 5. Combine into enriched response
+# 6. Apply sparse fieldsets if requested
+
+- route:
+    id: getSubmissionReturnByAck
+    from:
+      uri: direct:getSubmissionReturnByAck
+      steps:
+        # Step 1: Get submission from tax-platform
+        - kamelet:
+            name: tax-platform-getSubmission
+            parameters:
+              acknowledgementReference: "${exchangeProperty.ackRef}"
+
+        - log:
+            message: "Tax-platform response received - customerId: ${exchangeProperty.customerId}, approval: ${exchangeProperty.vpdApprovalNumber}, period: ${exchangeProperty.periodKey}"
+            loggingLevel: INFO
+
+        # Step 2: Get registration from excise (XML->JSON)
+        - kamelet:
+            name: excise-getRegistration
+            parameters:
+              vpdApprovalNumber: "${exchangeProperty.vpdApprovalNumber}"
+
+        - log:
+            message: "Excise registration received"
+            loggingLevel: INFO
+
+        # Step 3: Get period from excise (XML->JSON)
+        - kamelet:
+            name: excise-getPeriod
+            parameters:
+              periodKey: "${exchangeProperty.periodKey}"
+
+        - log:
+            message: "Excise period received"
+            loggingLevel: INFO
+
+        # Step 4: Get customer details
+        - kamelet:
+            name: customer-getCustomer
+            parameters:
+              customerId: "${exchangeProperty.customerId}"
+
+        - log:
+            message: "Customer response received"
+            loggingLevel: INFO
+
+        # Step 5: Combine all responses
+        - to: direct:assembleSubmissionReturnResponse
+
+        # Step 6: Apply sparse fieldsets if requested
+        - to: direct:applySparseFieldsets
+
+        # Set response headers
+        - to: direct:injectResponseHeaders

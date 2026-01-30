@@ -1,0 +1,40 @@
+# Generated from: mocks/customer-api.yaml
+# Operation: getCustomer
+# GET /customers/{customerId}
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: customer-getCustomer
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Customer - Get Customer
+    description: Retrieve customer details by ID
+    required:
+      - customerId
+    properties:
+      customerId:
+        title: Customer ID
+        description: The customer identifier
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/{{customerId}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
