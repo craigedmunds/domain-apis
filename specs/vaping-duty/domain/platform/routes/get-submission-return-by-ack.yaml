@@ -1,6 +1,6 @@
 # VPD Domain API - GET Submission Return by Acknowledgement Reference
 #
-# Refactored to use Kamelets for backend calls:
+# Uses Kamelets for backend calls:
 # - tax-platform-getSubmission: Get submission by ack ref
 # - excise-getRegistration: Get registration (XML->JSON)
 # - excise-getPeriod: Get period (XML->JSON)
@@ -13,6 +13,9 @@
 # 4. customer -> get trader details
 # 5. Combine into enriched response
 # 6. Apply sparse fieldsets if requested
+#
+# Note: Kamelet URIs include a unique routeId (e.g. /ack-tp) to ensure
+# separate instances per Kamelet invocation. See docs/api-producer-guide.md.
 
 - route:
     id: getSubmissionReturnByAck
@@ -20,40 +23,32 @@
       uri: direct:getSubmissionReturnByAck
       steps:
         # Step 1: Get submission from tax-platform
-        - kamelet:
-            name: tax-platform-getSubmission
-            parameters:
-              acknowledgementReference: "${exchangeProperty.ackRef}"
+        - to:
+            uri: "kamelet:tax-platform-getSubmission/ack-tp?acknowledgementReference=${exchangeProperty.ackRef}"
 
         - log:
             message: "Tax-platform response received - customerId: ${exchangeProperty.customerId}, approval: ${exchangeProperty.vpdApprovalNumber}, period: ${exchangeProperty.periodKey}"
             loggingLevel: INFO
 
         # Step 2: Get registration from excise (XML->JSON)
-        - kamelet:
-            name: excise-getRegistration
-            parameters:
-              vpdApprovalNumber: "${exchangeProperty.vpdApprovalNumber}"
+        - to:
+            uri: "kamelet:excise-getRegistration/ack-reg?vpdApprovalNumber=${exchangeProperty.vpdApprovalNumber}"
 
         - log:
             message: "Excise registration received"
             loggingLevel: INFO
 
         # Step 3: Get period from excise (XML->JSON)
-        - kamelet:
-            name: excise-getPeriod
-            parameters:
-              periodKey: "${exchangeProperty.periodKey}"
+        - to:
+            uri: "kamelet:excise-getPeriod/ack-period?periodKey=${exchangeProperty.periodKey}"
 
         - log:
             message: "Excise period received"
             loggingLevel: INFO
 
         # Step 4: Get customer details
-        - kamelet:
-            name: customer-getCustomer
-            parameters:
-              customerId: "${exchangeProperty.customerId}"
+        - to:
+            uri: "kamelet:customer-getCustomer/ack-cust?customerId=${exchangeProperty.customerId}"
 
         - log:
             message: "Customer response received"

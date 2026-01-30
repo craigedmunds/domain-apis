@@ -34,7 +34,6 @@ services:
           /routes/post-submission-return.yaml
           /routes/common.yaml
           /kamelets/customer-getCustomer.kamelet.yaml
-          /kamelets/customer-getCustomer-post.kamelet.yaml
           /kamelets/tax-platform-getSubmission.kamelet.yaml
           /kamelets/tax-platform-findSubmission.kamelet.yaml
           /kamelets/tax-platform-storeSubmission.kamelet.yaml

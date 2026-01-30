@@ -13,6 +13,9 @@
 # 4. customer -> get trader details
 # 5. Combine into enriched response
 # 6. Apply sparse fieldsets if requested
+#
+# Note: Kamelet URIs include a unique routeId (e.g. /appr-reg) to ensure
+# separate instances per Kamelet invocation. See docs/api-producer-guide.md.
 
 - route:
     id: getSubmissionReturnByApproval
@@ -20,41 +23,32 @@
       uri: direct:getSubmissionReturnByApproval
       steps:
         # Step 1: Get registration from excise (XML->JSON, extracts customerId)
-        - kamelet:
-            name: excise-getRegistration
-            parameters:
-              vpdApprovalNumber: "${exchangeProperty.approvalNumber}"
+        - to:
+            uri: "kamelet:excise-getRegistration/appr-reg?vpdApprovalNumber=${exchangeProperty.approvalNumber}"
 
         - log:
             message: "Excise registration received - customerId: ${exchangeProperty.customerId}"
             loggingLevel: INFO
 
         # Step 2: Get period from excise (XML->JSON)
-        - kamelet:
-            name: excise-getPeriod
-            parameters:
-              periodKey: "${exchangeProperty.periodKey}"
+        - to:
+            uri: "kamelet:excise-getPeriod/appr-period?periodKey=${exchangeProperty.periodKey}"
 
         - log:
             message: "Excise period received"
             loggingLevel: INFO
 
         # Step 3: Find submission from tax-platform
-        - kamelet:
-            name: tax-platform-findSubmission
-            parameters:
-              vpdApprovalNumber: "${exchangeProperty.approvalNumber}"
-              periodKey: "${exchangeProperty.periodKey}"
+        - toD:
+            uri: "kamelet:tax-platform-findSubmission/appr-tp?vpdApprovalNumber=${exchangeProperty.approvalNumber}&periodKey=${exchangeProperty.periodKey}"
 
         - log:
             message: "Tax-platform submission found"
             loggingLevel: INFO
 
         # Step 4: Get customer details
-        - kamelet:
-            name: customer-getCustomer
-            parameters:
-              customerId: "${exchangeProperty.customerId}"
+        - to:
+            uri: "kamelet:customer-getCustomer/appr-cust?customerId=${exchangeProperty.customerId}"
 
         - log:
             message: "Customer response received"

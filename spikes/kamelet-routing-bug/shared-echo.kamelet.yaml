@@ -1,0 +1,29 @@
+# Minimal Kamelet to reproduce routing bug
+# This Kamelet is shared between two routes
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: shared-echo
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Shared Echo
+    description: Echo back a message - used to test shared Kamelet routing
+    required:
+      - message
+    properties:
+      message:
+        title: Message
+        description: The message to echo
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - log:
+            message: "Kamelet received: {{message}}"
+            loggingLevel: INFO
+        - setProperty:
+            name: kameletResult
+            simple: "Processed: {{message}}"

@@ -1,0 +1,65 @@
+# Testing nodePrefixId on route to see if it auto-prefixes Kamelet instances
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: json
+
+- rest:
+    path: /test
+    get:
+      - path: /prefix-a
+        to: direct:prefixRouteA
+      - path: /prefix-b
+        to: direct:prefixRouteB
+
+- route:
+    id: prefixRouteA
+    nodePrefixId: routeA
+    from:
+      uri: direct:prefixRouteA
+      steps:
+        - log:
+            message: "Prefix Route A: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "PREFIX_ROUTE_A"
+        - kamelet:
+            name: shared-echo
+            parameters:
+              message: "from-route-A"
+        - log:
+            message: "Prefix Route A: After Kamelet, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              return '{"route": "A", "routeMarker": "' + exchange.getProperty('routeMarker') + '", "kameletResult": "' + exchange.getProperty('kameletResult') + '"}'
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+
+- route:
+    id: prefixRouteB
+    nodePrefixId: routeB
+    from:
+      uri: direct:prefixRouteB
+      steps:
+        - log:
+            message: "Prefix Route B: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "PREFIX_ROUTE_B"
+        - kamelet:
+            name: shared-echo
+            parameters:
+              message: "from-route-B"
+        - log:
+            message: "Prefix Route B: After Kamelet, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              return '{"route": "B", "routeMarker": "' + exchange.getProperty('routeMarker') + '", "kameletResult": "' + exchange.getProperty('kameletResult') + '"}'
+        - setHeader:
+            name: Content-Type
+            constant: application/json

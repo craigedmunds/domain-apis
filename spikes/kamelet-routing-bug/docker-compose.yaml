@@ -1,0 +1,18 @@
+services:
+  kamelet-test:
+    image: apache/camel-jbang:4.16.0
+    container_name: kamelet-routing-test
+    command: >
+      run /routes/routes.yaml
+          /routes/shared-echo.kamelet.yaml
+          --dep=org.apache.camel:camel-groovy
+    ports:
+      - "8090:8080"
+    volumes:
+      - .:/routes:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/test/route-a"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s

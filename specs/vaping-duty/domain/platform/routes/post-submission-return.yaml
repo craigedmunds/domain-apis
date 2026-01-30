@@ -12,6 +12,9 @@
 # 4. customer -> get trader details (for response enrichment)
 # 5. Return acknowledgement with enriched data
 #
+# Note: Kamelet URIs include a unique routeId (e.g. /post-exc) to ensure
+# separate instances per Kamelet invocation. See docs/api-producer-guide.md.
+#
 # Note: Groovy logic is inline due to Camel JBang classloader limitations.
 # See lib/*.groovy for testable versions of this logic.
 
@@ -49,10 +52,8 @@
             loggingLevel: INFO
 
         # Step 1: Validate and calculate via excise (XML->JSON)
-        - kamelet:
-            name: excise-validateAndCalculate
-            parameters:
-              requestBody: "${exchangeProperty.requestBody}"
+        - to:
+            uri: "kamelet:excise-validateAndCalculate/post-exc?requestBody=${exchangeProperty.requestBody}"
 
         # Check for excise errors
         - choice:
@@ -124,22 +125,16 @@
 
               return JsonOutput.toJson(storeRequest)
 
-        - kamelet:
-            name: tax-platform-storeSubmission
-            parameters:
-              requestBody: "${exchangeProperty.storeRequestBody}"
+        - to:
+            uri: "kamelet:tax-platform-storeSubmission/post-tp?requestBody=${exchangeProperty.storeRequestBody}"
 
         - log:
             message: "Submission stored in tax-platform"
             loggingLevel: INFO
 
         # Step 4: Get customer details
-        # Note: Uses POST-specific Kamelet to avoid Camel JBang routing bug
-        # where shared Kamelets cause route continuation in wrong route
-        - kamelet:
-            name: customer-getCustomer-post
-            parameters:
-              customerId: "${exchangeProperty.customerId}"
+        - to:
+            uri: "kamelet:customer-getCustomer/post-cust?customerId=${exchangeProperty.customerId}"
 
         - log:
             message: "Customer details retrieved"

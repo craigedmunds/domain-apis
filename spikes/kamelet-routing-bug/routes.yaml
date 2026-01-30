@@ -1,0 +1,64 @@
+# Two routes that share the same Kamelet
+# Bug: Under rapid load, route A may get route B's response after Kamelet completes
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: json
+
+- rest:
+    path: /test
+    get:
+      - path: /route-a
+        to: direct:routeA
+      - path: /route-b
+        to: direct:routeB
+
+- route:
+    id: routeA
+    from:
+      uri: direct:routeA
+      steps:
+        - log:
+            message: "Route A: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeId
+            constant: "ROUTE_A"
+        - kamelet:
+            name: shared-echo
+            parameters:
+              message: "from-route-A"
+        - log:
+            message: "Route A: After Kamelet, routeId=${exchangeProperty.routeId}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              return '{"route": "A", "routeId": "' + exchange.getProperty('routeId') + '", "kameletResult": "' + exchange.getProperty('kameletResult') + '"}'
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+
+- route:
+    id: routeB
+    from:
+      uri: direct:routeB
+      steps:
+        - log:
+            message: "Route B: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeId
+            constant: "ROUTE_B"
+        - kamelet:
+            name: shared-echo
+            parameters:
+              message: "from-route-B"
+        - log:
+            message: "Route B: After Kamelet, routeId=${exchangeProperty.routeId}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              return '{"route": "B", "routeId": "' + exchange.getProperty('routeId') + '", "kameletResult": "' + exchange.getProperty('kameletResult') + '"}'
+        - setHeader:
+            name: Content-Type
+            constant: application/json

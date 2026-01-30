@@ -1,0 +1,108 @@
+# Using direct: route as a reusable subroutine
+# This is the basic Camel pattern for inline reuse
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: json
+
+- rest:
+    path: /test
+    get:
+      - path: /direct-a/{customerId}
+        to: direct:directRouteA
+      - path: /direct-b/{customerId}
+        to: direct:directRouteB
+
+# Reusable subroutine via direct:
+- route:
+    id: customerLookupSubroutine
+    from:
+      uri: direct:lookupCustomer
+      steps:
+        - log:
+            message: "Subroutine: Looking up customer ${exchangeProperty.customerId}"
+            loggingLevel: INFO
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+        - log:
+            message: "Subroutine: Customer response received"
+            loggingLevel: INFO
+
+- route:
+    id: directRouteA
+    from:
+      uri: direct:directRouteA
+      steps:
+        - log:
+            message: "Direct Route A: Starting for customer ${header.customerId}"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "DIRECT_ROUTE_A"
+        - setProperty:
+            name: customerId
+            simple: "${header.customerId}"
+        # Call shared subroutine
+        - to: direct:lookupCustomer
+        - log:
+            message: "Direct Route A: After subroutine, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+              def customerJson = exchange.getProperty('customerResponse') ?: '{}'
+              def customer = new JsonSlurper().parseText(customerJson.toString())
+              return JsonOutput.toJson([
+                route: 'A',
+                routeMarker: exchange.getProperty('routeMarker'),
+                customer: customer
+              ])
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+
+- route:
+    id: directRouteB
+    from:
+      uri: direct:directRouteB
+      steps:
+        - log:
+            message: "Direct Route B: Starting for customer ${header.customerId}"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "DIRECT_ROUTE_B"
+        - setProperty:
+            name: customerId
+            simple: "${header.customerId}"
+        # Call shared subroutine
+        - to: direct:lookupCustomer
+        - log:
+            message: "Direct Route B: After subroutine, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+              def customerJson = exchange.getProperty('customerResponse') ?: '{}'
+              def customer = new JsonSlurper().parseText(customerJson.toString())
+              return JsonOutput.toJson([
+                route: 'B',
+                routeMarker: exchange.getProperty('routeMarker'),
+                customer: customer
+              ])
+        - setHeader:
+            name: Content-Type
+            constant: application/json

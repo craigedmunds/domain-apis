@@ -1,0 +1,78 @@
+# Testing with explicit routeId per caller
+# Syntax: kamelet:templateId/routeId?parameters
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: json
+
+- rest:
+    path: /test
+    get:
+      - path: /rid-a/{customerId}
+        to: direct:ridRouteA
+      - path: /rid-b/{customerId}
+        to: direct:ridRouteB
+
+- route:
+    id: ridRouteA
+    from:
+      uri: direct:ridRouteA
+      steps:
+        - log:
+            message: "RID Route A: Starting for customer ${header.customerId}"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "RID_ROUTE_A"
+        # Specify unique routeId for this caller
+        - to:
+            uri: "kamelet:shared-customer/routeA-customer-lookup?customerId=${header.customerId}"
+        - log:
+            message: "RID Route A: After Kamelet, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+              def customerJson = exchange.getProperty('customerResponse') ?: '{}'
+              def customer = new JsonSlurper().parseText(customerJson.toString())
+              return JsonOutput.toJson([
+                route: 'A',
+                routeMarker: exchange.getProperty('routeMarker'),
+                customer: customer
+              ])
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+
+- route:
+    id: ridRouteB
+    from:
+      uri: direct:ridRouteB
+      steps:
+        - log:
+            message: "RID Route B: Starting for customer ${header.customerId}"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "RID_ROUTE_B"
+        # Specify unique routeId for this caller
+        - to:
+            uri: "kamelet:shared-customer/routeB-customer-lookup?customerId=${header.customerId}"
+        - log:
+            message: "RID Route B: After Kamelet, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+              def customerJson = exchange.getProperty('customerResponse') ?: '{}'
+              def customer = new JsonSlurper().parseText(customerJson.toString())
+              return JsonOutput.toJson([
+                route: 'B',
+                routeMarker: exchange.getProperty('routeMarker'),
+                customer: customer
+              ])
+        - setHeader:
+            name: Content-Type
+            constant: application/json

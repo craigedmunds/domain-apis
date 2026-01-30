@@ -770,6 +770,163 @@ res.status(400).json({
 });
 ```
 
+## Using Kamelets for Backend Orchestration
+
+Kamelets are reusable route templates for calling backend services. They encapsulate common patterns like HTTP calls, XML-to-JSON transformation, and response handling.
+
+### Kamelet Location
+
+Kamelets are stored in:
+```
+specs/<api-name>/domain/platform/kamelets/
+```
+
+### Basic Kamelet Structure
+
+```yaml
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: customer-getCustomer
+spec:
+  definition:
+    title: Get Customer
+    properties:
+      customerId:
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: GET
+        - toD:
+            uri: "http://customer-proxy:4010/customers/{{customerId}}"
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+        - to: kamelet:sink
+```
+
+### Critical: Unique RouteIds for Each Kamelet Invocation
+
+When calling Kamelets from routes, **each Kamelet invocation must have a unique routeId**. Without this, Camel cannot properly track which route to return to after the Kamelet completes, causing execution to jump to wrong routes.
+
+**Syntax:**
+```yaml
+- to:
+    uri: "kamelet:<kamelet-name>/<unique-route-id>?param1=value1&param2=value2"
+```
+
+**Example - CORRECT (unique routeIds per invocation):**
+```yaml
+# In get-submission-return-by-ack.yaml
+- route:
+    id: getSubmissionReturnByAck
+    from:
+      uri: direct:getSubmissionReturnByAck
+      steps:
+        - to:
+            uri: "kamelet:tax-platform-getSubmission/ack-tp?acknowledgementReference=${exchangeProperty.ackRef}"
+        - to:
+            uri: "kamelet:excise-getRegistration/ack-reg?vpdApprovalNumber=${exchangeProperty.vpdApprovalNumber}"
+        - to:
+            uri: "kamelet:excise-getPeriod/ack-period?periodKey=${exchangeProperty.periodKey}"
+        - to:
+            uri: "kamelet:customer-getCustomer/ack-cust?customerId=${exchangeProperty.customerId}"
+```
+
+Note how each Kamelet call uses a unique routeId suffix:
+- `ack-tp` - tax-platform in the ack route
+- `ack-reg` - excise registration in the ack route
+- `ack-period` - excise period in the ack route
+- `ack-cust` - customer in the ack route
+
+**Example - INCORRECT (same routeId for multiple invocations):**
+```yaml
+# DON'T DO THIS - same routeId causes routing bugs!
+- to:
+    uri: "kamelet:tax-platform-getSubmission/get-by-ack?..."
+- to:
+    uri: "kamelet:excise-getRegistration/get-by-ack?..."  # WRONG: same routeId
+```
+
+### RouteId Naming Conventions
+
+Use a consistent naming scheme for routeIds:
+
+| Route | Kamelet | RouteId |
+|-------|---------|---------|
+| get-submission-return-by-ack | tax-platform-getSubmission | `ack-tp` |
+| get-submission-return-by-ack | excise-getRegistration | `ack-reg` |
+| get-submission-return-by-ack | customer-getCustomer | `ack-cust` |
+| get-submission-return-by-approval | excise-getRegistration | `appr-reg` |
+| get-submission-return-by-approval | customer-getCustomer | `appr-cust` |
+| post-submission-return | excise-validateAndCalculate | `post-exc` |
+| post-submission-return | customer-getCustomer | `post-cust` |
+
+The pattern is: `<route-abbreviation>-<kamelet-abbreviation>`
+
+### Kamelet Invocation Syntax
+
+Use the `to:` URI syntax with routeId:
+
+```yaml
+# Correct - to: with uri and routeId
+- to:
+    uri: "kamelet:customer-getCustomer/ack-cust?customerId=${exchangeProperty.customerId}"
+
+# Incorrect - YAML DSL kamelet: syntax doesn't support routeId
+- kamelet:
+    name: customer-getCustomer/ack-cust  # This won't work!
+```
+
+### Passing Parameters
+
+Parameters are passed as query parameters in the URI:
+
+```yaml
+- to:
+    uri: "kamelet:excise-getRegistration/ack-reg?vpdApprovalNumber=${exchangeProperty.vpdApprovalNumber}"
+```
+
+The Kamelet receives these as template properties:
+
+```yaml
+# In excise-getRegistration.kamelet.yaml
+spec:
+  definition:
+    properties:
+      vpdApprovalNumber:
+        type: string
+  template:
+    from:
+      steps:
+        - toD:
+            uri: "http://excise-proxy:4010/registrations/{{vpdApprovalNumber}}"
+```
+
+### Storing Response Data
+
+Kamelets should store response data in exchange properties for downstream consumption:
+
+```yaml
+# In the Kamelet
+- setProperty:
+    name: customerResponse
+    simple: "${body}"
+- to: kamelet:sink
+
+# In the calling route - access the stored response
+- setBody:
+    groovy: |
+      def customer = exchange.getProperty('customerResponse')
+      // Use customer data
+```
+
 ## Common Patterns
 
 ### Pattern 1: Paginated Collections
