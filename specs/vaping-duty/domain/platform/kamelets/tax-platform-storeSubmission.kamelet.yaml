@@ -1,6 +1,8 @@
 # Generated from: mocks/tax-platform-api.yaml
 # Operation: storeSubmission
 # POST /submissions/vpd
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
 apiVersion: camel.apache.org/v1
 kind: Kamelet
 metadata:
@@ -44,5 +46,20 @@ spec:
         - to:
             uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
-            name: taxPlatformStoreResponse
-            simple: "${body}"
+            name: taxPlatformStoreResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: taxPlatformStoreError
+                      simple: "${body}"
+                  - log:
+                      message: "Tax Platform store error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                - setProperty:
+                    name: taxPlatformStoreResponse
+                    simple: "${body}"

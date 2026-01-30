@@ -2,6 +2,8 @@
 # Operation: getPeriod
 # GET /excise/vpd/periods/{periodKey}
 # Response: application/xml -> transformed to JSON
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
 apiVersion: camel.apache.org/v1
 kind: Kamelet
 metadata:
@@ -19,6 +21,7 @@ spec:
         title: Period Key
         description: The accounting period key
         type: string
+        pattern: '^[0-9]{2}[A-Z]{1}[0-9]$'
   template:
     from:
       uri: kamelet:source
@@ -36,30 +39,45 @@ spec:
             simple: "${exchangeProperty.correlationId}"
         - toD:
             uri: "http://excise-proxy:4010/excise/vpd/periods/{{periodKey}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
-        # Transform XML to JSON
         - setProperty:
-            name: excisePeriodXml
-            simple: "${body}"
-        - setBody:
-            groovy: |
-              import groovy.xml.XmlSlurper
-              import groovy.json.JsonOutput
+            name: excisePeriodResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: excisePeriodError
+                      simple: "${body}"
+                  - log:
+                      message: "Excise period error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                # Transform XML to JSON
+                - setProperty:
+                    name: excisePeriodXml
+                    simple: "${body}"
+                - setBody:
+                    groovy: |
+                      import groovy.xml.XmlSlurper
+                      import groovy.json.JsonOutput
 
-              def xmlText = exchange.getProperty('excisePeriodXml', String)
-              def xml = new XmlSlurper().parseText(xmlText)
+                      def xmlText = exchange.getProperty('excisePeriodXml', String)
+                      def xml = new XmlSlurper().parseText(xmlText)
 
-              def period = [
-                periodKey: xml.periodKey.text(),
-                startDate: xml.startDate.text(),
-                endDate: xml.endDate.text(),
-                state: xml.state.text(),
-                dutyRates: [
-                  standardRate: xml.dutyRates.standardRate.text(),
-                  reducedRate: xml.dutyRates.reducedRate.text()
-                ]
-              ]
+                      def period = [
+                        periodKey: xml.periodKey.text(),
+                        startDate: xml.startDate.text(),
+                        endDate: xml.endDate.text(),
+                        state: xml.state.text(),
+                        dutyRates: [
+                          standardRate: xml.dutyRates.standardRate.text(),
+                          reducedRate: xml.dutyRates.reducedRate.text()
+                        ]
+                      ]
 
-              return JsonOutput.toJson(period)
-        - setProperty:
-            name: excisePeriodResponse
-            simple: "${body}"
+                      return JsonOutput.toJson(period)
+                - setProperty:
+                    name: excisePeriodResponse
+                    simple: "${body}"

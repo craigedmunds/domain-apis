@@ -1,6 +1,8 @@
 # Generated from: mocks/customer-api.yaml
 # Operation: getCustomer
 # GET /customers/{customerId}
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
 apiVersion: camel.apache.org/v1
 kind: Kamelet
 metadata:
@@ -18,6 +20,7 @@ spec:
         title: Customer ID
         description: The customer identifier
         type: string
+        pattern: '^[A-Za-z0-9-]+$'
   template:
     from:
       uri: kamelet:source
@@ -36,5 +39,20 @@ spec:
         - toD:
             uri: "http://customer-proxy:4010/customers/{{customerId}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
-            name: customerResponse
-            simple: "${body}"
+            name: customerResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: customerError
+                      simple: "${body}"
+                  - log:
+                      message: "Customer API error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                - setProperty:
+                    name: customerResponse
+                    simple: "${body}"

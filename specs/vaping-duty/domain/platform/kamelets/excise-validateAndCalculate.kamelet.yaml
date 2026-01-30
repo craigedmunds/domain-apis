@@ -2,6 +2,8 @@
 # Operation: validateAndCalculate
 # POST /excise/vpd/validate-and-calculate
 # Request: application/json, Response: application/xml -> transformed to JSON
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
 apiVersion: camel.apache.org/v1
 kind: Kamelet
 metadata:
@@ -45,51 +47,63 @@ spec:
         - setProperty:
             name: exciseResponseCode
             simple: "${header.CamelHttpResponseCode}"
-        # Transform XML to JSON
-        - setProperty:
-            name: exciseValidationXml
-            simple: "${body}"
-        - setBody:
-            groovy: |
-              import groovy.xml.XmlSlurper
-              import groovy.json.JsonOutput
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: exciseValidationError
+                      simple: "${body}"
+                  - log:
+                      message: "Excise validation error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                # Transform XML to JSON
+                - setProperty:
+                    name: exciseValidationXml
+                    simple: "${body}"
+                - setBody:
+                    groovy: |
+                      import groovy.xml.XmlSlurper
+                      import groovy.json.JsonOutput
 
-              def xmlText = exchange.getProperty('exciseValidationXml', String)
-              def xml = new XmlSlurper().parseText(xmlText)
+                      def xmlText = exchange.getProperty('exciseValidationXml', String)
+                      def xml = new XmlSlurper().parseText(xmlText)
 
-              def isValid = xml.valid.text() == 'true'
-              def customerId = xml.customerId.text()
+                      def isValid = xml.valid.text() == 'true'
+                      def customerId = xml.customerId.text()
 
-              // Set properties for subsequent use
-              exchange.setProperty('validationValid', isValid)
-              exchange.setProperty('customerId', customerId)
+                      // Set properties for subsequent use
+                      exchange.setProperty('validationValid', isValid)
+                      exchange.setProperty('customerId', customerId)
 
-              def validation = [
-                valid: isValid,
-                customerId: customerId,
-                calculations: [
-                  totalDutyDue: [
-                    amount: (xml.calculations.totalDutyDue.text() ?: '0') as Double,
-                    currency: xml.calculations.totalDutyDue.@currency.text() ?: 'GBP'
-                  ],
-                  vat: [
-                    amount: (xml.calculations.vat.text() ?: '0') as Double,
-                    currency: 'GBP'
-                  ],
-                  calculationHash: xml.calculations.calculationHash.text()
-                ],
-                warnings: []
-              ]
+                      def validation = [
+                        valid: isValid,
+                        customerId: customerId,
+                        calculations: [
+                          totalDutyDue: [
+                            amount: (xml.calculations.totalDutyDue.text() ?: '0') as Double,
+                            currency: xml.calculations.totalDutyDue.@currency.text() ?: 'GBP'
+                          ],
+                          vat: [
+                            amount: (xml.calculations.vat.text() ?: '0') as Double,
+                            currency: 'GBP'
+                          ],
+                          calculationHash: xml.calculations.calculationHash.text()
+                        ],
+                        warnings: []
+                      ]
 
-              // Parse warnings
-              xml.warnings.warning.each { warning ->
-                validation.warnings << [
-                  code: warning.@code.text(),
-                  text: warning.text()
-                ]
-              }
+                      // Parse warnings
+                      xml.warnings.warning.each { warning ->
+                        validation.warnings << [
+                          code: warning.@code.text(),
+                          text: warning.text()
+                        ]
+                      }
 
-              return JsonOutput.toJson(validation)
-        - setProperty:
-            name: exciseValidationResponse
-            simple: "${body}"
+                      return JsonOutput.toJson(validation)
+                - setProperty:
+                    name: exciseValidationResponse
+                    simple: "${body}"

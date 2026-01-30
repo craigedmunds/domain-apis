@@ -79,3 +79,30 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
 
+  groovy-tests:
+    name: Groovy Transformer Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        transformer:
+          - body-utils
+          - store-request-builder
+          - validation-error-builder
+          - submission-return-response-builder
+          - sparse-fieldsets
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test ${{ matrix.transformer }}
+        run: |
+          cd specs/vaping-duty/domain/platform/lib/transformers/${{ matrix.transformer }}
+          if [ -d "test" ]; then
+            docker run --rm \
+              -v $(pwd):/build \
+              -v $(pwd)/../common:/common:ro \
+              -w /build \
+              gradle:8.11-jdk21 gradle test --no-daemon
+          else
+            echo "No tests found for ${{ matrix.transformer }}"
+          fi
+
