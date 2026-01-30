@@ -1,0 +1,23 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build Groovy library JAR
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}:/build" -w /build gradle:8.11-jdk21 gradle jar --no-daemon
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}:/build" -w /build gradle:8.11-jdk21 gradle test --no-daemon
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}:/build" -w /build gradle:8.11-jdk21 gradle clean --no-daemon
+      - rm -rf .gradle build
+
+  default:
+    desc: Build and test
+    cmds:
+      - task: test

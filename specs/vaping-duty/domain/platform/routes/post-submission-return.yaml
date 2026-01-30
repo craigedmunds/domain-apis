@@ -134,27 +134,15 @@
             loggingLevel: INFO
 
         # Step 4: Get customer details
-        # Note: HTTP call is inlined here rather than using customer-getCustomer Kamelet
-        # to avoid a Camel JBang routing issue where Kamelet calls jump to the wrong route
-        - removeHeaders:
-            pattern: "CamelHttp*"
-        - setHeader:
-            name: CamelHttpMethod
-            constant: "GET"
-        - setHeader:
-            name: Accept
-            constant: "application/json"
-        - setHeader:
-            name: X-Correlation-Id
-            simple: "${exchangeProperty.correlationId}"
-        - toD:
-            uri: "http://customer-proxy:4010/customers/${exchangeProperty.customerId}?bridgeEndpoint=true&throwExceptionOnFailure=false"
-        - setProperty:
-            name: customerResponse
-            simple: "${body}"
+        # Note: Uses POST-specific Kamelet to avoid Camel JBang routing bug
+        # where shared Kamelets cause route continuation in wrong route
+        - kamelet:
+            name: customer-getCustomer-post
+            parameters:
+              customerId: "${exchangeProperty.customerId}"
 
         - log:
-            message: "Customer details retrieved for customerId=${exchangeProperty.customerId}"
+            message: "Customer details retrieved"
             loggingLevel: INFO
 
         # Step 5: Build enriched acknowledgement response
