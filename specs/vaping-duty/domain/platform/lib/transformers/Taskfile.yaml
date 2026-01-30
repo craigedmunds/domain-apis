@@ -1,7 +1,7 @@
 version: "3"
 
 vars:
-  TRANSFORMERS: body-utils store-request-builder validation-error-builder submission-return-response-builder
+  TRANSFORMERS: body-utils store-request-builder validation-error-builder submission-return-response-builder sparse-fieldsets
 
 tasks:
   test:

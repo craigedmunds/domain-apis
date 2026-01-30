@@ -449,7 +449,7 @@ tasks:
     dir: specs/vaping-duty/domain/platform/lib/transformers
     cmds:
       - |
-        for name in body-utils store-request-builder validation-error-builder submission-return-response-builder; do
+        for name in body-utils store-request-builder validation-error-builder submission-return-response-builder sparse-fieldsets; do
           echo "=== Testing $name ==="
           docker run --rm \
             -v "$(pwd)/$name:/build" \
