@@ -444,22 +444,25 @@ tasks:
       - npm install
 
   # VPD Domain API Library tasks
-  vpd:lib:build:
-    desc: Build VPD Domain API Groovy library JAR
-    cmds:
-      - docker run --rm -v "{{.ROOT_DIR}}/specs/vaping-duty/domain/platform/lib:/build" -w /build gradle:8.11-jdk21 gradle jar --no-daemon
-      - echo "✓ Library JAR built at specs/vaping-duty/domain/platform/lib/build/libs/domain-api-lib-1.0.0.jar"
-
   vpd:lib:test:
-    desc: Run VPD Domain API library unit tests
+    desc: Run all VPD Domain API library unit tests
+    dir: specs/vaping-duty/domain/platform/lib/transformers
     cmds:
-      - docker run --rm -v "{{.ROOT_DIR}}/specs/vaping-duty/domain/platform/lib:/build" -w /build gradle:8.11-jdk21 gradle test --no-daemon
+      - |
+        for name in body-utils store-request-builder validation-error-builder submission-return-response-builder; do
+          echo "=== Testing $name ==="
+          docker run --rm \
+            -v "$(pwd)/$name:/build" \
+            -v "$(pwd)/common:/common:ro" \
+            -w /build \
+            gradle:8.11-jdk21 gradle test --no-daemon
+        done
 
   vpd:lib:clean:
     desc: Clean VPD Domain API library build artifacts
     cmds:
-      - rm -rf specs/vaping-duty/domain/platform/lib/build
-      - rm -rf specs/vaping-duty/domain/platform/lib/.gradle
+      - rm -rf specs/vaping-duty/domain/platform/lib/transformers/*/build
+      - rm -rf specs/vaping-duty/domain/platform/lib/transformers/*/.gradle
 
   # Status check
   status:
