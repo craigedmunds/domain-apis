@@ -2,7 +2,12 @@
 
 ## Overview
 
-Acceptance tests for the Domain API POC are maintained in a **separate Playwright project** within this repository at `tests/acceptance/`. This keeps the acceptance tests isolated with their own dependencies while remaining part of the main codebase.
+Acceptance tests for the Domain API POC are maintained in separate test projects within this repository at `tests/acceptance/`:
+
+- **UI tests** (`tests/acceptance/ui/`) - Playwright tests for the documentation site and API explorer
+- **Domain API tests** (`tests/acceptance/domain-api/`) - Vitest tests for the VPD Domain API
+
+These tests support both **docker-compose** and **Kubernetes** deployments, allowing validation in different environments.
 
 ## Quick Start
 
@@ -22,23 +27,22 @@ This will:
 ### Run Tests
 
 ```bash
-# Run all acceptance tests (excludes slow tests by default)
+# Run all acceptance tests (UI and Domain API)
 task test:acceptance
 
-# Run tests in headed mode (see browser)
-task test:acceptance:headed
+# UI tests (documentation and explorer)
+task test:acceptance:ui:all          # Run all UI tests
+task test:acceptance:headed          # Run in headed mode (see browser)
+task test:acceptance:ui              # Run in UI mode (interactive)
+task test:acceptance:report          # View test report
 
-# Run tests in UI mode (interactive)
-task test:acceptance:ui
+# Domain API tests
+task test:acceptance:domain-api      # Run against docker-compose (default)
+task test:acceptance:domain-api:k8s  # Run against Kubernetes deployment
 
-# Run only the slow tests (Swagger UI rendering tests)
-task test:acceptance:skipped
-
-# Run slow tests in headed mode (recommended)
-task test:acceptance:skipped:headed
-
-# View test report
-task test:acceptance:report
+# Slow tests (Swagger UI rendering)
+task test:acceptance:skipped         # Run slow tests
+task test:acceptance:skipped:headed  # Run slow tests in headed mode
 ```
 
 ## Project Structure
@@ -46,13 +50,18 @@ task test:acceptance:report
 ```
 domain-apis/
 ├── tests/
-│   └── acceptance/              # Separate Playwright project
-│       ├── tests/
-│       │   ├── api-explorer.spec.ts      # API explorer tests
-│       │   └── documentation.spec.ts     # Documentation site tests
-│       ├── playwright.config.ts          # Playwright configuration
-│       ├── package.json                  # Separate dependencies
-│       └── README.md                     # Detailed test documentation
+│   └── acceptance/
+│       ├── ui/                           # Playwright UI tests
+│       │   ├── tests/
+│       │   │   ├── api-explorer.spec.ts      # API explorer tests
+│       │   │   └── documentation.spec.ts     # Documentation site tests
+│       │   ├── playwright.config.ts          # Playwright configuration
+│       │   ├── package.json                  # UI test dependencies
+│       │   └── README.md                     # UI test documentation
+│       └── domain-api/                   # Vitest Domain API tests
+│           ├── domain-api.spec.ts            # Domain API orchestration tests
+│           ├── vitest.config.ts              # Vitest configuration
+│           └── package.json                  # Domain API test dependencies
 ├── docs/                        # Documentation site
 │   ├── index.html              # Homepage
 │   ├── explorer.html           # API explorer
@@ -99,6 +108,35 @@ Validates the documentation site functionality:
 
 **Requirements validated:** 7.1, 7.2, 9.1, 9.5, 9.6
 
+### Domain API Tests (`tests/acceptance/domain-api/domain-api.spec.ts`)
+
+Validates the VPD Domain API orchestration and functionality:
+
+- ✅ Health check endpoint
+- ✅ GET by acknowledgement reference (orchestration: tax-platform → excise → customer)
+- ✅ GET by approval number + period key (orchestration: excise validation → tax-platform → customer)
+- ✅ POST submission (orchestration: excise validate → tax-platform store → customer enrich)
+- ✅ Trader details from customer service (orchestrated)
+- ✅ Registration details from excise service (XML transformed to JSON)
+- ✅ Period details from excise service (XML transformed to JSON)
+- ✅ Correlation ID propagation
+- ✅ Fault injection (delay and abort headers)
+- ✅ Error handling (400 responses)
+- ✅ Sparse fieldsets (soft filtering)
+  - Single and multiple field requests
+  - Nested field filtering with dot notation
+  - Invalid field validation
+  - Mixing top-level and nested fields
+- ✅ CORS support (preflight and headers)
+
+**Environment Support:**
+- **Docker Compose**: Tests against `http://localhost:8081` (default)
+- **Kubernetes**: Tests against `https://vpd-domain-api.lab.local.ctoaas.co` (via `TEST_ENV=k8s`)
+
+**Environment Variables:**
+- `DOMAIN_API_URL`: Override default URL
+- `TEST_ENV`: Set to `k8s` or `docker` to force environment
+
 ## Running Tests Locally
 
 ### Prerequisites
@@ -120,11 +158,13 @@ Validates the documentation site functionality:
 
 ### Run Tests
 
-The tests will automatically start the documentation server before running:
+#### UI Tests
+
+The UI tests will automatically start the documentation server before running:
 
 ```bash
-# Run all acceptance tests (fast tests only)
-task test:acceptance
+# Run all UI tests (fast tests only)
+task test:acceptance:ui:all
 
 # Run tests in headed mode (see browser)
 task test:acceptance:headed
@@ -140,6 +180,22 @@ task test:acceptance:skipped:headed
 
 # View test report
 task test:acceptance:report
+```
+
+#### Domain API Tests
+
+The Domain API tests require either docker-compose or Kubernetes to be running:
+
+```bash
+# Docker Compose (default)
+docker-compose up -d
+task test:acceptance:domain-api
+
+# Kubernetes
+task test:acceptance:domain-api:k8s
+
+# Custom URL
+DOMAIN_API_URL=https://custom-domain.example.com task test:acceptance:domain-api
 ```
 
 **About Slow Tests**: Some tests depend on Swagger UI fully rendering from CDN, which can be slow and inconsistent. These tests are tagged with `@slow` and excluded by default. Run them separately with `task test:acceptance:skipped` when you want to validate Swagger UI functionality.
