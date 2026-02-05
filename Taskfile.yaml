@@ -437,6 +437,12 @@ tasks:
     cmds:
       - npm test
 
+  test:acceptance:domain-api:k8s:
+    desc: Run VPD Domain API acceptance tests against Kubernetes deployment
+    dir: tests/acceptance/domain-api
+    cmds:
+      - TEST_ENV=k8s npm test
+
   test:acceptance:domain-api:install:
     desc: Install VPD Domain API acceptance test dependencies
     dir: tests/acceptance/domain-api
@@ -477,8 +483,8 @@ tasks:
       - docker buildx create --use --name multiplatform-builder --driver docker-container || true
       - docker buildx build --platform linux/amd64,linux/arm64 -f docs/Dockerfile -t ghcr.io/craigedmunds/domain-api-docs:latest --push .
 
-  k8s:build:
-    desc: Build all custom images
+  k8s:build:images:
+    desc: Build all custom images (gateway + docs)
     deps: [k8s:build:gateway, k8s:build:docs]
 
   # k8s:push:gateway:
@@ -493,33 +499,34 @@ tasks:
   #   desc: Push all custom images to registry
   #   deps: [k8s:push:gateway, k8s:push:docs]
 
-  k8s:apply:
-    desc: Apply Kubernetes manifests
+  # VPD POC K8s deployment tasks
+  k8s:build:
+    desc: Build VPD POC Kubernetes manifests
+    vars:
+      OVERLAY: '{{.OVERLAY | default "dev"}}'
     cmds:
-      - kubectl kustomize kustomize/base --enable-helm | kubectl apply -f -
+      - kustomize build --enable-helm --load-restrictor=LoadRestrictionsNone k8s/overlays/{{.OVERLAY}}
+
+  k8s:apply:
+    desc: Apply VPD POC Kubernetes manifests
+    vars:
+      OVERLAY: '{{.OVERLAY | default "dev"}}'
+    cmds:
+      - kustomize build --enable-helm --load-restrictor=LoadRestrictionsNone k8s/overlays/{{.OVERLAY}} | kubectl apply -f -
 
   k8s:delete:
-    desc: Delete Kubernetes resources
+    desc: Delete VPD POC Kubernetes resources
     cmds:
-      - kubectl delete -k kustomize/base
+      - kubectl delete namespace domain-apis
 
   k8s:status:
-    desc: Check domain-api deployment status
+    desc: Check VPD POC deployment status
     cmds:
-      - echo "=== Domain API Namespace ==="
-      - kubectl get all -n domain-api
+      - echo "=== Domain APIs Namespace ==="
+      - kubectl get all -n domain-apis
       - echo ""
-      - echo "=== Taxpayer API Namespace ==="
-      - kubectl get all -n domain-api-taxpayer
-      - echo ""
-      - echo "=== Income Tax API Namespace ==="
-      - kubectl get all -n domain-api-income-tax
-      - echo ""
-      - echo "=== Payment API Namespace ==="
-      - kubectl get all -n domain-api-payment
-      - echo ""
-      - echo "=== Ingress Routes ==="
-      - kubectl get ingressroute -n domain-api
+      - echo "=== Ingress ==="
+      - kubectl get ingress -n domain-apis
 
   k8s:logs:gateway:
     desc: View gateway logs
