@@ -1,0 +1,26 @@
+services:
+  kamelet-customer-test:
+    image: apache/camel-jbang:4.16.0
+    container_name: kamelet-customer-test
+    command: >
+      run /routes/routes-customer.yaml
+          /routes/shared-customer.kamelet.yaml
+          --dep=org.apache.camel:camel-groovy
+          --dep=org.apache.groovy:groovy-json:4.0.29
+    ports:
+      - "8091:8080"
+    volumes:
+      - .:/routes:ro
+    networks:
+      - domain-api-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/test/get-a/CUST001"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+
+networks:
+  domain-api-network:
+    external: true
+    name: domain-apis_domain-api-network

@@ -1,0 +1,85 @@
+# Generated from: mocks/excise-api.yaml
+# Operation: getRegistration
+# GET /excise/vpd/registrations/{vpdApprovalNumber}
+# Response: application/xml -> transformed to JSON
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: excise-getRegistration
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Excise - Get Registration
+    description: Retrieve VPD registration by approval number (XML response transformed to JSON)
+    required:
+      - vpdApprovalNumber
+    properties:
+      vpdApprovalNumber:
+        title: VPD Approval Number
+        description: The VPD approval number
+        type: string
+        pattern: '^[A-Z]{4}[0-9]{12}$'
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/xml"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://excise-proxy:4010/excise/vpd/registrations/{{vpdApprovalNumber}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: exciseRegistrationResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: exciseRegistrationError
+                      simple: "${body}"
+                  - log:
+                      message: "Excise registration error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                # Transform XML to JSON
+                - setProperty:
+                    name: exciseRegistrationXml
+                    simple: "${body}"
+                - setBody:
+                    groovy: |
+                      import groovy.xml.XmlSlurper
+                      import groovy.json.JsonOutput
+
+                      def xmlText = exchange.getProperty('exciseRegistrationXml', String)
+                      def xml = new XmlSlurper().parseText(xmlText)
+
+                      // Extract customerId for subsequent calls
+                      def customerId = xml.customerId.text()
+                      if (customerId && !exchange.getProperty('customerId')) {
+                        exchange.setProperty('customerId', customerId)
+                      }
+
+                      def registration = [
+                        vpdApprovalNumber: xml.vpdApprovalNumber.text(),
+                        customerId: customerId,
+                        status: xml.status.text(),
+                        registeredDate: xml.registeredDate.text()
+                      ]
+
+                      return JsonOutput.toJson(registration)
+                - setProperty:
+                    name: exciseRegistrationResponse
+                    simple: "${body}"

@@ -1,0 +1,18 @@
+services:
+  kamelet-nodeprefix-test:
+    image: apache/camel-jbang:4.16.0
+    container_name: kamelet-nodeprefix-test
+    command: >
+      run /routes/routes-nodeprefix.yaml
+          /routes/shared-echo.kamelet.yaml
+          --dep=org.apache.camel:camel-groovy
+    ports:
+      - "8095:8080"
+    volumes:
+      - .:/routes:ro
+    networks:
+      - domain-api-network
+
+networks:
+  domain-api-network:
+    driver: bridge

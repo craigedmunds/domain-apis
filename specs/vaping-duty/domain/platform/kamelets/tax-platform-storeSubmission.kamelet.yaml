@@ -1,0 +1,65 @@
+# Generated from: mocks/tax-platform-api.yaml
+# Operation: storeSubmission
+# POST /submissions/vpd
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: tax-platform-storeSubmission
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Tax Platform - Store Submission
+    description: Store a new submission
+    required:
+      - requestBody
+    properties:
+      requestBody:
+        title: Request Body
+        description: The submission JSON body
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setHeader:
+            name: X-Idempotency-Key
+            simple: "${exchangeProperty.idempotencyKey}"
+        - setBody:
+            simple: "{{requestBody}}"
+        - to:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: taxPlatformStoreResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: taxPlatformStoreError
+                      simple: "${body}"
+                  - log:
+                      message: "Tax Platform store error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                - setProperty:
+                    name: taxPlatformStoreResponse
+                    simple: "${body}"

@@ -1,0 +1,79 @@
+# Testing YAML DSL kamelet syntax with id/routeId parameter
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: json
+
+- rest:
+    path: /test
+    get:
+      - path: /yaml-a/{customerId}
+        to: direct:yamlRouteA
+      - path: /yaml-b/{customerId}
+        to: direct:yamlRouteB
+
+- route:
+    id: yamlRouteA
+    from:
+      uri: direct:yamlRouteA
+      steps:
+        - log:
+            message: "YAML Route A: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "YAML_ROUTE_A"
+        - kamelet:
+            name: shared-customer/yaml-route-a-lookup
+            parameters:
+              customerId: "${header.customerId}"
+        - log:
+            message: "YAML Route A: After Kamelet, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+              def customerJson = exchange.getProperty('customerResponse') ?: '{}'
+              def customer = new JsonSlurper().parseText(customerJson.toString())
+              return JsonOutput.toJson([
+                route: 'A',
+                routeMarker: exchange.getProperty('routeMarker'),
+                customer: customer
+              ])
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+
+- route:
+    id: yamlRouteB
+    from:
+      uri: direct:yamlRouteB
+      steps:
+        - log:
+            message: "YAML Route B: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeMarker
+            constant: "YAML_ROUTE_B"
+        - kamelet:
+            name: shared-customer/yaml-route-b-lookup
+            parameters:
+              customerId: "${header.customerId}"
+        - log:
+            message: "YAML Route B: After Kamelet, routeMarker=${exchangeProperty.routeMarker}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+              def customerJson = exchange.getProperty('customerResponse') ?: '{}'
+              def customer = new JsonSlurper().parseText(customerJson.toString())
+              return JsonOutput.toJson([
+                route: 'B',
+                routeMarker: exchange.getProperty('routeMarker'),
+                customer: customer
+              ])
+        - setHeader:
+            name: Content-Type
+            constant: application/json

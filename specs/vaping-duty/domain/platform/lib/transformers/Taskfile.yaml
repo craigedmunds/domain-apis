@@ -1,0 +1,23 @@
+version: "3"
+
+vars:
+  TRANSFORMERS: body-utils store-request-builder validation-error-builder submission-return-response-builder sparse-fieldsets
+
+tasks:
+  test:
+    desc: Run all transformer tests
+    cmds:
+      - for: { var: TRANSFORMERS }
+        task: _test:gradle
+        vars:
+          TRANSFORMER: "{{.ITEM}}"
+
+  _test:gradle:
+    internal: true
+    cmds:
+      - docker run --rm -v "{{.ROOT_DIR}}/{{.TRANSFORMER}}:/build" -v "{{.ROOT_DIR}}/common:/common:ro" -w /build gradle:8.11-jdk21 gradle test --no-daemon
+
+  clean:
+    desc: Clean all transformer build artifacts
+    cmds:
+      - rm -rf */build */.gradle

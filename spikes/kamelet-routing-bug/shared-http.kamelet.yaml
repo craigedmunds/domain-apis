@@ -1,0 +1,43 @@
+# Shared HTTP Kamelet - closer to real use case
+# Makes an actual HTTP call like customer-getCustomer
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: shared-http
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Shared HTTP Call
+    description: Makes HTTP call to echo server - tests HTTP component isolation
+    required:
+      - routeMarker
+    properties:
+      routeMarker:
+        title: Route Marker
+        description: Marker to identify which route called this
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - log:
+            message: "Kamelet HTTP call for route: {{routeMarker}}"
+            loggingLevel: INFO
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: X-Route-Marker
+            simple: "{{routeMarker}}"
+        # Call httpbin echo endpoint
+        - toD:
+            uri: "http://httpbin.org/headers?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: httpResponse
+            simple: "${body}"
+        - log:
+            message: "Kamelet HTTP response received for: {{routeMarker}}"
+            loggingLevel: INFO

@@ -20,6 +20,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { randomUUID } from 'crypto';
 
 // Auto-detect environment or use override
 const TEST_ENV = process.env.TEST_ENV || 'docker';
@@ -30,6 +31,9 @@ const DEFAULT_URLS = {
 
 const DOMAIN_API_URL = process.env.DOMAIN_API_URL || DEFAULT_URLS[TEST_ENV as keyof typeof DEFAULT_URLS] || DEFAULT_URLS.docker;
 const TIMEOUT_MS = 15000;
+
+// Generate a valid UUID for correlation IDs
+const generateCorrelationId = (): string => randomUUID();
 
 console.log(`Testing against: ${DOMAIN_API_URL} (env: ${TEST_ENV})`);
 
@@ -178,7 +182,7 @@ describe('VPD Domain API', () => {
     it('should propagate X-Correlation-Id header', async () => {
       if (!apiAvailable) return;
 
-      const correlationId = `test-${Date.now()}`;
+      const correlationId = generateCorrelationId();
 
       const response = await fetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`,
@@ -321,7 +325,7 @@ describe('VPD Domain API', () => {
           headers: {
             'Content-Type': 'application/json',
             'X-Idempotency-Key': idempotencyKey,
-            'X-Correlation-Id': `test-post-${Date.now()}`,
+            'X-Correlation-Id': generateCorrelationId(),
           },
           body: JSON.stringify(submission),
         }
@@ -342,7 +346,7 @@ describe('VPD Domain API', () => {
     it('should propagate X-Correlation-Id header on POST', async () => {
       if (!apiAvailable) return;
 
-      const correlationId = `test-post-correlation-${Date.now()}`;
+      const correlationId = generateCorrelationId();
       const idempotencyKey = `test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       // Full StoreRequest format as expected by tax-platform
@@ -410,7 +414,7 @@ describe('VPD Domain API', () => {
           headers: {
             'Content-Type': 'application/json',
             'X-Idempotency-Key': idempotencyKey,
-            'X-Correlation-Id': `test-calc-${Date.now()}`,
+            'X-Correlation-Id': generateCorrelationId(),
           },
           body: JSON.stringify(submission),
         }
@@ -690,7 +694,7 @@ describe('VPD Domain API', () => {
       it('should propagate X-Correlation-Id with sparse fieldsets', async () => {
         if (!apiAvailable) return;
 
-        const correlationId = `test-sparse-${Date.now()}`;
+        const correlationId = generateCorrelationId();
 
         const response = await fetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference`,
@@ -709,7 +713,7 @@ describe('VPD Domain API', () => {
       it('should propagate X-Correlation-Id even on validation errors', async () => {
         if (!apiAvailable) return;
 
-        const correlationId = `test-sparse-error-${Date.now()}`;
+        const correlationId = generateCorrelationId();
 
         const response = await fetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=invalidField`,

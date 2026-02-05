@@ -1,0 +1,42 @@
+# Shared customer Kamelet - uses real backend mock
+# This is similar to customer-getCustomer.kamelet.yaml
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: shared-customer
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Shared Customer Lookup
+    description: Get customer from mock backend - tests HTTP component isolation
+    required:
+      - customerId
+    properties:
+      customerId:
+        title: Customer ID
+        description: The customer identifier
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - log:
+            message: "Kamelet: Looking up customer {{customerId}}"
+            loggingLevel: INFO
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - toD:
+            uri: "http://customer-proxy:4010/customers/{{customerId}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: customerResponse
+            simple: "${body}"
+        - log:
+            message: "Kamelet: Customer response received"
+            loggingLevel: INFO

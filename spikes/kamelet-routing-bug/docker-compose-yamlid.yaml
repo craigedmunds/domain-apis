@@ -1,0 +1,20 @@
+services:
+  kamelet-yamlid-test:
+    image: apache/camel-jbang:4.16.0
+    container_name: kamelet-yamlid-test
+    command: >
+      run /routes/routes-customer-yamlid.yaml
+          /routes/shared-customer.kamelet.yaml
+          --dep=org.apache.camel:camel-groovy
+          --dep=org.apache.groovy:groovy-json:4.0.29
+    ports:
+      - "8094:8080"
+    volumes:
+      - .:/routes:ro
+    networks:
+      - domain-api-network
+
+networks:
+  domain-api-network:
+    external: true
+    name: domain-apis_domain-api-network

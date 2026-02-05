@@ -1,0 +1,74 @@
+# Generated from: mocks/tax-platform-api.yaml
+# Operation: getSubmission
+# GET /submissions/vpd/{acknowledgementReference}
+#
+# POC uses HTTP - production deployment should use HTTPS or service mesh mTLS
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: tax-platform-getSubmission
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Tax Platform - Get Submission
+    description: Retrieve submission by acknowledgement reference
+    required:
+      - acknowledgementReference
+    properties:
+      acknowledgementReference:
+        title: Acknowledgement Reference
+        description: The submission acknowledgement reference
+        type: string
+        pattern: '^[A-Za-z0-9-]+$'
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - toD:
+            uri: "http://tax-platform-proxy:4010/submissions/vpd/{{acknowledgementReference}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: taxPlatformResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - setProperty:
+                      name: taxPlatformError
+                      simple: "${body}"
+                  - log:
+                      message: "Tax Platform get error: ${header.CamelHttpResponseCode} - ${body}"
+                      loggingLevel: ERROR
+            otherwise:
+              steps:
+                - setProperty:
+                    name: taxPlatformResponse
+                    simple: "${body}"
+                # Extract key fields for subsequent calls
+                - setProperty:
+                    name: customerId
+                    jsonpath:
+                      expression: "$.customerId"
+                      suppressExceptions: true
+                - setProperty:
+                    name: vpdApprovalNumber
+                    jsonpath:
+                      expression: "$.vpdApprovalNumber"
+                      suppressExceptions: true
+                - setProperty:
+                    name: periodKey
+                    jsonpath:
+                      expression: "$.periodKey"
+                      suppressExceptions: true

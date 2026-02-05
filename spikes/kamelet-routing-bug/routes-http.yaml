@@ -1,0 +1,64 @@
+# Two routes sharing an HTTP-calling Kamelet
+# This is closer to the real VPD use case
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: json
+
+- rest:
+    path: /test
+    get:
+      - path: /http-a
+        to: direct:httpRouteA
+      - path: /http-b
+        to: direct:httpRouteB
+
+- route:
+    id: httpRouteA
+    from:
+      uri: direct:httpRouteA
+      steps:
+        - log:
+            message: "HTTP Route A: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeId
+            constant: "HTTP_ROUTE_A"
+        - kamelet:
+            name: shared-http
+            parameters:
+              routeMarker: "MARKER_A"
+        - log:
+            message: "HTTP Route A: After Kamelet, routeId=${exchangeProperty.routeId}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              return '{"route": "A", "routeId": "' + exchange.getProperty('routeId') + '"}'
+        - setHeader:
+            name: Content-Type
+            constant: application/json
+
+- route:
+    id: httpRouteB
+    from:
+      uri: direct:httpRouteB
+      steps:
+        - log:
+            message: "HTTP Route B: Starting"
+            loggingLevel: INFO
+        - setProperty:
+            name: routeId
+            constant: "HTTP_ROUTE_B"
+        - kamelet:
+            name: shared-http
+            parameters:
+              routeMarker: "MARKER_B"
+        - log:
+            message: "HTTP Route B: After Kamelet, routeId=${exchangeProperty.routeId}"
+            loggingLevel: INFO
+        - setBody:
+            groovy: |
+              return '{"route": "B", "routeId": "' + exchange.getProperty('routeId') + '"}'
+        - setHeader:
+            name: Content-Type
+            constant: application/json

@@ -6,9 +6,9 @@
 # - Entry point routing (getSubmission)
 #
 # Other routes are in separate files:
-# - get-by-ack.yaml - GET by acknowledgementReference
-# - get-by-approval.yaml - GET by vpdApprovalNumber+periodKey
-# - post-submission.yaml - POST submission
+# - get-submission-return-by-ack.yaml - GET by acknowledgementReference
+# - get-submission-return-by-approval.yaml - GET by vpdApprovalNumber+periodKey
+# - post-submission-return.yaml - POST submission
 # - common.yaml - Health check, sparse fieldsets
 
 # =============================================================================
@@ -29,7 +29,7 @@
     get:
       - to: direct:getSubmission
     post:
-      - to: direct:postSubmission
+      - to: direct:postSubmissionReturn
 
 - rest:
     path: /health
@@ -88,10 +88,10 @@
             when:
               - simple: "${exchangeProperty.ackRef} != null"
                 steps:
-                  - to: direct:getByAcknowledgement
+                  - to: direct:getSubmissionReturnByAck
               - simple: "${exchangeProperty.approvalNumber} != null && ${exchangeProperty.periodKey} != null"
                 steps:
-                  - to: direct:getByApprovalAndPeriod
+                  - to: direct:getSubmissionReturnByApproval
             otherwise:
               steps:
                 - setHeader:
