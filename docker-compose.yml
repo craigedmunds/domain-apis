@@ -61,6 +61,51 @@ services:
       start_period: 90s
 
   # =============================================================================
+  # Domain API - Camel Java DSL (Quarkus) - Internal
+  # Equivalent implementation to domain-api-internal, using Java DSL instead
+  # of YAML DSL. Runs on port 8082, exposed via Envoy on 8083.
+  # =============================================================================
+
+  domain-api-java-internal:
+    build:
+      context: ./specs/vaping-duty/domain/platform-java
+      dockerfile: Dockerfile
+    container_name: vpd-domain-api-java-internal
+    networks:
+      - domain-api-network
+    depends_on:
+      - excise-proxy
+      - customer-proxy
+      - tax-platform-proxy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  domain-api-java-proxy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: vpd-domain-api-java-proxy
+    ports:
+      - "8083:8080"
+      - "9904:9901"
+    volumes:
+      - ./config/envoy/envoy-domain-api-java.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      domain-api-java-internal:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-external-labels: "service=domain-api-java-proxy,job=envoy"
+    networks:
+      - domain-api-network
+
+  # =============================================================================
   # Domain API Proxy (Envoy) - CORS, logging, tracing
   # =============================================================================
 

@@ -79,6 +79,18 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
 
+  build-java:
+    name: Build Camel Java DSL Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Java domain API image
+        run: |
+          docker build \
+            -t vpd-domain-api-java:ci \
+            specs/vaping-duty/domain/platform-java/
+
   groovy-tests:
     name: Groovy Transformer Tests
     runs-on: ubuntu-latest
