@@ -59,10 +59,8 @@ public class PostSubmissionRoute extends RouteBuilder {
                 })
 
                 // Extract vpdApprovalNumber and periodKey from request body
-                .setProperty("vpdApprovalNumber",
-                        jsonpath("$.vpdApprovalNumber").suppressExceptions())
-                .setProperty("periodKey",
-                        jsonpath("$.periodKey").suppressExceptions())
+                .setProperty("vpdApprovalNumber", jsonpath("$.vpdApprovalNumber", true))
+                .setProperty("periodKey", jsonpath("$.periodKey", true))
 
                 .log("POST submission - approval=${exchangeProperty.vpdApprovalNumber}, "
                         + "period=${exchangeProperty.periodKey}")
