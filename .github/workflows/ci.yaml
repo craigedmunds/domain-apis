@@ -85,6 +85,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Wait for Docker daemon
+        run: |
+          for i in $(seq 1 15); do
+            docker info > /dev/null 2>&1 && echo "Docker ready" && break
+            echo "Waiting for Docker... ($i/15)"
+            sleep 2
+          done
+
       - name: Build Java domain API image
         run: |
           docker build \
