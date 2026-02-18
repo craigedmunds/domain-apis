@@ -81,8 +81,7 @@ jobs:
 
   build-java:
     name: Build Camel Java DSL Image
-    # TODO: switch to arc-runner-domain-apis once k8s-lab runner PR is merged
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-domain-apis
     steps:
       - uses: actions/checkout@v4
 
