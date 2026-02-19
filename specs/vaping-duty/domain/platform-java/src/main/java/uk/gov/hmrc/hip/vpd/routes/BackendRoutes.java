@@ -79,6 +79,7 @@ public class BackendRoutes extends RouteBuilder {
                 })
                 .toD(exciseUrl + "/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     exchange.setProperty("exciseRegistrationResponseCode", statusCode);
@@ -123,6 +124,7 @@ public class BackendRoutes extends RouteBuilder {
                 })
                 .toD(exciseUrl + "/excise/vpd/periods/${exchangeProperty.periodKey}"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     exchange.setProperty("excisePeriodResponseCode", statusCode);
@@ -163,6 +165,7 @@ public class BackendRoutes extends RouteBuilder {
                 })
                 .to(exciseUrl + "/excise/vpd/validate-and-calculate"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     exchange.setProperty("exciseResponseCode", statusCode);
@@ -206,6 +209,7 @@ public class BackendRoutes extends RouteBuilder {
                 })
                 .toD(taxPlatformUrl + "/submissions/vpd/${exchangeProperty.ackRef}"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     Integer statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     String body = exchange.getIn().getBody(String.class);
@@ -254,6 +258,7 @@ public class BackendRoutes extends RouteBuilder {
                         + "/submissions/vpd?vpdApprovalNumber=${exchangeProperty.approvalNumber}"
                         + "&periodKey=${exchangeProperty.periodKey}"
                         + "&bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     String body = exchange.getIn().getBody(String.class);
@@ -283,6 +288,7 @@ public class BackendRoutes extends RouteBuilder {
                 })
                 .to(taxPlatformUrl + "/submissions/vpd"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     String body = exchange.getIn().getBody(String.class);
                     exchange.setProperty("taxPlatformStoreResponse", body);
@@ -307,6 +313,7 @@ public class BackendRoutes extends RouteBuilder {
                 })
                 .toD(customerUrl + "/customers/${exchangeProperty.customerId}"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
+                .convertBodyTo(String.class)
                 .process(exchange -> {
                     String body = exchange.getIn().getBody(String.class);
                     exchange.setProperty("customerResponse", body);
