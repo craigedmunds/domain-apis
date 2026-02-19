@@ -20,6 +20,7 @@ RUN mvn dependency:go-offline -q
 
 # Copy source and build
 COPY src ./src
+# Unit tests run here (no -DskipTests). Build fails if any test fails.
 RUN mvn package -q
 
 # ---------------------------------------------------------------------------
