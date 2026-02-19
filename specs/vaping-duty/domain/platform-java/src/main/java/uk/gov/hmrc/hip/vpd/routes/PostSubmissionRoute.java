@@ -59,8 +59,25 @@ public class PostSubmissionRoute extends RouteBuilder {
                 })
 
                 // Extract vpdApprovalNumber and periodKey from request body
-                .setProperty("vpdApprovalNumber", jsonpath("$.vpdApprovalNumber", true))
-                .setProperty("periodKey", jsonpath("$.periodKey", true))
+                .process(exchange -> {
+                    String body = exchange.getProperty("requestBody", String.class);
+                    String approvalNumber = null;
+                    String periodKey = null;
+                    if (body != null) {
+                        try {
+                            com.fasterxml.jackson.databind.JsonNode node =
+                                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(body);
+                            if (node.has("vpdApprovalNumber") && !node.get("vpdApprovalNumber").isNull()) {
+                                approvalNumber = node.get("vpdApprovalNumber").asText();
+                            }
+                            if (node.has("periodKey") && !node.get("periodKey").isNull()) {
+                                periodKey = node.get("periodKey").asText();
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    exchange.setProperty("vpdApprovalNumber", approvalNumber);
+                    exchange.setProperty("periodKey", periodKey);
+                })
 
                 .log("POST submission - approval=${exchangeProperty.vpdApprovalNumber}, "
                         + "period=${exchangeProperty.periodKey}")
