@@ -307,6 +307,7 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.0
+    platform: linux/amd64
     container_name: vpd-otel-collector
     command: ["--config=/etc/otel/config.yaml"]
     volumes:

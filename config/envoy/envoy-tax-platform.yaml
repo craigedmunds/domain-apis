@@ -33,6 +33,13 @@ static_resources:
                 stat_prefix: tax_platform_proxy
                 codec_type: AUTO
                 generate_request_id: true
+                # Allow HTTP upgrade requests (h2c, websocket) to pass through rather
+                # than reject with 403. Apache HttpClient 5 (used by camel-quarkus-http)
+                # may send h2c upgrade headers; without this Envoy counts them as
+                # downstream_rq_ws_on_non_ws_route and returns 403.
+                upgrade_configs:
+                  - upgrade_type: "websocket"
+                  - upgrade_type: "h2c"
                 tracing:
                   provider:
                     name: envoy.tracers.opentelemetry
