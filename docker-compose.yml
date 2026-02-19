@@ -75,8 +75,8 @@ services:
     image: ghcr.io/craigedmunds/vpd-domain-api-java:latest
     container_name: vpd-domain-api-java-internal
     environment:
-      # Override to 'none' when running without otel-collector (e.g. CI partial stack)
-      - QUARKUS_OTEL_TRACES_EXPORTER=${QUARKUS_OTEL_TRACES_EXPORTER:-otlp}
+      # quarkus.otel.traces.exporter is build-time fixed to 'none' in application.properties.
+      # Rebuild the image with quarkus.otel.traces.exporter=otlp to enable tracing.
     ports:
       - "8082:8082"
     networks:
