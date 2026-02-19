@@ -86,8 +86,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Wait for dind
+        run: |
+          for i in $(seq 1 15); do
+            docker info > /dev/null 2>&1 && echo "Docker ready" && break
+            echo "Waiting for Docker... ($i/15)"
+            sleep 2
+          done
+
       - name: Run unit tests
-        run: mvn test -pl specs/vaping-duty/domain/platform-java
+        run: |
+          docker run --rm \
+            -v $(pwd)/specs/vaping-duty/domain/platform-java:/app \
+            -w /app \
+            maven:3.9-eclipse-temurin-21 mvn test
 
   build-java:
     name: Build Camel Java DSL Image
