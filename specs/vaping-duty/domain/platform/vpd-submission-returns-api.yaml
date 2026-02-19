@@ -26,6 +26,8 @@ info:
 servers:
 - url: http://localhost:8081
   description: Local Development (Docker via Camel JBang)
+- url: http://localhost:8083
+  description: Local Development (Docker via Camel Java)
 - url: https://api.hip.hmrc.gov.uk
   description: Production
 - url: https://api.qa.hip.hmrc.gov.uk

@@ -1,16 +1,14 @@
-# Envoy Proxy Configuration for Excise Mock (WireMock)
+# Envoy Proxy Configuration for VPD Domain API - Camel Java DSL
+#
+# Mirrors envoy-domain-api.yaml but targets the Java service on port 8082.
+# External port: 8083 (Java Envoy) vs 8081 (YAML JBang Envoy)
 #
 # Provides:
+# - CORS support for browser-based API Explorer
 # - Request/response logging
 # - Trace context propagation (W3C Trace Context via OTLP)
-# - CORS support
-# - Header-controlled fault injection (Domain API sets headers)
 #
-# Fault injection headers (set by Domain API):
-# - x-envoy-fault-delay-request: delay in ms (e.g., "250")
-# - x-envoy-fault-abort-request: HTTP status code (e.g., "503")
-#
-# Upstream: excise-mock-internal (WireMock) on port 8080
+# Upstream: domain-api-java (Quarkus + Camel Java DSL) on port 8082
 
 admin:
   address:
@@ -20,22 +18,19 @@ admin:
 
 static_resources:
   listeners:
-    - name: listener_excise
+    - name: listener_domain_api_java
       address:
         socket_address:
           address: 0.0.0.0
-          port_value: 4010
+          port_value: 8080
       filter_chains:
         - filters:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-                stat_prefix: excise_proxy
+                stat_prefix: domain_api_java_proxy
                 codec_type: AUTO
                 generate_request_id: true
-                upgrade_configs:
-                  - upgrade_type: "websocket"
-                  - upgrade_type: "h2c"
                 tracing:
                   provider:
                     name: envoy.tracers.opentelemetry
@@ -45,7 +40,7 @@ static_resources:
                         envoy_grpc:
                           cluster_name: otel_collector
                         timeout: 0.250s
-                      service_name: excise-proxy
+                      service_name: domain-api-java-proxy
                 access_log:
                   - name: envoy.access_loggers.stdout
                     typed_config:
@@ -53,64 +48,51 @@ static_resources:
                       log_format:
                         json_format:
                           timestamp: "%START_TIME%"
-                          service: "excise-proxy"
+                          service: "domain-api-java-proxy"
                           method: "%REQ(:METHOD)%"
                           path: "%REQ(:PATH)%"
                           response_code: "%RESPONSE_CODE%"
                           duration_ms: "%DURATION%"
                           content_type: "%RESP(CONTENT-TYPE)%"
                 route_config:
-                  name: excise_route
+                  name: domain_api_java_route
                   virtual_hosts:
-                    - name: excise_service
+                    - name: domain_api_java_service
                       domains: ["*"]
                       cors:
                         allow_origin_string_match:
                           - prefix: "*"
                         allow_methods: "GET, POST, PUT, DELETE, OPTIONS"
-                        allow_headers: "content-type, x-correlation-id, accept, traceparent, tracestate"
-                        expose_headers: "content-type"
+                        allow_headers: "content-type, x-correlation-id, x-idempotency-key, accept, traceparent, tracestate, x-envoy-fault-delay-request, x-envoy-fault-abort-request"
+                        expose_headers: "content-type, x-correlation-id"
                         max_age: "86400"
                       routes:
                         - match:
                             prefix: "/"
                           route:
-                            cluster: excise_mock
-                            timeout: 30s
+                            cluster: domain_api_java
+                            timeout: 60s
                 http_filters:
                   - name: envoy.filters.http.cors
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
-                  - name: envoy.filters.http.fault
-                    typed_config:
-                      "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
-                      delay:
-                        header_delay: {}
-                        percentage:
-                          numerator: 100
-                          denominator: HUNDRED
-                      abort:
-                        header_abort: {}
-                        percentage:
-                          numerator: 100
-                          denominator: HUNDRED
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
   clusters:
-    - name: excise_mock
+    - name: domain_api_java
       type: STRICT_DNS
       lb_policy: ROUND_ROBIN
       load_assignment:
-        cluster_name: excise_mock
+        cluster_name: domain_api_java
         endpoints:
           - lb_endpoints:
               - endpoint:
                   address:
                     socket_address:
-                      address: excise-mock-internal
-                      port_value: 8080
+                      address: domain-api-java-internal
+                      port_value: 8082
 
     - name: otel_collector
       type: STRICT_DNS

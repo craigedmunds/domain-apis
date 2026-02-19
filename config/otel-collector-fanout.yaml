@@ -1,0 +1,62 @@
+# OpenTelemetry Collector - Fan-out (local + k8s LGTM)
+#
+# Receives OTLP from all compose services, forwards to:
+#   - Local LGTM (lgtm:4317)
+#   - K8s LGTM (https://lgtm.lab.local.ctoaas.co)
+#
+# Usage:
+#   OTEL_CONFIG=config/otel-collector-fanout.yaml docker compose up -d otel-collector
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+  # Tag telemetry from compose so it's filterable in k8s Grafana
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: "local-compose"
+        action: upsert
+      - key: service.namespace
+        value: "domain-apis"
+        action: upsert
+
+exporters:
+  otlp/local:
+    endpoint: lgtm:4317
+    tls:
+      insecure: true
+
+  otlphttp/k8s:
+    endpoint: https://lgtm.lab.local.ctoaas.co
+    tls:
+      insecure_skip_verify: true
+    # Drop silently if k8s LGTM is unreachable (e.g. offline) so local
+    # telemetry is never blocked or lost due to k8s connectivity issues
+    retry_on_failure:
+      enabled: false
+    sending_queue:
+      enabled: false
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [otlp/local, otlphttp/k8s]
+    metrics:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [otlp/local, otlphttp/k8s]
+    logs:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [otlp/local, otlphttp/k8s]

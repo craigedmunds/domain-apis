@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -78,6 +79,76 @@ jobs:
 
       - name: Run integration tests
         run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
+
+  build-java:
+    name: Build Camel Java DSL Image
+    runs-on: arc-runner-domain-apis
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for dind
+        run: |
+          for i in $(seq 1 15); do
+            docker info > /dev/null 2>&1 && echo "Docker ready" && break
+            echo "Waiting for Docker... ($i/15)"
+            sleep 2
+          done
+
+      - name: Build Java domain API image (native arch for testing)
+        run: |
+          docker build \
+            -t vpd-domain-api-java:ci \
+            specs/vaping-duty/domain/platform-java/
+
+      - name: Smoke test - container starts and serves health
+        run: |
+          docker run -d --name vpd-java-smoke -p 8082:8082 vpd-domain-api-java:ci
+          for i in $(seq 1 20); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/health || true)
+            if [ "$status" = "200" ]; then
+              echo "Health check passed"
+              docker rm -f vpd-java-smoke
+              exit 0
+            fi
+            echo "Waiting for service... ($i/20) status=$status"
+            sleep 3
+          done
+          echo "Service failed to start:"
+          docker logs vpd-java-smoke
+          docker rm -f vpd-java-smoke
+          exit 1
+
+  publish-java:
+    name: Publish Multi-Arch Java Image
+    runs-on: arc-runner-domain-apis
+    needs: [build-java]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for dind
+        run: |
+          for i in $(seq 1 15); do
+            docker info > /dev/null 2>&1 && echo "Docker ready" && break
+            echo "Waiting for Docker... ($i/15)"
+            sleep 2
+          done
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        run: task domain:docker:build
 
   groovy-tests:
     name: Groovy Transformer Tests

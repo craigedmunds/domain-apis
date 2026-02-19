@@ -61,6 +61,58 @@ services:
       start_period: 90s
 
   # =============================================================================
+  # Domain API - Camel Java DSL (Quarkus) - Internal
+  # Equivalent implementation to domain-api-internal, using Java DSL instead
+  # of YAML DSL. Runs on port 8082, exposed via Envoy on 8083.
+  # =============================================================================
+
+  domain-api-java-internal:
+    build:
+      context: ./specs/vaping-duty/domain/platform-java
+      dockerfile: Dockerfile
+      platforms:
+        - linux/arm64
+    image: ghcr.io/craigedmunds/vpd-domain-api-java:latest
+    container_name: vpd-domain-api-java-internal
+    # quarkus.otel.traces.exporter is build-time fixed to 'none' in application.properties.
+    # Rebuild the image with quarkus.otel.traces.exporter=otlp to enable tracing.
+    ports:
+      - "8082:8082"
+    networks:
+      - domain-api-network
+    depends_on:
+      - excise-proxy
+      - customer-proxy
+      - tax-platform-proxy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  domain-api-java-proxy:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: vpd-domain-api-java-proxy
+    ports:
+      - "8083:8080"
+      - "9904:9901"
+    volumes:
+      - ./config/envoy/envoy-domain-api-java.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      domain-api-java-internal:
+        condition: service_healthy
+      lgtm:
+        condition: service_started
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+        loki-external-labels: "service=domain-api-java-proxy,job=envoy"
+    networks:
+      - domain-api-network
+
+  # =============================================================================
   # Domain API Proxy (Envoy) - CORS, logging, tracing
   # =============================================================================
 
@@ -236,12 +288,39 @@ services:
     container_name: vpd-lgtm
     ports:
       - "3000:3000"   # Grafana UI
-      - "3100:3100"   # Loki API (for Promtail)
-      - "4317:4317"   # OTLP gRPC
+      - "3100:3100"   # Loki API (for Docker logging driver + Alloy)
+      - "4317:4317"   # OTLP gRPC (from otel-collector only)
       - "4318:4318"   # OTLP HTTP
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
+    networks:
+      - domain-api-network
+
+  # =============================================================================
+  # OTel Collector - fan-out for traces/metrics
+  #
+  # All services send OTLP to this collector (port 4319/4320) rather than
+  # directly to LGTM. The collector forwards to local LGTM always.
+  #
+  # To also forward to k8s LGTM (lgtm.lab.local.ctoaas.co), swap the config:
+  #   OTEL_CONFIG=config/otel-collector-fanout.yaml docker compose up -d otel-collector
+  #
+  # The fanout config drops k8s failures silently so offline mode still works.
+  # =============================================================================
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.0
+    container_name: vpd-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      # Swap to config/otel-collector-fanout.yaml to also forward to k8s LGTM
+      - ./config/otel-collector.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4319:4317"   # OTLP gRPC (services send here, not to lgtm:4317 directly)
+      - "4320:4318"   # OTLP HTTP
+    depends_on:
+      - lgtm
     networks:
       - domain-api-network
 
