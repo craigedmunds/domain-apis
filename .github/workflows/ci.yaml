@@ -109,7 +109,7 @@ jobs:
         run: |
           # Start backend mocks and the Java service only - skip proxy (needs lgtm/Loki)
           # Expose the Java service directly on host port 8082
-          docker compose up -d \
+          QUARKUS_OTEL_TRACES_EXPORTER=none docker compose up -d \
             excise-mock-internal \
             excise-proxy \
             customer-mock-internal \
