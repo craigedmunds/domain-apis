@@ -310,7 +310,8 @@ services:
     container_name: vpd-otel-collector
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
-      - ${OTEL_CONFIG:-config/otel-collector.yaml}:/etc/otel/config.yaml:ro
+      # Swap to config/otel-collector-fanout.yaml to also forward to k8s LGTM
+      - ./config/otel-collector.yaml:/etc/otel/config.yaml:ro
     ports:
       - "4319:4317"   # OTLP gRPC (services send here, not to lgtm:4317 directly)
       - "4320:4318"   # OTLP HTTP
