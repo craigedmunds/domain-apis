@@ -38,7 +38,16 @@ public class GetByApprovalRoute extends RouteBuilder {
 
                 // Step 3: Find submission from tax-platform
                 .to("direct:tax-platform-findSubmission")
-                .log("Tax-platform submission found")
+                .log("Tax-platform response - status=${exchangeProperty.taxPlatformResponseCode}")
+
+                // Short-circuit on tax-platform error (e.g. 404 not found)
+                .choice()
+                    .when(exchangeProperty("taxPlatformResponseCode").isGreaterThanOrEqualTo(400))
+                        .setHeader("CamelHttpResponseCode", exchangeProperty("taxPlatformResponseCode"))
+                        .setBody(exchangeProperty("taxPlatformResponse"))
+                        .to("direct:injectResponseHeaders")
+                        .stop()
+                .end()
 
                 // Step 4: Get customer details
                 .to("direct:customer-getCustomer")

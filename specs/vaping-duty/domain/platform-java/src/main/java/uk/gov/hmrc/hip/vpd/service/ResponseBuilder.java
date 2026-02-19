@@ -183,11 +183,18 @@ public class ResponseBuilder {
                 .filter(f -> !f.isBlank())
                 .toArray(String[]::new);
 
-        // Validate all fields exist
+        // Validate all fields exist.
+        // A field is valid if: (a) getNestedValue returns a non-missing node, OR
+        // (b) it is a top-level key that exists in the response (value may be JSON null).
+        // This matches the Groovy SparseFieldsets implementation.
         List<String> invalidFields = new ArrayList<>();
         for (String field : requestedFields) {
             JsonNode value = getNestedValue(response, field);
-            if (value == null || value.isMissingNode()) {
+            boolean missing = (value == null || value.isMissingNode());
+            if (missing && !field.contains(".") && response.isObject() && response.has(field)) {
+                missing = false; // key exists, value is JSON null — still a valid field
+            }
+            if (missing) {
                 invalidFields.add(field);
             }
         }

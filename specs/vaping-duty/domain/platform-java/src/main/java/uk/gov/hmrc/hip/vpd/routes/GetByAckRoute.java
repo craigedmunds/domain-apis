@@ -31,9 +31,19 @@ public class GetByAckRoute extends RouteBuilder {
                 // Step 1: Get submission from tax-platform
                 // (also extracts customerId, vpdApprovalNumber, periodKey into properties)
                 .to("direct:tax-platform-getSubmission")
-                .log("Tax-platform response - customerId=${exchangeProperty.customerId}, "
+                .log("Tax-platform response - status=${exchangeProperty.taxPlatformResponseCode}, "
+                        + "customerId=${exchangeProperty.customerId}, "
                         + "approval=${exchangeProperty.vpdApprovalNumber}, "
                         + "period=${exchangeProperty.periodKey}")
+
+                // Short-circuit on tax-platform error (e.g. 404 not found)
+                .choice()
+                    .when(exchangeProperty("taxPlatformResponseCode").isGreaterThanOrEqualTo(400))
+                        .setHeader("CamelHttpResponseCode", exchangeProperty("taxPlatformResponseCode"))
+                        .setBody(exchangeProperty("taxPlatformResponse"))
+                        .to("direct:injectResponseHeaders")
+                        .stop()
+                .end()
 
                 // Step 2: Get registration from excise (XML→JSON)
                 .to("direct:excise-getRegistration")

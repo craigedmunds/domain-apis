@@ -209,6 +209,7 @@ public class BackendRoutes extends RouteBuilder {
                 .process(exchange -> {
                     int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     String body = exchange.getIn().getBody(String.class);
+                    exchange.setProperty("taxPlatformResponseCode", statusCode);
                     exchange.setProperty("taxPlatformResponse", body);
 
                     if (statusCode < 400) {
@@ -252,7 +253,9 @@ public class BackendRoutes extends RouteBuilder {
                         + "&periodKey=${exchangeProperty.periodKey}"
                         + "&bridgeEndpoint=true&throwExceptionOnFailure=false")
                 .process(exchange -> {
+                    int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     String body = exchange.getIn().getBody(String.class);
+                    exchange.setProperty("taxPlatformResponseCode", statusCode);
                     exchange.setProperty("taxPlatformResponse", body);
                 });
 
