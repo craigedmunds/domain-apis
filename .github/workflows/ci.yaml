@@ -94,29 +94,58 @@ jobs:
             sleep 2
           done
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Build Java domain API image
         run: |
           docker build \
-            -t vpd-domain-api-java:ci \
+            -t vpd-domain-api-java:latest \
             specs/vaping-duty/domain/platform-java/
 
-      - name: Smoke test - container starts and serves health
+      - name: Start backend mocks and Java service
         run: |
-          docker run -d --name vpd-java-smoke -p 8082:8082 vpd-domain-api-java:ci
-          for i in $(seq 1 20); do
+          # Start backend mocks and the Java service only - skip proxy (needs lgtm/Loki)
+          # Expose the Java service directly on host port 8082
+          docker compose up -d \
+            excise-mock-internal \
+            excise-proxy \
+            customer-mock-internal \
+            customer-proxy \
+            tax-platform-mock-internal \
+            tax-platform-proxy \
+            domain-api-java-internal
+          # Wait for the Java service healthcheck to pass (up to 90s)
+          for i in $(seq 1 30); do
             status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/health || true)
             if [ "$status" = "200" ]; then
-              echo "Health check passed"
-              docker rm -f vpd-java-smoke
-              exit 0
+              echo "Service healthy"
+              break
             fi
-            echo "Waiting for service... ($i/20) status=$status"
+            echo "Waiting for service... ($i/30) status=$status"
             sleep 3
           done
-          echo "Service failed to start:"
-          docker logs vpd-java-smoke
-          docker rm -f vpd-java-smoke
-          exit 1
+          if [ "$status" != "200" ]; then
+            echo "Service failed to become healthy:"
+            docker compose logs domain-api-java-internal
+            exit 1
+          fi
+
+      - name: Run acceptance tests against Java service
+        run: |
+          cd tests/acceptance/domain-api
+          npm ci
+          DOMAIN_API_URL=http://localhost:8082 npm test
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs domain-api-java-internal domain-api-java-proxy
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down
 
   groovy-tests:
     name: Groovy Transformer Tests
