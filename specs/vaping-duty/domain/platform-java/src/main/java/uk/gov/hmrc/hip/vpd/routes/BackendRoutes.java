@@ -68,13 +68,11 @@ public class BackendRoutes extends RouteBuilder {
                 .routeId("excise-getRegistration")
                 .process(exchange -> {
                     String approvalNumber = exchange.getProperty("vpdApprovalNumber", String.class);
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "GET");
                     exchange.getIn().setHeader("Accept", "application/xml");
                     exchange.getIn().setHeader("X-Correlation-Id",
                             exchange.getProperty("correlationId", String.class));
-                    exchange.getIn().setHeader("CamelHttpPath",
-                            "/excise/vpd/registrations/" + approvalNumber);
                     exchange.getIn().setBody(null);
                 })
                 .toD(exciseUrl + "/excise/vpd/registrations/${exchangeProperty.vpdApprovalNumber}"
@@ -115,7 +113,7 @@ public class BackendRoutes extends RouteBuilder {
         from("direct:excise-getPeriod")
                 .routeId("excise-getPeriod")
                 .process(exchange -> {
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "GET");
                     exchange.getIn().setHeader("Accept", "application/xml");
                     exchange.getIn().setHeader("X-Correlation-Id",
@@ -155,7 +153,7 @@ public class BackendRoutes extends RouteBuilder {
         from("direct:excise-validateAndCalc")
                 .routeId("excise-validateAndCalc")
                 .process(exchange -> {
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "POST");
                     exchange.getIn().setHeader("Content-Type", "application/json");
                     exchange.getIn().setHeader("Accept", "application/xml");
@@ -200,7 +198,7 @@ public class BackendRoutes extends RouteBuilder {
         from("direct:tax-platform-getSubmission")
                 .routeId("tax-platform-getSubmission")
                 .process(exchange -> {
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "GET");
                     exchange.getIn().setHeader("Accept", "application/json");
                     exchange.getIn().setHeader("X-Correlation-Id",
@@ -247,7 +245,7 @@ public class BackendRoutes extends RouteBuilder {
         from("direct:tax-platform-findSubmission")
                 .routeId("tax-platform-findSubmission")
                 .process(exchange -> {
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "GET");
                     exchange.getIn().setHeader("Accept", "application/json");
                     exchange.getIn().setHeader("X-Correlation-Id",
@@ -276,7 +274,7 @@ public class BackendRoutes extends RouteBuilder {
         from("direct:tax-platform-storeSubmission")
                 .routeId("tax-platform-storeSubmission")
                 .process(exchange -> {
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "POST");
                     exchange.getIn().setHeader("Content-Type", "application/json");
                     exchange.getIn().setHeader("Accept", "application/json");
@@ -304,7 +302,7 @@ public class BackendRoutes extends RouteBuilder {
         from("direct:customer-getCustomer")
                 .routeId("customer-getCustomer")
                 .process(exchange -> {
-                    exchange.getIn().removeHeaders("CamelHttp*");
+                    exchange.getIn().removeHeaders("*");
                     exchange.getIn().setHeader("CamelHttpMethod", "GET");
                     exchange.getIn().setHeader("Accept", "application/json");
                     exchange.getIn().setHeader("X-Correlation-Id",
