@@ -109,5 +109,5 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: lgtm
+                      address: otel-collector
                       port_value: 4317

@@ -284,12 +284,38 @@ services:
     container_name: vpd-lgtm
     ports:
       - "3000:3000"   # Grafana UI
-      - "3100:3100"   # Loki API (for Promtail)
-      - "4317:4317"   # OTLP gRPC
+      - "3100:3100"   # Loki API (for Docker logging driver + Alloy)
+      - "4317:4317"   # OTLP gRPC (from otel-collector only)
       - "4318:4318"   # OTLP HTTP
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
+    networks:
+      - domain-api-network
+
+  # =============================================================================
+  # OTel Collector - fan-out for traces/metrics
+  #
+  # All services send OTLP to this collector (port 4319/4320) rather than
+  # directly to LGTM. The collector forwards to local LGTM always.
+  #
+  # To also forward to k8s LGTM (lgtm.lab.local.ctoaas.co), swap the config:
+  #   OTEL_CONFIG=config/otel-collector-fanout.yaml docker compose up -d otel-collector
+  #
+  # The fanout config drops k8s failures silently so offline mode still works.
+  # =============================================================================
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.0
+    container_name: vpd-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ${OTEL_CONFIG:-config/otel-collector.yaml}:/etc/otel/config.yaml:ro
+    ports:
+      - "4319:4317"   # OTLP gRPC (services send here, not to lgtm:4317 directly)
+      - "4320:4318"   # OTLP HTTP
+    depends_on:
+      - lgtm
     networks:
       - domain-api-network
 
