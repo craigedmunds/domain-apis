@@ -25,9 +25,13 @@ info:
     correlationId: true
 servers:
 - url: http://localhost:8081
-  description: Local Development (Docker via Camel JBang)
+  description: Local (Docker - Camel JBang)
 - url: http://localhost:8083
-  description: Local Development (Docker via Camel Java)
+  description: Local (Docker - Camel Java)
+- url: https://vpd-domain-api.lab.local.ctoaas.co
+  description: k8s-lab (Camel JBang)
+- url: https://vpd-domain-api-java.lab.local.ctoaas.co
+  description: k8s-lab (Camel Java)
 - url: https://api.hip.hmrc.gov.uk
   description: Production
 - url: https://api.qa.hip.hmrc.gov.uk

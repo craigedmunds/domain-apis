@@ -305,7 +305,7 @@
                     },
                     requestInterceptor: (req) => {
                         // Add W3C Trace Context headers for requests to domain API and mock services
-                        if (req.url.includes('localhost:40') || req.url.includes('localhost:8081') || req.url.includes('localhost:8083')) {
+                        if (req.url.includes('localhost:40') || req.url.includes('localhost:8081') || req.url.includes('localhost:8083') || req.url.includes('lab.local.ctoaas.co')) {
                             currentTrace = TraceContext.create();
                             currentTrace.method = req.method;
                             currentTrace.url = req.url;
