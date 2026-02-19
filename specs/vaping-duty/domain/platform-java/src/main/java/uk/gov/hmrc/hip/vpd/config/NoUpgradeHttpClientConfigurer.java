@@ -1,7 +1,10 @@
 package uk.gov.hmrc.hip.vpd.config;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import org.apache.camel.CamelContext;
 import org.apache.camel.component.http.HttpClientConfigurer;
+import org.apache.camel.component.http.HttpComponent;
+import org.apache.camel.quarkus.core.CamelContextCustomizer;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 
@@ -17,18 +20,27 @@ import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
  *   response_flags: "-"   (local reject, duration_ms: 0)
  * </pre>
  *
- * <p>Registered as a CDI bean; Camel's autowiring picks up all
- * {@link HttpClientConfigurer} beans and applies them to the HTTP component.
+ * <p>Implemented as a {@link CamelContextCustomizer} so Quarkus Camel invokes
+ * it before routes start, guaranteeing the configurer is registered on the
+ * HTTP component regardless of CDI autowiring order.
  */
 @ApplicationScoped
-public class NoUpgradeHttpClientConfigurer implements HttpClientConfigurer {
+public class NoUpgradeHttpClientConfigurer implements CamelContextCustomizer {
 
     @Override
-    public void configureHttpClient(HttpClientBuilder clientBuilder) {
-        clientBuilder.setDefaultRequestConfig(
-                RequestConfig.custom()
-                        .setProtocolUpgradeEnabled(false)
-                        .build()
-        );
+    public void customize(CamelContext camelContext) {
+        HttpComponent http = camelContext.getComponent("http", HttpComponent.class);
+        if (http != null) {
+            http.setHttpClientConfigurer(new HttpClientConfigurer() {
+                @Override
+                public void configureHttpClient(HttpClientBuilder clientBuilder) {
+                    clientBuilder.setDefaultRequestConfig(
+                            RequestConfig.custom()
+                                    .setProtocolUpgradeEnabled(false)
+                                    .build()
+                    );
+                }
+            });
+        }
     }
 }
