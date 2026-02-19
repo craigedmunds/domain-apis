@@ -80,6 +80,22 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
 
+  unit-tests-java:
+    name: Java Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run unit tests
+        run: mvn test -pl specs/vaping-duty/domain/platform-java
+
   build-java:
     name: Build Camel Java DSL Image
     runs-on: arc-runner-domain-apis
