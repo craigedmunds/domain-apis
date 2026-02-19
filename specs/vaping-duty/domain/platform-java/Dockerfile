@@ -20,7 +20,7 @@ RUN mvn dependency:go-offline -q
 
 # Copy source and build
 COPY src ./src
-RUN mvn package -DskipTests -q
+RUN mvn package -q
 
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime

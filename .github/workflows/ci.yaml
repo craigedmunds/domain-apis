@@ -80,27 +80,6 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration -- --ci --runInBand --testTimeout=120000 --forceExit
 
-  unit-tests-java:
-    name: Java Unit Tests
-    runs-on: arc-runner-domain-apis
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Wait for dind
-        run: |
-          for i in $(seq 1 15); do
-            docker info > /dev/null 2>&1 && echo "Docker ready" && break
-            echo "Waiting for Docker... ($i/15)"
-            sleep 2
-          done
-
-      - name: Run unit tests
-        run: |
-          docker run --rm \
-            -v $(pwd)/specs/vaping-duty/domain/platform-java:/app \
-            -w /app \
-            maven:3.9-eclipse-temurin-21 mvn test
-
   build-java:
     name: Build Camel Java DSL Image
     runs-on: arc-runner-domain-apis
@@ -142,7 +121,7 @@ jobs:
   publish-java:
     name: Publish Multi-Arch Java Image
     runs-on: arc-runner-domain-apis
-    needs: [build-java, unit-tests-java]
+    needs: [build-java]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: read
