@@ -74,9 +74,8 @@ services:
         - linux/arm64
     image: ghcr.io/craigedmunds/vpd-domain-api-java:latest
     container_name: vpd-domain-api-java-internal
-    environment:
-      # quarkus.otel.traces.exporter is build-time fixed to 'none' in application.properties.
-      # Rebuild the image with quarkus.otel.traces.exporter=otlp to enable tracing.
+    # quarkus.otel.traces.exporter is build-time fixed to 'none' in application.properties.
+    # Rebuild the image with quarkus.otel.traces.exporter=otlp to enable tracing.
     ports:
       - "8082:8082"
     networks:
