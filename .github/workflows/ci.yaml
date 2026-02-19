@@ -118,7 +118,7 @@ jobs:
         run: |
           # Start backend mocks and the Java service only - skip proxy (needs lgtm/Loki)
           # Expose the Java service directly on host port 8082
-          docker compose up -d \
+          docker-compose up -d \
             excise-mock-internal \
             excise-proxy \
             customer-mock-internal \
@@ -138,7 +138,7 @@ jobs:
           done
           if [ "$status" != "200" ]; then
             echo "Service failed to become healthy:"
-            docker compose logs domain-api-java-internal
+            docker-compose logs domain-api-java-internal
             exit 1
           fi
 
@@ -150,11 +150,11 @@ jobs:
 
       - name: Dump logs on failure
         if: failure()
-        run: docker compose logs domain-api-java-internal domain-api-java-proxy
+        run: docker-compose logs domain-api-java-internal domain-api-java-proxy
 
       - name: Tear down stack
         if: always()
-        run: docker compose down
+        run: docker-compose down
 
   publish-java:
     name: Publish Multi-Arch Java Image
