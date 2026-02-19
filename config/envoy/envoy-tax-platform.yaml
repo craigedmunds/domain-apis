@@ -63,6 +63,10 @@ static_resources:
                           response_code: "%RESPONSE_CODE%"
                           duration_ms: "%DURATION%"
                           content_type: "%RESP(CONTENT-TYPE)%"
+                          req_connection: "%REQ(Connection)%"
+                          req_upgrade: "%REQ(Upgrade)%"
+                          req_origin: "%REQ(Origin)%"
+                          response_flags: "%RESPONSE_FLAGS%"
                 route_config:
                   name: tax_platform_route
                   virtual_hosts:
