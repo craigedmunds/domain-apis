@@ -1,10 +1,9 @@
 package uk.gov.hmrc.hip.vpd.config;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import org.apache.camel.CamelContext;
+import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.http.HttpClientConfigurer;
 import org.apache.camel.component.http.HttpComponent;
-import org.apache.camel.quarkus.core.CamelContextCustomizer;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 
@@ -20,16 +19,17 @@ import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
  *   response_flags: "-"   (local reject, duration_ms: 0)
  * </pre>
  *
- * <p>Implemented as a {@link CamelContextCustomizer} so Quarkus Camel invokes
- * it before routes start, guaranteeing the configurer is registered on the
- * HTTP component regardless of CDI autowiring order.
+ * <p>Implemented as a {@link RouteBuilder} with no routes, so that Camel
+ * invokes {@link #configure()} during context startup — at which point
+ * {@link #getContext()} is live and we can reach the HTTP component directly.
+ * This avoids relying on CDI autowiring order or Quarkus-specific SPI classes.
  */
 @ApplicationScoped
-public class NoUpgradeHttpClientConfigurer implements CamelContextCustomizer {
+public class NoUpgradeHttpClientConfigurer extends RouteBuilder {
 
     @Override
-    public void customize(CamelContext camelContext) {
-        HttpComponent http = camelContext.getComponent("http", HttpComponent.class);
+    public void configure() {
+        HttpComponent http = getContext().getComponent("http", HttpComponent.class);
         if (http != null) {
             http.setHttpClientConfigurer(new HttpClientConfigurer() {
                 @Override
