@@ -70,7 +70,7 @@ services:
     build:
       context: ./specs/vaping-duty/domain/platform-java
       dockerfile: Dockerfile
-    image: vpd-domain-api-java:latest
+    image: ghcr.io/craigedmunds/domain-apis/vpd-domain-api-java:latest
     container_name: vpd-domain-api-java-internal
     ports:
       - "8082:8082"
@@ -307,7 +307,6 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.0
-    platform: linux/amd64
     container_name: vpd-otel-collector
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
