@@ -100,6 +100,24 @@ jobs:
             -t vpd-domain-api-java:ci \
             specs/vaping-duty/domain/platform-java/
 
+      - name: Smoke test - container starts and serves health
+        run: |
+          docker run -d --name vpd-java-smoke -p 8082:8082 vpd-domain-api-java:ci
+          for i in $(seq 1 20); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082/health || true)
+            if [ "$status" = "200" ]; then
+              echo "Health check passed"
+              docker rm -f vpd-java-smoke
+              exit 0
+            fi
+            echo "Waiting for service... ($i/20) status=$status"
+            sleep 3
+          done
+          echo "Service failed to start:"
+          docker logs vpd-java-smoke
+          docker rm -f vpd-java-smoke
+          exit 1
+
   groovy-tests:
     name: Groovy Transformer Tests
     runs-on: ubuntu-latest

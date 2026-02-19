@@ -83,6 +83,12 @@
             <artifactId>camel-quarkus-jacksonxml</artifactId>
         </dependency>
 
+        <!-- Direct component for internal route chaining -->
+        <dependency>
+            <groupId>org.apache.camel.quarkus</groupId>
+            <artifactId>camel-quarkus-direct</artifactId>
+        </dependency>
+
         <!-- JSONPath for extracting from request body -->
         <dependency>
             <groupId>org.apache.camel.quarkus</groupId>
