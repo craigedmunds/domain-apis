@@ -70,7 +70,9 @@ services:
     build:
       context: ./specs/vaping-duty/domain/platform-java
       dockerfile: Dockerfile
-    image: ghcr.io/craigedmunds/domain-apis/vpd-domain-api-java:latest
+      platforms:
+        - linux/arm64
+    image: ghcr.io/craigedmunds/vpd-domain-api-java:latest
     container_name: vpd-domain-api-java-internal
     ports:
       - "8082:8082"

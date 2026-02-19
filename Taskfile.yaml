@@ -5,6 +5,18 @@ vars:
   DOCS_DIR: docs
   TESTS_DIR: tests
 
+includes:
+  # VPD Domain API Java service - multi-arch Docker build via shared workflow
+  domain:
+    taskfile: libs/workspace-shared/Taskfile.yaml
+    vars:
+      APP_NAME: vpd-domain-api-java
+      DOCKER_IMAGE_NAME: vpd-domain-api-java
+      DOCKERFILE: specs/vaping-duty/domain/platform-java/Dockerfile
+      CONTEXT: specs/vaping-duty/domain/platform-java
+      VERSION_FILE: specs/vaping-duty/domain/platform-java/VERSION
+      UPDATE_KUSTOMIZATION: 'false'
+
 tasks:
   # Validation tasks
   validate:
