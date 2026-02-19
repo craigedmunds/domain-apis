@@ -207,15 +207,17 @@ public class BackendRoutes extends RouteBuilder {
                 .toD(taxPlatformUrl + "/submissions/vpd/${exchangeProperty.ackRef}"
                         + "?bridgeEndpoint=true&throwExceptionOnFailure=false")
                 .process(exchange -> {
-                    int statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
+                    Integer statusCode = exchange.getIn().getHeader("CamelHttpResponseCode", Integer.class);
                     String body = exchange.getIn().getBody(String.class);
-                    exchange.setProperty("taxPlatformResponseCode", statusCode);
+                    log.debug("Tax-platform getSubmission raw response: status={} body={}", statusCode, body);
+                    exchange.setProperty("taxPlatformResponseCode", statusCode != null ? statusCode : 500);
                     exchange.setProperty("taxPlatformResponse", body);
 
-                    if (statusCode < 400) {
-                        // Extract fields needed for subsequent backend calls
+                    if (statusCode != null && statusCode < 400) {
                         try {
                             JsonNode json = objectMapper.readTree(body);
+                            log.debug("Tax-platform parsed JSON fields: customerId={} vpdApprovalNumber={} periodKey={}",
+                                    json.path("customerId"), json.path("vpdApprovalNumber"), json.path("periodKey"));
                             String customerId = json.path("customerId").asText(null);
                             String approvalNumber = json.path("vpdApprovalNumber").asText(null);
                             String periodKey = json.path("periodKey").asText(null);
