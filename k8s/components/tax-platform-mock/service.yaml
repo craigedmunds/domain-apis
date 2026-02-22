@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tax-platform-mock
+  labels:
+    app.kubernetes.io/name: tax-platform-mock
+    app.kubernetes.io/component: mock
+spec:
+  selector:
+    app.kubernetes.io/name: tax-platform-mock
+  ports:
+    - name: http
+      port: 4010
+      targetPort: 4010

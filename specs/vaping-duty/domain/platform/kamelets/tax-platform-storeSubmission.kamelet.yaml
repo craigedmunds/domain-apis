@@ -44,7 +44,7 @@ spec:
         - setBody:
             simple: "{{requestBody}}"
         - to:
-            uri: "http://tax-platform-proxy:4010/submissions/vpd?bridgeEndpoint=true&throwExceptionOnFailure=false"
+            uri: "http://tax-platform-mock:4010/submissions/vpd?bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
             name: taxPlatformStoreResponseCode
             simple: "${header.CamelHttpResponseCode}"

@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docs-nginx-config
+  labels:
+    app.kubernetes.io/name: docs
+    app.kubernetes.io/component: docs
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        
+        server {
+            listen 8080;
+            server_name _;
+            
+            # Serve docs from repos/domain-apis/docs directory but at root URL
+            location / {
+                alias /web/repos/domain-apis/docs/;
+                index index.html;
+                autoindex on;
+            }
+            
+            # Serve specs from repos/domain-apis/specs directory
+            location /specs {
+                alias /web/repos/domain-apis/specs;
+                autoindex on;
+                add_header Access-Control-Allow-Origin *;
+            }
+        }
+    }

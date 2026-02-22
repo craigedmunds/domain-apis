@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: domain-api
+  labels:
+    app.kubernetes.io/name: domain-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/instance: vpd-poc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: domain-api
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: domain-api
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: envoy
+          image: envoyproxy/envoy:v1.28-latest
+          ports:
+            - name: http
+              containerPort: 8081
+            - name: admin
+              containerPort: 9901
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: camel-jbang
+          image: apache/camel-jbang:4.16.0
+          args:
+            - run
+            - /routes/rest-config.yaml
+            - /routes/get-submission-return-by-ack.yaml
+            - /routes/get-submission-return-by-approval.yaml
+            - /routes/post-submission-return.yaml
+            - /routes/common.yaml
+            - /kamelets/customer-getCustomer.kamelet.yaml
+            - /kamelets/excise-getRegistration.kamelet.yaml
+            - /kamelets/excise-getPeriod.kamelet.yaml
+            - /kamelets/excise-validateAndCalculate.kamelet.yaml
+            - /kamelets/tax-platform-getSubmission.kamelet.yaml
+            - /kamelets/tax-platform-findSubmission.kamelet.yaml
+            - /kamelets/tax-platform-storeSubmission.kamelet.yaml
+            - --dep=org.apache.camel:camel-jacksonxml
+            - --dep=org.apache.camel:camel-groovy
+            - --dep=org.apache.groovy:groovy-json:4.0.29
+            - --dep=org.apache.groovy:groovy-xml:4.0.29
+          env:
+            - name: EXCISE_URL
+              value: http://excise-mock:8080
+            - name: CUSTOMER_URL
+              value: http://customer-mock:4010
+            - name: TAX_PLATFORM_URL
+              value: http://tax-platform-mock:4010
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: routes
+              mountPath: /routes
+              readOnly: true
+            - name: kamelets
+              mountPath: /kamelets
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: routes
+          configMap:
+            name: domain-api-routes
+        - name: kamelets
+          configMap:
+            name: domain-api-kamelets
+        - name: envoy-config
+          configMap:
+            name: domain-api-envoy-config
