@@ -180,7 +180,10 @@
     <script>
         // Lightweight W3C Trace Context with OTLP export to Tempo
         const TraceContext = {
-            OTLP_ENDPOINT: 'http://localhost:4318/v1/traces',
+            // Auto-detect environment: use k8s ingress if on vpd-docs domain, else localhost for docker-compose
+            OTLP_ENDPOINT: window.location.hostname.includes('vpd-docs.lab.local.ctoaas.co') 
+                ? 'https://otel-collector.lab.local.ctoaas.co/v1/traces'
+                : 'http://localhost:4318/v1/traces',
             SERVICE_NAME: 'vpd-api-explorer',
 
             // Generate random hex string of specified length
@@ -252,7 +255,12 @@
             },
 
             // Build Grafana Tempo search URL
-            tempoUrl: (traceId) => `http://localhost:3000/explore?orgId=1&left={"datasource":"tempo","queries":[{"refId":"A","queryType":"traceql","query":"${traceId}"}]}`
+            tempoUrl: (traceId) => {
+                const grafanaUrl = window.location.hostname.includes('vpd-docs.lab.local.ctoaas.co')
+                    ? 'https://grafana.lab.local.ctoaas.co'
+                    : 'http://localhost:3000';
+                return `${grafanaUrl}/explore?orgId=1&left={"datasource":"tempo","queries":[{"refId":"A","queryType":"traceql","query":"${traceId}"}]}`;
+            }
         };
 
         let currentTrace = null;
@@ -305,7 +313,7 @@
                     },
                     requestInterceptor: (req) => {
                         // Add W3C Trace Context headers for requests to domain API and mock services
-                        if (req.url.includes('localhost:40') || req.url.includes('localhost:8081') || req.url.includes('localhost:8083')) {
+                        if (req.url.includes('localhost:40') || req.url.includes('localhost:8081') || req.url.includes('localhost:8083') || req.url.includes('lab.local.ctoaas.co')) {
                             currentTrace = TraceContext.create();
                             currentTrace.method = req.method;
                             currentTrace.url = req.url;

@@ -37,7 +37,7 @@ spec:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://customer-proxy:4010/customers/{{customerId}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+            uri: "http://customer-mock:4010/customers/{{customerId}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
             name: customerResponseCode
             simple: "${header.CamelHttpResponseCode}"

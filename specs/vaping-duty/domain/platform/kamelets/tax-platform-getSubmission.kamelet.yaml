@@ -37,7 +37,7 @@ spec:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://tax-platform-proxy:4010/submissions/vpd/{{acknowledgementReference}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+            uri: "http://tax-platform-mock:4010/submissions/vpd/{{acknowledgementReference}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
             name: taxPlatformResponseCode
             simple: "${header.CamelHttpResponseCode}"

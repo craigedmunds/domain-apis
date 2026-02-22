@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-mock
+  labels:
+    app.kubernetes.io/name: customer-mock
+    app.kubernetes.io/component: mock
+spec:
+  selector:
+    app.kubernetes.io/name: customer-mock
+  ports:
+    - name: http
+      port: 4010
+      targetPort: 4010

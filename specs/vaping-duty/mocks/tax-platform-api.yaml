@@ -15,6 +15,8 @@ servers:
     description: Local mock server
   - url: http://tax-platform-mock:4010
     description: Docker internal
+  - url: https://tax-platform-mock-vpd.lab.local.ctoaas.co
+    description: k8s-lab
   - url: https://tax-platform.internal.hmrc.gov.uk
     description: Internal production
 

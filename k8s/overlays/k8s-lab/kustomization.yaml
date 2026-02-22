@@ -1,0 +1,113 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: domain-apis
+
+components:
+  - ../../components/domain-api
+  - ../../components/excise-mock
+  - ../../components/customer-mock
+  - ../../components/tax-platform-mock
+
+labels:
+  - pairs:
+      environment: k8s-lab
+      app.kubernetes.io/instance: vpd-poc
+    includeSelectors: false
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: domain-api-routes
+    files:
+      - ../../../specs/vaping-duty/domain/platform/routes/rest-config.yaml
+      - ../../../specs/vaping-duty/domain/platform/routes/get-submission-return-by-ack.yaml
+      - ../../../specs/vaping-duty/domain/platform/routes/get-submission-return-by-approval.yaml
+      - ../../../specs/vaping-duty/domain/platform/routes/post-submission-return.yaml
+      - ../../../specs/vaping-duty/domain/platform/routes/common.yaml
+  - name: domain-api-kamelets
+    files:
+      - ../../../specs/vaping-duty/domain/platform/kamelets/customer-getCustomer.kamelet.yaml
+      - ../../../specs/vaping-duty/domain/platform/kamelets/excise-getRegistration.kamelet.yaml
+      - ../../../specs/vaping-duty/domain/platform/kamelets/excise-getPeriod.kamelet.yaml
+      - ../../../specs/vaping-duty/domain/platform/kamelets/excise-validateAndCalculate.kamelet.yaml
+      - ../../../specs/vaping-duty/domain/platform/kamelets/tax-platform-getSubmission.kamelet.yaml
+      - ../../../specs/vaping-duty/domain/platform/kamelets/tax-platform-findSubmission.kamelet.yaml
+      - ../../../specs/vaping-duty/domain/platform/kamelets/tax-platform-storeSubmission.kamelet.yaml
+  - name: excise-mock-mappings
+    files:
+      - ../../../specs/vaping-duty/mocks/wiremock/mappings/get-registration.json
+      - ../../../specs/vaping-duty/mocks/wiremock/mappings/get-registration-404.json
+      - ../../../specs/vaping-duty/mocks/wiremock/mappings/get-period-open.json
+      - ../../../specs/vaping-duty/mocks/wiremock/mappings/get-period-filed.json
+      - ../../../specs/vaping-duty/mocks/wiremock/mappings/get-period-404.json
+      - ../../../specs/vaping-duty/mocks/wiremock/mappings/validate-and-calculate.json
+  - name: customer-mock-specs
+    files:
+      - ../../../specs/vaping-duty/mocks/customer-api.yaml
+  - name: tax-platform-mock-specs
+    files:
+      - ../../../specs/vaping-duty/mocks/tax-platform-api.yaml
+
+helmGlobals:
+  chartHome: ../../../libs/workspace-shared/helm
+
+helmCharts:
+  - name: traefik-ingress
+    releaseName: vpd-poc
+    valuesInline:
+      domains:
+        localDomainSuffix: lab.local.ctoaas.co
+      tls:
+        enabled: true
+        issuer: letsencrypt-prod
+      ingresses:
+        - service:
+            name: domain-api
+            namespace: domain-apis
+            port:
+              name: http
+          ingress:
+            name: domain-api
+            accessPattern: internal
+          domains:
+            name: vpd-domain-api
+          tls:
+            secretName: domain-api-lab-local-ctoaas-tls
+        - service:
+            name: excise-mock
+            namespace: domain-apis
+            port:
+              name: http
+          ingress:
+            name: excise-mock
+            accessPattern: internal
+          domains:
+            name: excise-mock-vpd
+          tls:
+            secretName: excise-mock-lab-local-ctoaas-tls
+        - service:
+            name: customer-mock
+            namespace: domain-apis
+            port:
+              name: http
+          ingress:
+            name: customer-mock
+            accessPattern: internal
+          domains:
+            name: customer-mock-vpd
+          tls:
+            secretName: customer-mock-lab-local-ctoaas-tls
+        - service:
+            name: tax-platform-mock
+            namespace: domain-apis
+            port:
+              name: http
+          ingress:
+            name: tax-platform-mock
+            accessPattern: internal
+          domains:
+            name: tax-platform-mock-vpd
+          tls:
+            secretName: tax-platform-mock-lab-local-ctoaas-tls

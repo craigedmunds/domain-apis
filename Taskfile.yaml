@@ -536,14 +536,14 @@ tasks:
   k8s:build:
     desc: Build VPD POC Kubernetes manifests
     vars:
-      OVERLAY: '{{.OVERLAY | default "dev"}}'
+      OVERLAY: '{{.OVERLAY | default "k8s-lab"}}'
     cmds:
       - kustomize build --enable-helm --load-restrictor=LoadRestrictionsNone k8s/overlays/{{.OVERLAY}}
 
   k8s:apply:
     desc: Apply VPD POC Kubernetes manifests
     vars:
-      OVERLAY: '{{.OVERLAY | default "dev"}}'
+      OVERLAY: '{{.OVERLAY | default "k8s-lab"}}'
     cmds:
       - kustomize build --enable-helm --load-restrictor=LoadRestrictionsNone k8s/overlays/{{.OVERLAY}} | kubectl apply -f -
 

@@ -19,6 +19,8 @@ servers:
     description: Local mock server
   - url: http://excise-mock:4010
     description: Docker internal
+  - url: https://excise-mock-vpd.lab.local.ctoaas.co
+    description: k8s-lab
   - url: https://excise.internal.hmrc.gov.uk
     description: Internal production
 

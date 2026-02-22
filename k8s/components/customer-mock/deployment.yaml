@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-mock
+  labels:
+    app.kubernetes.io/name: customer-mock
+    app.kubernetes.io/component: mock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: customer-mock
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: customer-mock
+        app.kubernetes.io/component: mock
+    spec:
+      containers:
+        - name: prism
+          image: stoplight/prism:latest
+          args:
+            - mock
+            - -h
+            - 0.0.0.0
+            - /specs/customer-api.yaml
+          ports:
+            - name: http
+              containerPort: 4010
+          volumeMounts:
+            - name: specs
+              mountPath: /specs
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      volumes:
+        - name: specs
+          configMap:
+            name: customer-mock-specs
