@@ -1,0 +1,46 @@
+# Customs Declarations — Common/Shared Routes
+#
+# Shared routes used by both the platform and producer-component variants:
+# - extractStandardHeaders: extract correlation ID and other standard headers
+# - injectResponseHeaders: set standard headers on the outbound response
+#
+# Copied from the platform routes pattern established in the vaping-duty domain.
+
+# =============================================================================
+# Reusable Route: Extract Standard Headers
+# Call at the start of each route to extract correlation ID, idempotency key, etc.
+# =============================================================================
+
+- route:
+    id: extractStandardHeaders
+    from:
+      uri: direct:extractStandardHeaders
+      steps:
+        - setProperty:
+            name: correlationId
+            simple: "${header.X-Correlation-Id}"
+        - setProperty:
+            name: idempotencyKey
+            simple: "${header.X-Idempotency-Key}"
+        - log:
+            message: "Request correlationId=${exchangeProperty.correlationId}"
+            loggingLevel: DEBUG
+
+# =============================================================================
+# Reusable Route: Inject Response Headers
+# Call before returning response to set standard response headers
+# =============================================================================
+
+- route:
+    id: injectResponseHeaders
+    from:
+      uri: direct:injectResponseHeaders
+      steps:
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - removeHeader:
+            name: "CamelHttpQuery"

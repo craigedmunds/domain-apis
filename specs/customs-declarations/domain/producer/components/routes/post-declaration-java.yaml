@@ -1,0 +1,110 @@
+# Customs Declarations — POST Declaration (Java Components variant)
+#
+# Demonstrates the producer-authored Java component pattern:
+# - YAML DSL handles orchestration and routing
+# - Java Processors/AggregationStrategies handle complex business logic
+#
+# Java components used:
+#   - GoodsItemValidationProcessor  — complex cross-field validation before tariff call
+#   - DutyCalculationAggregationStrategy — partial-failure-aware aggregation
+#
+# Compare with: specs/customs-declarations/domain/platform/routes/post-declaration.yaml
+#
+# Key differences from the YAML-only version:
+#   1. `process: ref: "#class:..."` replaces inline Groovy validation
+#   2. `aggregationStrategy: "#class:..."` replaces YAML group + Groovy aggregation
+#
+# The #class: syntax tells Camel JBang to instantiate the named Java class from
+# the classpath. The producer JAR is supplied via --dep=file:///deps/... at startup.
+
+- route:
+    id: postDeclarationJava
+    from:
+      uri: direct:postDeclaration
+      steps:
+        - to: direct:extractStandardHeaders
+
+        # Store request body for later use
+        - setProperty:
+            name: requestBody
+            groovy: |
+              if (body instanceof byte[]) return new String(body, 'UTF-8')
+              if (body instanceof java.io.InputStream) return new String(body.bytes, 'UTF-8')
+              return body?.toString()
+
+        # Extract top-level declaration fields
+        - setProperty:
+            name: declarationType
+            jsonpath:
+              expression: "$.declarationType"
+              suppressExceptions: true
+        - setProperty:
+            name: eori
+            jsonpath:
+              expression: "$.eori"
+              suppressExceptions: true
+
+        # Validate required top-level fields
+        - choice:
+            when:
+              - simple: "${exchangeProperty.declarationType} == null || ${exchangeProperty.eori} == null"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      constant: '{"code":"BAD_REQUEST","message":"declarationType and eori are required"}'
+                  - stop: {}
+
+        - log:
+            message: "POST declaration - type=${exchangeProperty.declarationType}, eori=${exchangeProperty.eori}"
+            loggingLevel: INFO
+
+        # =====================================================================
+        # EIP: Splitter + custom Java AggregationStrategy
+        #
+        # The split processes goodsItems individually through tariff classification.
+        # The Java AggregationStrategy handles:
+        #   - Partial failure: one item fails → others still processed
+        #   - Deduplication: same commodityCode re-classified → keeps latest result
+        #
+        # Using Java here (vs YAML/Groovy) because:
+        #   - Partial failure semantics are complex to express declaratively
+        #   - Type-safe dedup logic with clear error propagation rules
+        #   - Unit-testable in isolation without a running Camel context
+        #
+        # The #class: syntax resolves the class from the producer JAR on the classpath.
+        # Camel JBang instantiates it once and reuses the instance across split legs.
+        # =====================================================================
+        - split:
+            jsonpath: "$.goodsItems"
+            aggregationStrategy: "#class:uk.gov.hmrc.hip.cd.aggregation.DutyCalculationAggregationStrategy"
+            parallelProcessing: true
+            stopOnException: false
+            steps:
+              # =====================================================================
+              # EIP: Message Filter via Java Processor
+              #
+              # Validates each goods item before calling tariff API.
+              # Using Java here (vs Groovy) because:
+              #   - Cross-field validation rules (EXCISE requires exciseProductCode)
+              #   - Commodity code format validation (10-digit UK HS code regex)
+              #   - Easier to unit-test than inline Groovy
+              #   - exchange.setRouteStop(true) halts only this split leg cleanly
+              # =====================================================================
+              - process:
+                  ref: "#class:uk.gov.hmrc.hip.cd.processor.GoodsItemValidationProcessor"
+
+              # Mock tariff classification (replace with Kamelet in production)
+              # In production: to: "kamelet:tariff-classify/split-${exchangeProperty.CamelSplitIndex}"
+              - setBody:
+                  groovy: |
+                    import groovy.json.JsonOutput
+                    def item = new groovy.json.JsonSlurper().parseText(body.toString())
+                    return JsonOutput.toJson([
+                      commodityCode: item.commodityCode,
+                      dutyRate: 0.05,
+                      dutyAmount: (item.quantity ?: 1) * 0.05
+                    ])
+
+        - to: direct:injectResponseHeaders
