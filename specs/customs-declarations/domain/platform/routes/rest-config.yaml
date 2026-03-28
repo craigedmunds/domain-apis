@@ -1,0 +1,68 @@
+# Customs Declarations Domain API — REST Configuration
+#
+# Demonstrates: REST entry point routing (Messaging Gateway pattern)
+#
+# Routes:
+#   POST /customs/declarations  → postDeclaration (Content-Based Router, Splitter, Aggregator)
+#   GET  /customs/traders/{eori}/overview → getTraderOverview (Scatter-Gather)
+#
+# See:
+#   post-declaration.yaml    — declaration submission pipeline
+#   get-trader-overview.yaml — trader overview (scatter-gather)
+#   common.yaml              — shared header/response utilities
+
+- restConfiguration:
+    component: platform-http
+    bindingMode: off
+    port: 8080
+
+- rest:
+    path: /customs/declarations
+    post:
+      - to: direct:postDeclaration
+
+- rest:
+    path: /customs/declarations/{declarationId}
+    get:
+      - to: direct:getDeclarationById
+
+- rest:
+    path: /customs/traders/{eori}/overview
+    get:
+      - to: direct:getTraderOverview
+
+- rest:
+    path: /health
+    get:
+      - to: direct:health
+
+# =============================================================================
+# Route: GET Declaration by ID
+# Simple lookup — not the focus of this EIP demo
+# =============================================================================
+- route:
+    id: getDeclarationById
+    from:
+      uri: direct:getDeclarationById
+      steps:
+        - to: direct:extractStandardHeaders
+        - setProperty:
+            name: declarationId
+            simple: "${header.declarationId}"
+        - to:
+            uri: "kamelet:tax-platform-getDeclaration/get-decl?declarationId=${exchangeProperty.declarationId}"
+        - choice:
+            when:
+              - simple: "${exchangeProperty.taxPlatformResponseCode} == 404"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 404
+                  - setBody:
+                      constant: '{"code":"NOT_FOUND","message":"Declaration not found"}'
+                  - to: direct:injectResponseHeaders
+                  - stop: {}
+        - setHeader:
+            name: CamelHttpResponseCode
+            constant: 200
+        - to: direct:injectResponseHeaders

@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: UK Global Tariff API — Mock
+  version: 1.0.0
+  description: |
+    Backend API for UK Global Tariff commodity code classification.
+    Returns duty rates, tariff preferences, and controlled goods flags.
+
+servers:
+  - url: http://localhost:4011
+    description: Local mock server
+  - url: http://tariff-mock:8080
+    description: Docker internal
+
+paths:
+  /tariff/commodities/{commodityCode}:
+    get:
+      summary: Classify a commodity code
+      operationId: classifyCommodity
+      parameters:
+        - name: commodityCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Classification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassificationResult'
+              examples:
+                wine:
+                  summary: Wine (22042100)
+                  value:
+                    commodityCode: "2204.21"
+                    description: Wine of fresh grapes
+                    dutyRate: 32.0
+                    dutyAmount: 384.0
+                    preference: null
+                    controlled: false
+                coffee:
+                  summary: Coffee — GSP preference (09011100)
+                  value:
+                    commodityCode: "0901.11"
+                    description: Coffee, not roasted
+                    dutyRate: 0.0
+                    dutyAmount: 0.0
+                    preference: GSP
+                    controlled: false
+                electronics:
+                  summary: Laptop computers (84713000)
+                  value:
+                    commodityCode: "8471.30"
+                    description: Portable automatic data-processing machines
+                    dutyRate: 0.0
+                    dutyAmount: 0.0
+                    preference: null
+                    controlled: false
+                pharmaceuticals:
+                  summary: Pharmaceutical (controlled)
+                  value:
+                    commodityCode: "3004.90"
+                    description: Medicaments (mixed or not mixed)
+                    dutyRate: 0.0
+                    dutyAmount: 0.0
+                    preference: null
+                    controlled: true
+        '404':
+          description: Commodity code not found
+
+components:
+  schemas:
+    ClassificationResult:
+      type: object
+      properties:
+        commodityCode:
+          type: string
+        description:
+          type: string
+        dutyRate:
+          type: number
+          description: Duty rate as a percentage
+        dutyAmount:
+          type: number
+          description: Calculated duty amount in GBP
+        preference:
+          type: string
+          nullable: true
+          description: Tariff preference applied (e.g. GSP, EU)
+        controlled:
+          type: boolean
+          description: Whether this is a controlled good requiring a licence

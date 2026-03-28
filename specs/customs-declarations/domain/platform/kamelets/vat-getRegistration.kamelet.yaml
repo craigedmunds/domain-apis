@@ -1,0 +1,59 @@
+# VAT Registration Kamelet (Scatter-Gather leg)
+# One of three parallel registry lookups in the Trader Overview Scatter-Gather.
+# Stores result as exchangeProperty.vatResult for aggregation.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: vat-getRegistration
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: VAT — Get Trader Registration
+    description: Fetches VAT registration status and VRN for a trader
+    required:
+      - eori
+    properties:
+      eori:
+        title: EORI Number
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - to:
+            uri: "http://vat-mock:8080/vat/traders/{{eori}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: vatResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} == 200"
+                steps:
+                  - setProperty:
+                      name: vatResult
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        def text = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        return new JsonSlurper().parseText(text)
+              - simple: "${header.CamelHttpResponseCode} >= 500"
+                steps:
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "VAT registry unavailable: HTTP ${exchangeProperty.vatResponseCode}"
+            otherwise:
+              steps:
+                - setProperty:
+                    name: vatResult
+                    groovy: "return [status: 'NOT_REGISTERED', vatNumber: null]"

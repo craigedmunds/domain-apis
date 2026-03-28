@@ -1,0 +1,146 @@
+# Customs Declarations Domain API — GET Trader Overview Pipeline
+#
+# EIP Patterns demonstrated:
+#
+#   4.11 Scatter-Gather     — queries excise, customs, and VAT registries in parallel
+#                             using Camel `multicast` with parallelProcessing: true
+#   4.7  Content Filter     — removes internal/null fields from each registry response
+#   4.8  Normalizer         — unifies different registry response structures into common shape
+#   5.2  Envelope Wrapper   — extracts relevant fields from backend responses
+#
+# Error handling:
+#   doTry/doCatch per leg — one registry failure does not fail the whole request.
+#   Partial results are returned with an error flag on the failing registry.
+
+# =============================================================================
+# Route: Trader Overview — Scatter-Gather entry point
+# =============================================================================
+- route:
+    id: getTraderOverview
+    from:
+      uri: direct:getTraderOverview
+      steps:
+        - to: direct:extractStandardHeaders
+        - setProperty:
+            name: eori
+            simple: "${header.eori}"
+
+        - log:
+            message: "GET trader overview for EORI: ${exchangeProperty.eori}"
+            loggingLevel: INFO
+
+        # =====================================================================
+        # EIP: Scatter-Gather
+        # Sends the same request to multiple recipients concurrently.
+        # Each pipeline leg calls a different registry and stores its result.
+        # parallelProcessing: true — all three calls execute simultaneously.
+        # The body after multicast is irrelevant; results are in exchange properties.
+        # =====================================================================
+        - multicast:
+            parallelProcessing: true
+            steps:
+              # Leg 1: Excise Registration
+              - pipeline:
+                  steps:
+                    - doTry:
+                        steps:
+                          - to:
+                              uri: "kamelet:excise-getRegistration/sg-exc?eori=${exchangeProperty.eori}"
+                        doCatch:
+                          - exception:
+                              - java.lang.Exception
+                            steps:
+                              - log:
+                                  message: "Excise registry lookup failed: ${exception.message}"
+                                  loggingLevel: WARN
+                              - setProperty:
+                                  name: exciseResult
+                                  groovy: "return [error: 'EXCISE_UNAVAILABLE']"
+
+              # Leg 2: Customs Authorisation
+              - pipeline:
+                  steps:
+                    - doTry:
+                        steps:
+                          - to:
+                              uri: "kamelet:customs-getAuthorisation/sg-cust?eori=${exchangeProperty.eori}"
+                        doCatch:
+                          - exception:
+                              - java.lang.Exception
+                            steps:
+                              - log:
+                                  message: "Customs registry lookup failed: ${exception.message}"
+                                  loggingLevel: WARN
+                              - setProperty:
+                                  name: customsResult
+                                  groovy: "return [error: 'CUSTOMS_UNAVAILABLE']"
+
+              # Leg 3: VAT Registration
+              - pipeline:
+                  steps:
+                    - doTry:
+                        steps:
+                          - to:
+                              uri: "kamelet:vat-getRegistration/sg-vat?eori=${exchangeProperty.eori}"
+                        doCatch:
+                          - exception:
+                              - java.lang.Exception
+                            steps:
+                              - log:
+                                  message: "VAT registry lookup failed: ${exception.message}"
+                                  loggingLevel: WARN
+                              - setProperty:
+                                  name: vatResult
+                                  groovy: "return [error: 'VAT_UNAVAILABLE']"
+
+        # =====================================================================
+        # EIP: Content Filter — assemble response with only relevant fields
+        # Removes null/internal fields from registry responses.
+        # Normalizer: unifies registry-specific response shapes into TraderOverview.
+        # =====================================================================
+        - transform:
+            groovy: |
+              import groovy.json.JsonOutput
+
+              def excise = exchange.getProperty('exciseResult') ?: [:]
+              def customs = exchange.getProperty('customsResult') ?: [:]
+              def vat = exchange.getProperty('vatResult') ?: [:]
+              def eori = exchange.getProperty('eori')
+
+              // EIP: Normalizer — each registry returns different structure;
+              // map each to canonical TraderOverview shape
+              def normaliseExcise = { r ->
+                if (r.error) return [error: r.error]
+                [
+                  status: r.registrationStatus ?: r.status,
+                  registrationRef: r.exciseRegistrationNumber ?: r.registrationRef
+                ]
+              }
+
+              def normaliseCustoms = { r ->
+                if (r.error) return [error: r.error]
+                [
+                  aeoStatus: r.aeoStatus ?: r.authorisationStatus,
+                  authorisations: r.authorisationTypes ?: r.authorisations ?: []
+                ]
+              }
+
+              def normaliseVat = { r ->
+                if (r.error) return [error: r.error]
+                [
+                  status: r.vatRegistrationStatus ?: r.status,
+                  vatNumber: r.vrn ?: r.vatNumber
+                ]
+              }
+
+              return JsonOutput.toJson([
+                eori: eori,
+                excise: normaliseExcise(excise),
+                customs: normaliseCustoms(customs),
+                vat: normaliseVat(vat)
+              ])
+
+        - setHeader:
+            name: CamelHttpResponseCode
+            constant: 200
+        - to: direct:injectResponseHeaders

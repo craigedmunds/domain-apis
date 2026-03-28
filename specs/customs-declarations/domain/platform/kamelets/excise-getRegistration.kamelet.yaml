@@ -1,0 +1,59 @@
+# Excise Registration Kamelet (Scatter-Gather leg)
+# One of three parallel registry lookups in the Trader Overview Scatter-Gather.
+# Stores result as exchangeProperty.exciseResult for aggregation.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: excise-getRegistration
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Excise — Get Trader Registration
+    description: Fetches excise registration status for a trader
+    required:
+      - eori
+    properties:
+      eori:
+        title: EORI Number
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - to:
+            uri: "http://excise-mock:8080/excise/traders/{{eori}}/registration?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: exciseResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} == 200"
+                steps:
+                  - setProperty:
+                      name: exciseResult
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        def text = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        return new JsonSlurper().parseText(text)
+              - simple: "${header.CamelHttpResponseCode} >= 500"
+                steps:
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "Excise registry unavailable: HTTP ${exchangeProperty.exciseResponseCode}"
+            otherwise:
+              steps:
+                - setProperty:
+                    name: exciseResult
+                    groovy: "return [status: 'NOT_REGISTERED']"

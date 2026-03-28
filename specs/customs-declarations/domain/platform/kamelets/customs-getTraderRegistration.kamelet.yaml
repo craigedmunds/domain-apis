@@ -1,0 +1,57 @@
+# Customs Trader Registration Kamelet
+# Fetches trader registration details from the customs registry.
+# Stores trader name and registration status as exchange properties.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: customs-getTraderRegistration
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Customs — Get Trader Registration
+    description: Looks up a trader's customs registration by EORI number
+    required:
+      - eori
+    properties:
+      eori:
+        title: EORI Number
+        description: Economic Operator Registration and Identification number
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - to:
+            uri: "http://customs-mock:8080/customs/traders/{{eori}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: traderRegistrationCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} == 200"
+                steps:
+                  - setProperty:
+                      name: traderRegistration
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        def text = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        def reg = new JsonSlurper().parseText(text)
+                        exchange.setProperty('traderName', reg.traderName ?: reg.name ?: '')
+                        return reg
+              - simple: "${header.CamelHttpResponseCode} >= 500"
+                steps:
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "Customs trader registration lookup failed: HTTP ${exchangeProperty.traderRegistrationCode}"

@@ -1,0 +1,283 @@
+openapi: 3.1.0
+info:
+  title: Customs Declarations Domain API
+  version: 1.0.0
+  description: |
+    Domain API for submitting and querying customs declarations.
+
+    This API demonstrates EIP patterns in HIP Simple API workflows:
+    - **Content-Based Router** — routes simplified vs full declarations to different processing paths
+    - **Message Filter** — short-circuits invalid submissions before calling any backends
+    - **Content Enricher** — augments declarations with trader registration details
+    - **Splitter + Aggregator** — processes goods items individually and combines results
+    - **Scatter-Gather** — queries multiple backend registries in parallel for trader overview
+    - **Error handling** — `doTry`/`doCatch` for backend failure resilience
+
+servers:
+  - url: http://localhost:8080
+    description: Local (camel run)
+  - url: http://domain-api:8080
+    description: Docker internal
+
+tags:
+  - name: Declarations
+    description: Import and export declaration operations
+  - name: Traders
+    description: Trader registration and overview
+
+paths:
+  /customs/declarations:
+    post:
+      tags:
+        - Declarations
+      summary: Submit a customs declaration
+      description: |
+        Submits an import declaration. Routes to either the simplified or full declaration
+        pipeline based on `declarationType`. Goods items are individually classified and
+        duty calculated before the declaration is stored.
+      operationId: postDeclaration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclarationRequest'
+            examples:
+              simplified:
+                summary: Simplified declaration (1 goods item)
+                value:
+                  declarationType: simplified
+                  eori: GB123456789000
+                  goodsItems:
+                    - commodityCode: "2204.21"
+                      description: Wine of fresh grapes
+                      quantity: 100
+                      unit: LTR
+                      value: 1200.00
+                      currency: GBP
+              full:
+                summary: Full declaration (multiple goods items)
+                value:
+                  declarationType: full
+                  eori: GB123456789000
+                  goodsItems:
+                    - commodityCode: "2204.21"
+                      description: Wine of fresh grapes
+                      quantity: 100
+                      unit: LTR
+                      value: 1200.00
+                      currency: GBP
+                    - commodityCode: "0901.11"
+                      description: Coffee, not roasted
+                      quantity: 50
+                      unit: KGM
+                      value: 300.00
+                      currency: GBP
+      responses:
+        '201':
+          description: Declaration accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclarationResponse'
+        '400':
+          description: Invalid declaration type or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Declaration failed validation (e.g. missing trader registration)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /customs/declarations/{declarationId}:
+    get:
+      tags:
+        - Declarations
+      summary: Get a declaration by ID
+      operationId: getDeclaration
+      parameters:
+        - name: declarationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Declaration found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclarationResponse'
+        '404':
+          description: Declaration not found
+
+  /customs/traders/{eori}/overview:
+    get:
+      tags:
+        - Traders
+      summary: Get trader registration overview
+      description: |
+        Returns a unified view of a trader's registration status across excise, customs,
+        and VAT registries. Uses the Scatter-Gather pattern to query all three concurrently.
+      operationId: getTraderOverview
+      parameters:
+        - name: eori
+          in: path
+          required: true
+          schema:
+            type: string
+            example: GB123456789000
+      responses:
+        '200':
+          description: Trader overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderOverview'
+        '404':
+          description: Trader not found
+
+components:
+  schemas:
+    DeclarationRequest:
+      type: object
+      required:
+        - declarationType
+        - eori
+        - goodsItems
+      properties:
+        declarationType:
+          type: string
+          enum: [simplified, full]
+          description: Determines the processing path
+        eori:
+          type: string
+          description: Economic Operator Registration and Identification number
+        goodsItems:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/GoodsItem'
+
+    GoodsItem:
+      type: object
+      required:
+        - commodityCode
+        - description
+        - quantity
+        - unit
+        - value
+        - currency
+      properties:
+        commodityCode:
+          type: string
+          description: 8-digit commodity code
+        description:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+          enum: [KGM, LTR, MTR, NAR]
+        value:
+          type: number
+        currency:
+          type: string
+          default: GBP
+        controlled:
+          type: boolean
+          description: Whether this is a controlled good (requires licence check)
+          default: false
+
+    DeclarationResponse:
+      type: object
+      properties:
+        declarationId:
+          type: string
+        declarationType:
+          type: string
+        eori:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED, REJECTED, UNDER_REVIEW]
+        traderName:
+          type: string
+        goodsItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClassifiedGoodsItem'
+        totalDuty:
+          type: number
+        currency:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
+
+    ClassifiedGoodsItem:
+      allOf:
+        - $ref: '#/components/schemas/GoodsItem'
+        - type: object
+          properties:
+            dutyRate:
+              type: number
+            dutyAmount:
+              type: number
+            preference:
+              type: string
+              description: Tariff preference applied (e.g. GSP, EU)
+            licenceRequired:
+              type: boolean
+            licenceRef:
+              type: string
+
+    TraderOverview:
+      type: object
+      properties:
+        eori:
+          type: string
+        excise:
+          type: object
+          properties:
+            status:
+              type: string
+            registrationRef:
+              type: string
+        customs:
+          type: object
+          properties:
+            aeoStatus:
+              type: string
+            authorisations:
+              type: array
+              items:
+                type: string
+        vat:
+          type: object
+          properties:
+            status:
+              type: string
+            vatNumber:
+              type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string

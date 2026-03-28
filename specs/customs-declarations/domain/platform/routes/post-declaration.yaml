@@ -1,0 +1,404 @@
+# Customs Declarations Domain API — POST Declaration Pipeline
+#
+# EIP Patterns demonstrated:
+#
+#   4.1  Pipes and Filters     — sequential steps (validate → enrich → classify → store)
+#   4.3  Process Manager       — next step depends on outcome of previous (simplified vs full paths)
+#   4.4  Content-Based Router  — routes to simplified or full declaration path based on declarationType
+#   4.5  Message Filter        — short-circuits on invalid trader registration (422, no backend calls)
+#   4.6  Content Enricher      — augments with trader name from registration API
+#   4.9  Splitter              — processes goodsItems individually for tariff classification
+#   4.10 Aggregator            — collects per-item results, calculates total duty
+#   4.12 Composed Message Processor — per-item routing: controlled items get additional licence check
+#
+# Error handling:
+#   doTry/doCatch — wraps backend calls; on failure returns 502 without propagating exception
+#   This is the synchronous REST equivalent of the Dead Letter Channel pattern.
+
+- route:
+    id: postDeclaration
+    from:
+      uri: direct:postDeclaration
+      steps:
+        - to: direct:extractStandardHeaders
+
+        # Store request body as string for reuse after Kamelet calls replace body
+        - setProperty:
+            name: requestBody
+            groovy: |
+              if (body == null) return null
+              if (body instanceof byte[]) return new String(body, 'UTF-8')
+              if (body instanceof java.io.InputStream) return new String(body.bytes, 'UTF-8')
+              return body.toString()
+
+        # Extract top-level fields
+        - setProperty:
+            name: declarationType
+            jsonpath:
+              expression: "$.declarationType"
+              suppressExceptions: true
+        - setProperty:
+            name: eori
+            jsonpath:
+              expression: "$.eori"
+              suppressExceptions: true
+
+        - log:
+            message: "POST declaration - type: ${exchangeProperty.declarationType}, eori: ${exchangeProperty.eori}"
+            loggingLevel: INFO
+
+        # =====================================================================
+        # EIP: Message Filter — validate required fields before calling any backends
+        # Pattern: if invalid, short-circuit with 400; don't waste backend calls
+        # =====================================================================
+        - choice:
+            when:
+              - simple: "${exchangeProperty.declarationType} == null || ${exchangeProperty.eori} == null"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      constant: '{"code":"BAD_REQUEST","message":"declarationType and eori are required"}'
+                  - to: direct:injectResponseHeaders
+                  - stop: {}
+              - groovy: "!['simplified','full'].contains(exchange.getProperty('declarationType'))"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 400
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonOutput
+                        return JsonOutput.toJson([
+                          code: 'INVALID_DECLARATION_TYPE',
+                          message: "declarationType must be 'simplified' or 'full', got: ${exchange.getProperty('declarationType')}"
+                        ])
+                  - to: direct:injectResponseHeaders
+                  - stop: {}
+
+        # =====================================================================
+        # EIP: Content Enricher — fetch trader registration details
+        # Augments the request with trader name for use in the response
+        # Error handling: doTry/doCatch wraps Kamelet call (dead letter equivalent)
+        # =====================================================================
+        - doTry:
+            steps:
+              - to:
+                  uri: "kamelet:customs-getTraderRegistration/enrich-trader?eori=${exchangeProperty.eori}"
+            doCatch:
+              - exception:
+                  - java.lang.Exception
+                steps:
+                  - log:
+                      message: "Failed to enrich with trader registration: ${exception.message}"
+                      loggingLevel: WARN
+                  - setProperty:
+                      name: traderRegistration
+                      constant: null
+
+        # =====================================================================
+        # EIP: Message Filter — trader must be registered; stop if not found
+        # =====================================================================
+        - choice:
+            when:
+              - simple: "${exchangeProperty.traderRegistrationCode} == 404"
+                steps:
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 422
+                  - setBody:
+                      groovy: |
+                        import groovy.json.JsonOutput
+                        return JsonOutput.toJson([
+                          code: 'TRADER_NOT_REGISTERED',
+                          message: "Trader ${exchange.getProperty('eori')} is not registered for customs"
+                        ])
+                  - to: direct:injectResponseHeaders
+                  - stop: {}
+
+        # =====================================================================
+        # EIP: Content-Based Router — route to simplified or full declaration path
+        # Each path has different validation and processing requirements
+        # =====================================================================
+        - choice:
+            when:
+              - simple: "${exchangeProperty.declarationType} == 'simplified'"
+                steps:
+                  - to: direct:processSimplifiedDeclaration
+              - simple: "${exchangeProperty.declarationType} == 'full'"
+                steps:
+                  - to: direct:processFullDeclaration
+
+        # Common completion: store declaration, build response
+        - to: direct:storeAndRespond
+
+# =============================================================================
+# Route: Simplified Declaration Processing
+# Fast-track path — reduced checks for trusted traders / low-value goods.
+# Pattern: Pipes and Filters (2-step: classify goods, calculate totals)
+# =============================================================================
+- route:
+    id: processSimplifiedDeclaration
+    from:
+      uri: direct:processSimplifiedDeclaration
+      steps:
+        - log:
+            message: "Processing simplified declaration for ${exchangeProperty.eori}"
+            loggingLevel: INFO
+
+        # Initialise result accumulator
+        - setProperty:
+            name: processedItems
+            groovy: "return []"
+
+        # =====================================================================
+        # EIP: Splitter + Aggregator — process each goods item independently
+        # Splitter breaks composite message into individual items
+        # Aggregator collects results into processedItems list
+        # =====================================================================
+        - split:
+            jsonpath: "$.goodsItems"
+            steps:
+              # Classify each item against the tariff
+              - setProperty:
+                  name: currentItem
+                  groovy: "return body"
+              - setProperty:
+                  name: splitIndex
+                  simple: "${exchangeProperty.CamelSplitIndex}"
+
+              - doTry:
+                  steps:
+                    - to:
+                        uri: "kamelet:tariff-classifyItem/cls-${exchangeProperty.splitIndex}?commodityCode=${body[commodityCode]}"
+                  doCatch:
+                    - exception:
+                        - java.lang.Exception
+                      steps:
+                        - log:
+                            message: "Tariff classification failed for item ${exchangeProperty.splitIndex}: ${exception.message}"
+                            loggingLevel: WARN
+                        # Set fallback — zero duty, flag for review
+                        - setProperty:
+                            name: classificationResult
+                            groovy: |
+                              return [
+                                commodityCode: exchange.getProperty('currentItem').commodityCode,
+                                dutyRate: 0.0,
+                                dutyAmount: 0.0,
+                                preference: null,
+                                error: 'CLASSIFICATION_UNAVAILABLE'
+                              ]
+
+              # Accumulate result into list (Aggregator)
+              - setProperty:
+                  name: processedItems
+                  groovy: |
+                    import groovy.json.JsonSlurper
+                    def items = exchange.getProperty('processedItems', [])
+                    def currentItem = exchange.getProperty('currentItem') ?: [:]
+                    def classification = exchange.getProperty('classificationResult') ?: [:]
+                    items << (currentItem + classification)
+                    return items
+
+        # Restore request body context (split replaced it with last item)
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              return new JsonSlurper().parseText(exchange.getProperty('requestBody', String))
+
+# =============================================================================
+# Route: Full Declaration Processing
+# Standard path — complete tariff classification, valuation, compliance checks.
+# Pattern: Composed Message Processor
+#   - splits goods items
+#   - routes controlled items to licence check (Content-Based Router per item)
+#   - aggregates results
+# =============================================================================
+- route:
+    id: processFullDeclaration
+    from:
+      uri: direct:processFullDeclaration
+      steps:
+        - log:
+            message: "Processing full declaration for ${exchangeProperty.eori}"
+            loggingLevel: INFO
+
+        # Initialise result accumulator
+        - setProperty:
+            name: processedItems
+            groovy: "return []"
+
+        # =====================================================================
+        # EIP: Composed Message Processor
+        # Splits composite message, routes each element based on its content,
+        # reassembles results. Per-item Content-Based Router handles controlled goods.
+        # =====================================================================
+        - split:
+            jsonpath: "$.goodsItems"
+            steps:
+              - setProperty:
+                  name: currentItem
+                  groovy: "return body"
+              - setProperty:
+                  name: splitIndex
+                  simple: "${exchangeProperty.CamelSplitIndex}"
+
+              # Step 1: Tariff classification (all items)
+              - doTry:
+                  steps:
+                    - to:
+                        uri: "kamelet:tariff-classifyItem/cls-${exchangeProperty.splitIndex}?commodityCode=${body[commodityCode]}"
+                  doCatch:
+                    - exception:
+                        - java.lang.Exception
+                      steps:
+                        - log:
+                            message: "Tariff classification failed for item ${exchangeProperty.splitIndex}"
+                            loggingLevel: WARN
+                        - setProperty:
+                            name: classificationResult
+                            groovy: |
+                              return [
+                                commodityCode: exchange.getProperty('currentItem').commodityCode,
+                                dutyRate: 0.0,
+                                dutyAmount: 0.0,
+                                preference: null,
+                                error: 'CLASSIFICATION_UNAVAILABLE'
+                              ]
+
+              # Step 2: Content-Based Router — controlled goods require licence check
+              - choice:
+                  when:
+                    - groovy: |
+                        def cls = exchange.getProperty('classificationResult')
+                        return cls?.controlled == true || exchange.getProperty('currentItem')?.controlled == true
+                      steps:
+                        - doTry:
+                            steps:
+                              - to:
+                                  uri: "kamelet:customs-checkLicence/lic-${exchangeProperty.splitIndex}?commodityCode=${exchangeProperty.currentItem[commodityCode]}&eori=${exchangeProperty.eori}"
+                            doCatch:
+                              - exception:
+                                  - java.lang.Exception
+                                steps:
+                                  - log:
+                                      message: "Licence check failed for item ${exchangeProperty.splitIndex}: ${exception.message}"
+                                      loggingLevel: WARN
+                                  - setProperty:
+                                      name: licenceResult
+                                      groovy: "return [licenceRequired: true, licenceRef: null, error: 'LICENCE_CHECK_UNAVAILABLE']"
+
+              # Merge classification + licence result
+              - setProperty:
+                  name: processedItems
+                  groovy: |
+                    def items = exchange.getProperty('processedItems', [])
+                    def currentItem = exchange.getProperty('currentItem') ?: [:]
+                    def classification = exchange.getProperty('classificationResult') ?: [:]
+                    def licence = exchange.getProperty('licenceResult') ?: [:]
+                    items << (currentItem + classification + licence)
+                    return items
+
+              # Reset per-item properties for next iteration
+              - setProperty:
+                  name: classificationResult
+                  constant: null
+              - setProperty:
+                  name: licenceResult
+                  constant: null
+
+        # Restore request body context
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              return new JsonSlurper().parseText(exchange.getProperty('requestBody', String))
+
+# =============================================================================
+# Route: Store declaration and build response
+# Called after both simplified and full paths complete
+# =============================================================================
+- route:
+    id: storeAndRespond
+    from:
+      uri: direct:storeAndRespond
+      steps:
+        # Calculate total duty across all items (Aggregator step)
+        - setProperty:
+            name: totalDuty
+            groovy: |
+              def items = exchange.getProperty('processedItems', [])
+              return items.sum { (it.dutyAmount ?: 0.0) as Double } ?: 0.0
+
+        # Build the store request
+        - setProperty:
+            name: storeRequestBody
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def original = new JsonSlurper().parseText(exchange.getProperty('requestBody', String))
+              def items = exchange.getProperty('processedItems', [])
+              def totalDuty = exchange.getProperty('totalDuty', 0.0)
+              def traderName = exchange.getProperty('traderName', '')
+
+              return JsonOutput.toJson([
+                declarationType: original.declarationType,
+                eori: original.eori,
+                traderName: traderName,
+                goodsItems: items,
+                totalDuty: totalDuty,
+                currency: 'GBP'
+              ])
+
+        # Store with error handling
+        - doTry:
+            steps:
+              - to:
+                  uri: "kamelet:tax-platform-storeDeclaration/store-decl?requestBody=${exchangeProperty.storeRequestBody}"
+            doCatch:
+              - exception:
+                  - java.lang.Exception
+                steps:
+                  - log:
+                      message: "Failed to store declaration: ${exception.message}"
+                      loggingLevel: ERROR
+                  - setHeader:
+                      name: CamelHttpResponseCode
+                      constant: 502
+                  - setBody:
+                      constant: '{"code":"STORE_FAILED","message":"Failed to store declaration; please retry"}'
+                  - to: direct:injectResponseHeaders
+                  - stop: {}
+
+        # Build the 201 response
+        - setBody:
+            groovy: |
+              import groovy.json.JsonSlurper
+              import groovy.json.JsonOutput
+
+              def storeResult = exchange.getProperty('storeDeclarationResponse') ?: [:]
+              def items = exchange.getProperty('processedItems', [])
+              def totalDuty = exchange.getProperty('totalDuty', 0.0)
+              def traderName = exchange.getProperty('traderName', '')
+
+              def slurper = new JsonSlurper()
+              def original = slurper.parseText(exchange.getProperty('requestBody', String))
+
+              return JsonOutput.toJson([
+                declarationId: storeResult.declarationId,
+                declarationType: original.declarationType,
+                eori: original.eori,
+                traderName: traderName,
+                status: 'ACCEPTED',
+                goodsItems: items,
+                totalDuty: totalDuty,
+                currency: 'GBP',
+                acceptedAt: new Date().format("yyyy-MM-dd'T'HH:mm:ss'Z'", TimeZone.getTimeZone('UTC'))
+              ])
+
+        - setHeader:
+            name: CamelHttpResponseCode
+            constant: 201
+        - to: direct:injectResponseHeaders
