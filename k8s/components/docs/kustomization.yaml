@@ -4,4 +4,8 @@ kind: Component
 resources:
   - deployment.yaml
   - service.yaml
-  - configmap.yaml
+
+configMapGenerator:
+  - name: docs-nginx-config
+    files:
+      - nginx.conf

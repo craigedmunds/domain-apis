@@ -17,8 +17,8 @@ info:
 servers:
   - url: http://localhost:4010
     description: Local mock server
-  - url: http://excise-mock:4010
-    description: Docker internal
+  - url: http://excise-proxy:4010
+    description: Docker Envoy proxy
   - url: https://excise-mock-vpd.lab.local.ctoaas.co
     description: k8s-lab
   - url: https://excise.internal.hmrc.gov.uk

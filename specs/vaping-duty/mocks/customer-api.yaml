@@ -13,8 +13,8 @@ info:
 servers:
   - url: http://localhost:4011
     description: Local mock server
-  - url: http://customer-mock:4010
-    description: Docker internal
+  - url: http://customer-proxy:4010
+    description: Docker Envoy proxy
   - url: https://customer-mock-vpd.lab.local.ctoaas.co
     description: k8s-lab
   - url: https://customer.internal.hmrc.gov.uk

@@ -38,7 +38,7 @@ spec:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://excise-mock:8080/excise/vpd/periods/{{periodKey}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+            uri: "{{env:EXCISE_URL}}/excise/vpd/periods/{{periodKey}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
             name: excisePeriodResponseCode
             simple: "${header.CamelHttpResponseCode}"

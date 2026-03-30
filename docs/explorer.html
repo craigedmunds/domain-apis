@@ -180,10 +180,15 @@
     <script>
         // Lightweight W3C Trace Context with OTLP export to Tempo
         const TraceContext = {
-            // Auto-detect environment: use k8s ingress if on vpd-docs domain, else localhost for docker-compose
-            OTLP_ENDPOINT: window.location.hostname.includes('vpd-docs.lab.local.ctoaas.co') 
-                ? 'https://otel-collector.lab.local.ctoaas.co/v1/traces'
-                : 'http://localhost:4318/v1/traces',
+            // Auto-detect environment: derive OTEL endpoint from hostname
+            // On any *.ctoaas.co domain, extract the domain suffix and construct the OTEL collector URL
+            // (supports both lab.ctoaas.co and lab.local.ctoaas.co variants)
+            OTLP_ENDPOINT: (() => {
+                const match = window.location.hostname.match(/\.((?:[^.]+\.)?ctoaas\.co)$/);
+                return match
+                    ? `https://otel-collector.${match[1]}/v1/traces`
+                    : 'http://localhost:4318/v1/traces';
+            })(),
             SERVICE_NAME: 'vpd-api-explorer',
 
             // Generate random hex string of specified length
