@@ -42,7 +42,7 @@ spec:
         - setBody:
             simple: "{{requestBody}}"
         - to:
-            uri: "http://excise-mock:8080/excise/vpd/validate-and-calculate?bridgeEndpoint=true&throwExceptionOnFailure=false"
+            uri: "{{env:EXCISE_URL}}/excise/vpd/validate-and-calculate?bridgeEndpoint=true&throwExceptionOnFailure=false"
         # Store response code for error handling
         - setProperty:
             name: exciseResponseCode

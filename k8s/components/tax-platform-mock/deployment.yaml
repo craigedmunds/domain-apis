@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
         - name: prism
-          image: stoplight/prism:latest
+          image: stoplight/prism:5.8.2
           args:
             - mock
             - -h

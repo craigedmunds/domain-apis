@@ -19,6 +19,9 @@ generatorOptions:
   disableNameSuffixHash: true
 
 configMapGenerator:
+  - name: domain-api-envoy-config
+    files:
+      - envoy.yaml=../../components/domain-api/envoy.yaml
   - name: domain-api-routes
     files:
       - ../../../specs/vaping-duty/domain/platform/routes/rest-config.yaml

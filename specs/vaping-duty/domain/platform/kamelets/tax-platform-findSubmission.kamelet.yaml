@@ -43,7 +43,7 @@ spec:
             name: X-Correlation-Id
             simple: "${exchangeProperty.correlationId}"
         - toD:
-            uri: "http://tax-platform-mock:4010/submissions/vpd?vpdApprovalNumber={{vpdApprovalNumber}}&periodKey={{periodKey}}&bridgeEndpoint=true&throwExceptionOnFailure=false"
+            uri: "{{env:TAX_PLATFORM_URL}}/submissions/vpd?vpdApprovalNumber={{vpdApprovalNumber}}&periodKey={{periodKey}}&bridgeEndpoint=true&throwExceptionOnFailure=false"
         - setProperty:
             name: taxPlatformResponseCode
             simple: "${header.CamelHttpResponseCode}"
