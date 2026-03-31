@@ -41,8 +41,18 @@ spec:
           image: apache/camel-jbang:4.16.0
           args:
             - run
-            - /routes/*.yaml
-            - /kamelets/*.kamelet.yaml
+            - /routes/rest-config.yaml
+            - /routes/get-submission-return-by-ack.yaml
+            - /routes/get-submission-return-by-approval.yaml
+            - /routes/post-submission-return.yaml
+            - /routes/common.yaml
+            - /kamelets/customer-getCustomer.kamelet.yaml
+            - /kamelets/excise-getRegistration.kamelet.yaml
+            - /kamelets/excise-getPeriod.kamelet.yaml
+            - /kamelets/excise-validateAndCalculate.kamelet.yaml
+            - /kamelets/tax-platform-getSubmission.kamelet.yaml
+            - /kamelets/tax-platform-findSubmission.kamelet.yaml
+            - /kamelets/tax-platform-storeSubmission.kamelet.yaml
             - --dep=org.apache.camel:camel-jacksonxml
             - --dep=org.apache.camel:camel-groovy
             - --dep=org.apache.groovy:groovy-json:4.0.29
