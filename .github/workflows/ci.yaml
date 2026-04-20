@@ -82,17 +82,9 @@ jobs:
 
   build-java:
     name: Build Camel Java DSL Image
-    runs-on: arc-runner-domain-apis
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Wait for dind
-        run: |
-          for i in $(seq 1 15); do
-            docker info > /dev/null 2>&1 && echo "Docker ready" && break
-            echo "Waiting for Docker... ($i/15)"
-            sleep 2
-          done
 
       - name: Build Java domain API image (native arch for testing)
         run: |
@@ -120,7 +112,7 @@ jobs:
 
   publish-java:
     name: Publish Multi-Arch Java Image
-    runs-on: arc-runner-domain-apis
+    runs-on: ubuntu-latest
     needs: [build-java]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -128,14 +120,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Wait for dind
-        run: |
-          for i in $(seq 1 15); do
-            docker info > /dev/null 2>&1 && echo "Docker ready" && break
-            echo "Waiting for Docker... ($i/15)"
-            sleep 2
-          done
 
       - name: Install Task
         uses: arduino/setup-task@v2
