@@ -264,6 +264,23 @@ class PlatformOASGenerator:
         producer_servers = platform_oas.get('servers', [])
         platform_oas['servers'] = deployment_servers + producer_servers
 
+        # Inject BasicAuth security scheme for dev/k8s-lab access
+        if 'components' not in platform_oas:
+            platform_oas['components'] = {}
+        if 'securitySchemes' not in platform_oas['components']:
+            platform_oas['components']['securitySchemes'] = {}
+        platform_oas['components']['securitySchemes']['BasicAuth'] = {
+            'type': 'http',
+            'scheme': 'basic',
+            'description': 'Basic authentication for k8s-lab public endpoint (username:password)'
+        }
+
+        # Ensure BasicAuth is in the global security list
+        if 'security' not in platform_oas:
+            platform_oas['security'] = []
+        if {'BasicAuth': []} not in platform_oas['security']:
+            platform_oas['security'].insert(0, {'BasicAuth': []})
+
         # Save output
         output_path = self.output_dir / self.producer_oas_path.name
         print(f"Saving platform OAS: {output_path}")
