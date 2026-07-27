@@ -414,6 +414,10 @@ components:
           description: JSON path to the field (optional)
           example: /dutyProducts/0/quantity
   securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Basic authentication for k8s-lab public endpoint (username:password)
     BearerAuth:
       type: http
       scheme: bearer
@@ -474,4 +478,5 @@ components:
             postcode: AB1 2CD
             country: GB
 security:
+- BasicAuth: []
 - BearerAuth: []
