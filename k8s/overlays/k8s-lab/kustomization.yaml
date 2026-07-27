@@ -8,6 +8,7 @@ components:
   - ../../components/excise-mock
   - ../../components/customer-mock
   - ../../components/tax-platform-mock
+  - ../../components/docs
 
 labels:
   - pairs:
@@ -116,3 +117,14 @@ helmCharts:
             name: tax-platform-mock-vpd
           tls:
             secretName: tax-platform-mock-lab-local-ctoaas-tls
+        - service:
+            name: docs
+            namespace: domain-apis
+            port:
+              name: http
+          ingress:
+            name: vpd-docs
+            accessPattern: public
+            externalAuth: basicAuth
+          domains:
+            name: vpd-docs

@@ -4,6 +4,7 @@ kind: Component
 resources:
   - deployment.yaml
   - service.yaml
+  - pvc.yaml
 
 configMapGenerator:
   - name: docs-nginx-config
