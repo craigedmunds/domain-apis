@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth-credentials
+type: Opaque
+stringData:
+  users: "boomi:$2y$05$cPi0CfdUiiSFq6.IRSe5NelHzk55tLi05dqpGQ.CGb95qHPpqf5vi"
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: basic-auth
+spec:
+  basicAuth:
+    secret: basic-auth-credentials
+    removeHeader: true

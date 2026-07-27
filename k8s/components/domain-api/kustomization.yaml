@@ -4,3 +4,4 @@ kind: Component
 resources:
   - deployment.yaml
   - service.yaml
+  - basic-auth.yaml

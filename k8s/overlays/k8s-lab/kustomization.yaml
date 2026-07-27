@@ -62,6 +62,9 @@ helmCharts:
     valuesInline:
       domains:
         localDomainSuffix: lab.local.ctoaas.co
+        publicDomainSuffix: lab.ctoaas.co
+      auth:
+        basicAuthMiddleware: "domain-apis-basic-auth@kubernetescrd"
       tls:
         enabled: true
         issuer: letsencrypt-prod
@@ -73,11 +76,10 @@ helmCharts:
               name: http
           ingress:
             name: domain-api
-            accessPattern: internal
+            accessPattern: public
+            externalAuth: basicAuth
           domains:
             name: vpd-domain-api
-          tls:
-            secretName: domain-api-lab-local-ctoaas-tls
         - service:
             name: excise-mock
             namespace: domain-apis
