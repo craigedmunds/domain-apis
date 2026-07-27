@@ -1,11 +1,20 @@
 ---
-apiVersion: v1
-kind: Secret
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
 metadata:
   name: basic-auth-credentials
-type: Opaque
-stringData:
-  users: "boomi:$2y$05$cPi0CfdUiiSFq6.IRSe5NelHzk55tLi05dqpGQ.CGb95qHPpqf5vi"
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: central-secret-store
+  target:
+    name: basic-auth-credentials
+  data:
+    - secretKey: users
+      remoteRef:
+        key: basic-auth-credentials
+        property: users
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
