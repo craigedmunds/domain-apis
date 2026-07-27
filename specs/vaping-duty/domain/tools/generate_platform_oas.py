@@ -253,6 +253,17 @@ class PlatformOASGenerator:
             'injected for all HIP APIs (sparse fieldsets, rate limiting, correlation IDs).'
         )
 
+        # Inject deployment-specific servers (prepended before producer servers)
+        deployment_servers = [
+            {'url': 'https://vpd-domain-api.lab.ctoaas.co', 'description': 'k8s-lab (public, basicAuth)'},
+            {'url': 'https://vpd-domain-api.lab.local.ctoaas.co', 'description': 'k8s-lab (internal)'},
+            {'url': 'http://localhost:8081', 'description': 'Local (Docker - Camel JBang)'},
+            {'url': 'http://localhost:8083', 'description': 'Local (Docker - Camel Java)'},
+            {'url': 'https://vpd-domain-api-java.lab.local.ctoaas.co', 'description': 'k8s-lab (Camel Java)'},
+        ]
+        producer_servers = platform_oas.get('servers', [])
+        platform_oas['servers'] = deployment_servers + producer_servers
+
         # Save output
         output_path = self.output_dir / self.producer_oas_path.name
         print(f"Saving platform OAS: {output_path}")
