@@ -15,3 +15,38 @@ spec:
   basicAuth:
     secret: basic-auth-credentials
     removeHeader: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: cors-headers
+spec:
+  headers:
+    accessControlAllowOriginList:
+      - "https://vpd-docs.lab.ctoaas.co"
+      - "https://vpd-docs.lab.local.ctoaas.co"
+    accessControlAllowMethods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+    accessControlAllowHeaders:
+      - "Content-Type"
+      - "Accept"
+      - "Authorization"
+      - "X-Correlation-Id"
+      - "X-Idempotency-Key"
+    accessControlAllowCredentials: true
+    accessControlMaxAge: 3600
+    addVaryHeader: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: public-api-chain
+spec:
+  chain:
+    middlewares:
+      - name: cors-headers
+      - name: basic-auth

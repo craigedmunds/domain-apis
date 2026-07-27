@@ -65,7 +65,7 @@ helmCharts:
         localDomainSuffix: lab.local.ctoaas.co
         publicDomainSuffix: lab.ctoaas.co
       auth:
-        basicAuthMiddleware: "domain-apis-basic-auth@kubernetescrd"
+        basicAuthMiddleware: "domain-apis-public-api-chain@kubernetescrd"
       tls:
         enabled: true
         issuer: letsencrypt-prod
