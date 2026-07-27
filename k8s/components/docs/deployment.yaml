@@ -23,8 +23,8 @@ spec:
             - name: http
               containerPort: 8080
           volumeMounts:
-            - name: workspace
-              mountPath: /web
+            - name: workspace-agents
+              mountPath: /workspace/agents
               readOnly: true
             - name: nginx-config
               mountPath: /etc/nginx/nginx.conf
@@ -37,10 +37,16 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
       volumes:
-        - name: workspace
+        - name: workspace-agents
           persistentVolumeClaim:
-            claimName: code-server-storage
+            claimName: workspace-agents
         - name: nginx-config
           configMap:
             name: docs-nginx-config
