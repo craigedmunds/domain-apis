@@ -88,11 +88,10 @@ helmCharts:
               name: http
           ingress:
             name: excise-mock
-            accessPattern: internal
+            accessPattern: public
+            externalAuth: basicAuth
           domains:
             name: excise-mock-vpd
-          tls:
-            secretName: excise-mock-lab-local-ctoaas-tls
         - service:
             name: customer-mock
             namespace: domain-apis
@@ -100,11 +99,10 @@ helmCharts:
               name: http
           ingress:
             name: customer-mock
-            accessPattern: internal
+            accessPattern: public
+            externalAuth: basicAuth
           domains:
             name: customer-mock-vpd
-          tls:
-            secretName: customer-mock-lab-local-ctoaas-tls
         - service:
             name: tax-platform-mock
             namespace: domain-apis
@@ -112,11 +110,10 @@ helmCharts:
               name: http
           ingress:
             name: tax-platform-mock
-            accessPattern: internal
+            accessPattern: public
+            externalAuth: basicAuth
           domains:
             name: tax-platform-mock-vpd
-          tls:
-            secretName: tax-platform-mock-lab-local-ctoaas-tls
         - service:
             name: docs
             namespace: domain-apis
