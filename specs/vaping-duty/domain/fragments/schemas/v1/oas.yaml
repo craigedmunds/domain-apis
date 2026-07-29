@@ -97,8 +97,9 @@ ErrorDetail:
       description: JSON path to the field with the error
       example: "/dutyProducts/0/quantity"
     value:
+      type: string
       description: The invalid value that caused the error
-      example: -5
+      example: "-5"
 
 Timestamp:
   type: string
