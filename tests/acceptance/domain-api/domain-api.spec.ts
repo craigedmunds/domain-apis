@@ -8,6 +8,7 @@
  *
  * Environment Variables:
  *   DOMAIN_API_URL - Override default URL (optional)
+ *   DOMAIN_API_AUTH - Basic auth credentials as "user:password" (optional)
  *   TEST_ENV - Set to 'k8s' or 'docker' to force environment (optional)
  *
  * Run with:
@@ -15,8 +16,11 @@
  *   docker-compose up -d
  *   cd tests/acceptance/domain-api && npm install && npm test
  *
- *   # Kubernetes
+ *   # Kubernetes (internal, no auth)
  *   TEST_ENV=k8s DOMAIN_API_URL=https://vpd-domain-api.lab.local.ctoaas.co npm test
+ *
+ *   # Kubernetes (public, with auth)
+ *   DOMAIN_API_URL=https://vpd-domain-api.lab.ctoaas.co DOMAIN_API_AUTH=boomi:<password> npm test
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -30,17 +34,33 @@ const DEFAULT_URLS = {
 };
 
 const DOMAIN_API_URL = process.env.DOMAIN_API_URL || DEFAULT_URLS[TEST_ENV as keyof typeof DEFAULT_URLS] || DEFAULT_URLS.docker;
+const DOMAIN_API_AUTH = process.env.DOMAIN_API_AUTH || '';
 const TIMEOUT_MS = 15000;
 
 // Generate a valid UUID for correlation IDs
 const generateCorrelationId = (): string => randomUUID();
 
-console.log(`Testing against: ${DOMAIN_API_URL} (env: ${TEST_ENV})`);
+// Build default headers (includes auth if configured)
+const defaultHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {};
+  if (DOMAIN_API_AUTH) {
+    headers['Authorization'] = `Basic ${Buffer.from(DOMAIN_API_AUTH).toString('base64')}`;
+  }
+  return headers;
+};
+
+// Wrapper around fetch that injects auth headers
+const apiFetch = (url: string, init?: RequestInit): Promise<Response> => {
+  const headers = { ...defaultHeaders(), ...(init?.headers as Record<string, string> || {}) };
+  return fetch(url, { ...init, headers });
+};
+
+console.log(`Testing against: ${DOMAIN_API_URL} (env: ${TEST_ENV}, auth: ${DOMAIN_API_AUTH ? 'yes' : 'no'})`);
 
 // Check if domain API is available
 const isDomainApiRunning = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${DOMAIN_API_URL}/health`, {
+    const response = await apiFetch(`${DOMAIN_API_URL}/health`, {
       signal: AbortSignal.timeout(2000),
     });
     return response.ok;
@@ -68,7 +88,7 @@ describe('VPD Domain API', () => {
     it('should return healthy status', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(`${DOMAIN_API_URL}/health`);
+      const response = await apiFetch(`${DOMAIN_API_URL}/health`);
 
       expect(response.status).toBe(200);
       const body = await response.json();
@@ -87,12 +107,11 @@ describe('VPD Domain API', () => {
     it('should return submission with orchestrated data', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
       );
 
-      // Prism may return 422 randomly, accept both
-      expect([200, 422]).toContain(response.status);
+      expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('application/json');
 
       if (response.status === 200) {
@@ -107,7 +126,7 @@ describe('VPD Domain API', () => {
     it('should include trader details from customer service (orchestrated)', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
       );
 
@@ -129,7 +148,7 @@ describe('VPD Domain API', () => {
     it('should include submission status', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
       );
 
@@ -143,7 +162,7 @@ describe('VPD Domain API', () => {
     it('should include registration details from excise service (XML transformed)', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
       );
 
@@ -160,7 +179,7 @@ describe('VPD Domain API', () => {
     it('should include period details from excise service (XML transformed)', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`
       );
 
@@ -184,7 +203,7 @@ describe('VPD Domain API', () => {
 
       const correlationId = generateCorrelationId();
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`,
         {
           headers: {
@@ -193,8 +212,7 @@ describe('VPD Domain API', () => {
         }
       );
 
-      // Prism may randomly return 422, but correlation ID should still be echoed
-      expect([200, 422]).toContain(response.status);
+      expect(response.status).toBe(200);
       expect(response.headers.get('x-correlation-id')).toBe(correlationId);
     }, TIMEOUT_MS);
   });
@@ -211,12 +229,11 @@ describe('VPD Domain API', () => {
     it('should return submission by approval and period', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
       );
 
-      // Prism may return 422 randomly, accept both
-      expect([200, 422]).toContain(response.status);
+      expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toContain('application/json');
 
       if (response.status === 200) {
@@ -229,7 +246,7 @@ describe('VPD Domain API', () => {
     it('should include submission data from tax-platform', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
       );
 
@@ -245,7 +262,7 @@ describe('VPD Domain API', () => {
     it('should include registration details from excise service (XML transformed)', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
       );
 
@@ -261,7 +278,7 @@ describe('VPD Domain API', () => {
     it('should include period details from excise service (XML transformed)', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
       );
 
@@ -279,7 +296,7 @@ describe('VPD Domain API', () => {
     it('should include trader details from customer service (orchestrated)', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}`
       );
 
@@ -318,7 +335,7 @@ describe('VPD Domain API', () => {
         dutyProducts: [],
       };
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1`,
         {
           method: 'POST',
@@ -333,7 +350,7 @@ describe('VPD Domain API', () => {
 
       // Accept 201 (created), 422 (validation error from Prism), 400 (schema mismatch), or 200 (idempotent replay)
       // Note: 400 is expected because the simplified test payload doesn't match tax-platform's StoreRequest schema
-      expect([200, 201, 400, 422]).toContain(response.status);
+      expect(response.status).toBe(201);
 
       // Content-type may be text/plain for error responses from Prism
       if (response.status === 201 || response.status === 200) {
@@ -369,7 +386,7 @@ describe('VPD Domain API', () => {
         warnings: [],
       };
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1`,
         {
           method: 'POST',
@@ -383,7 +400,7 @@ describe('VPD Domain API', () => {
       );
 
       // Accept 200, 201, 400, or 422 - Prism may return various status codes
-      expect([200, 201, 400, 422]).toContain(response.status);
+      expect(response.status).toBe(201);
       // Correlation ID should be echoed back regardless of status
       expect(response.headers.get('x-correlation-id')).toBe(correlationId);
     }, TIMEOUT_MS);
@@ -407,7 +424,7 @@ describe('VPD Domain API', () => {
         dutyProducts: [],
       };
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1`,
         {
           method: 'POST',
@@ -446,7 +463,7 @@ describe('VPD Domain API', () => {
       const delayMs = 500;
       const startTime = Date.now();
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`,
         {
           headers: {
@@ -457,8 +474,7 @@ describe('VPD Domain API', () => {
 
       const elapsed = Date.now() - startTime;
 
-      // Prism may randomly return 422, but delay should still be applied
-      expect([200, 422]).toContain(response.status);
+      expect(response.status).toBe(200);
       // Allow tolerance for network overhead
       expect(elapsed).toBeGreaterThanOrEqual(delayMs - 100);
     }, TIMEOUT_MS);
@@ -466,7 +482,7 @@ describe('VPD Domain API', () => {
     it('should pass abort header to backend and return error', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}`,
         {
           headers: {
@@ -487,7 +503,7 @@ describe('VPD Domain API', () => {
     it('should return 400 when no query parameters provided', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1`
       );
 
@@ -499,13 +515,13 @@ describe('VPD Domain API', () => {
     it('should handle non-existent acknowledgement reference', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=NONEXISTENT-999`
       );
 
       // Prism returns mock data for any ackRef (200), or may return 422
       // In production this would be 404, but mock returns example data
-      expect([200, 404, 422]).toContain(response.status);
+      expect([200, 404]).toContain(response.status);
     }, TIMEOUT_MS);
   });
 
@@ -522,7 +538,7 @@ describe('VPD Domain API', () => {
       it('should return only requested fields when fields[submission-returns] is provided', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference,customerId`
         );
 
@@ -547,7 +563,7 @@ describe('VPD Domain API', () => {
       it('should return single field when only one field requested', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference`
         );
 
@@ -562,7 +578,7 @@ describe('VPD Domain API', () => {
       it('should return trader field when requested (orchestrated data)', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader,vpdApprovalNumber`
         );
 
@@ -586,7 +602,7 @@ describe('VPD Domain API', () => {
       it('should return 400 for invalid field names', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=invalidField,anotherBadField`
         );
 
@@ -600,7 +616,7 @@ describe('VPD Domain API', () => {
       it('should return 400 when mixing valid and invalid fields', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference,invalidField`
         );
 
@@ -613,7 +629,7 @@ describe('VPD Domain API', () => {
       it('should handle whitespace in field list', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference, customerId, vpdApprovalNumber`
         );
 
@@ -630,7 +646,7 @@ describe('VPD Domain API', () => {
       it('should return full response when fields parameter is empty', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=`
         );
 
@@ -650,12 +666,11 @@ describe('VPD Domain API', () => {
       it('should return only requested fields', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}&fields[submission-returns]=vpdApprovalNumber,periodKey,status`
         );
 
-        // Prism may return 422 randomly, accept both
-        expect([200, 422]).toContain(response.status);
+        expect(response.status).toBe(200);
 
         if (response.status === 200) {
           const body = await response.json();
@@ -675,12 +690,11 @@ describe('VPD Domain API', () => {
       it('should return 400 for invalid field names', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?vpdApprovalNumber=${validApproval}&periodKey=${validPeriod}&fields[submission-returns]=nonExistentField`
         );
 
-        // Prism may return 422 randomly, or 400 for invalid fields
-        expect([400, 422]).toContain(response.status);
+        expect(response.status).toBe(400);
         
         if (response.status === 400) {
           const body = await response.json();
@@ -696,7 +710,7 @@ describe('VPD Domain API', () => {
 
         const correlationId = generateCorrelationId();
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference`,
           {
             headers: {
@@ -715,7 +729,7 @@ describe('VPD Domain API', () => {
 
         const correlationId = generateCorrelationId();
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=invalidField`,
           {
             headers: {
@@ -724,8 +738,7 @@ describe('VPD Domain API', () => {
           }
         );
 
-        // Prism may return 422 randomly, or 400 for invalid fields
-        expect([400, 422]).toContain(response.status);
+        expect(response.status).toBe(400);
         expect(response.headers.get('x-correlation-id')).toBe(correlationId);
       }, TIMEOUT_MS);
     });
@@ -739,7 +752,7 @@ describe('VPD Domain API', () => {
         // which comes from customer service orchestration
         const startTime = Date.now();
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader`
         );
 
@@ -764,7 +777,7 @@ describe('VPD Domain API', () => {
       it('should return nested object when requesting with dot notation', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=submission.basicInformation`
         );
 
@@ -792,7 +805,7 @@ describe('VPD Domain API', () => {
       it('should return deeply nested field', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=submission.basicInformation.submittedBy.name`
         );
 
@@ -815,7 +828,7 @@ describe('VPD Domain API', () => {
       it('should support mixing top-level and nested fields', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=acknowledgementReference,submission.basicInformation,trader.name`
         );
 
@@ -844,7 +857,7 @@ describe('VPD Domain API', () => {
       it('should return 400 for invalid nested field paths', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=submission.nonExistentField`
         );
 
@@ -857,7 +870,7 @@ describe('VPD Domain API', () => {
       it('should return 400 when nested path does not exist', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader.address.invalidField`
         );
 
@@ -870,7 +883,7 @@ describe('VPD Domain API', () => {
       it('should handle multiple nested fields from same parent', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=trader.name,trader.type`
         );
 
@@ -894,7 +907,7 @@ describe('VPD Domain API', () => {
       it('should handle nested array access', async () => {
         if (!apiAvailable) return;
 
-        const response = await fetch(
+        const response = await apiFetch(
           `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=${validAckRef}&fields[submission-returns]=calculations.totalDutyDue.amount`
         );
 
@@ -923,7 +936,7 @@ describe('VPD Domain API', () => {
     it('should respond to OPTIONS preflight request', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1`,
         {
           method: 'OPTIONS',
@@ -943,7 +956,7 @@ describe('VPD Domain API', () => {
     it('should include CORS headers on responses', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1?acknowledgementReference=ACK-2026-01-26-000123`,
         {
           headers: {
@@ -952,8 +965,7 @@ describe('VPD Domain API', () => {
         }
       );
 
-      // Prism may randomly return 422, but CORS headers should still be present
-      expect([200, 422]).toContain(response.status);
+      expect(response.status).toBe(200);
       expect(response.headers.get('access-control-allow-origin')).toBeDefined();
     }, TIMEOUT_MS);
   });
@@ -966,7 +978,7 @@ describe('VPD Domain API', () => {
     it('should include k8s URL in domain API OpenAPI spec servers array', async () => {
       if (!apiAvailable) return;
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${DOMAIN_API_URL}/duty/vpd/submission-returns/v1/openapi.yaml`
       );
 
@@ -1072,7 +1084,7 @@ describe('VPD Domain API', () => {
       ];
 
       for (const { name, url } of k8sUrls) {
-        const response = await fetch(url);
+        const response = await apiFetch(url);
         expect(response.ok, `${name} should be accessible at ${url}`).toBe(true);
       }
     }, TIMEOUT_MS);

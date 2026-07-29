@@ -61,6 +61,19 @@ static_resources:
                   - name: envoy.filters.http.cors
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  - name: envoy.filters.http.fault
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+                      delay:
+                        header_delay: {}
+                        percentage:
+                          numerator: 100
+                          denominator: HUNDRED
+                      abort:
+                        header_abort: {}
+                        percentage:
+                          numerator: 100
+                          denominator: HUNDRED
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
