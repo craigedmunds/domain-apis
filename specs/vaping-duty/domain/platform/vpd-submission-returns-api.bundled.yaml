@@ -1,0 +1,821 @@
+openapi: 3.0.3
+info:
+  title: VPD Submission Returns API
+  version: 1.0.0
+  description: |-
+    Domain API for Vaping Products Duty (VPD) Submission Returns.
+
+    **Producer OAS**: This specification defines the core domain contract.
+    Platform features (sparse fieldsets, rate limiting, correlation) are
+    automatically added by the platform.
+
+
+    ---
+
+    **Platform-Enhanced OAS**: This specification includes platform features automatically injected for all HIP APIs (sparse fieldsets, rate limiting, correlation IDs).
+  x-platform-generated: true
+  x-platform-features:
+    sparseFieldsets: true
+    rateLimiting: true
+    correlationId: true
+servers:
+  - url: https://vpd-domain-api.lab.ctoaas.co
+    description: k8s-lab (public, basicAuth)
+  - url: https://vpd-domain-api.lab.local.ctoaas.co
+    description: k8s-lab (internal)
+  - url: http://localhost:8081
+    description: Local (Docker - Camel JBang)
+  - url: http://localhost:8083
+    description: Local (Docker - Camel Java)
+  - url: https://vpd-domain-api-java.lab.local.ctoaas.co
+    description: k8s-lab (Camel Java)
+  - url: https://api.hip.hmrc.gov.uk
+    description: Production
+  - url: https://api.qa.hip.hmrc.gov.uk
+    description: QA
+security:
+  - BasicAuth: []
+  - BearerAuth: []
+tags:
+  - name: Submission Returns
+    description: VPD submission return operations
+paths:
+  /duty/vpd/submission-returns/v1:
+    post:
+      tags:
+        - Submission Returns
+      summary: Submit a VPD return
+      description: |
+        Submit a new VPD return. The domain API orchestrates:
+        1. excise: Validates submission and calculates duty/VAT
+        2. Parallel: tax-platform stores + customer enriches response
+
+        Returns acknowledgement reference for tracking.
+      operationId: submitReturn
+      parameters:
+        - $ref: '#/components/parameters/X-Correlation-Id-Header'
+        - $ref: '#/components/parameters/X-Idempotency-Key-Header'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionRequest'
+            examples:
+              validSubmission:
+                $ref: '#/components/examples/ValidSubmissionRequest'
+      responses:
+        '201':
+          description: Submission accepted and stored
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id-Response'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/SubmissionSuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    get:
+      tags:
+        - Submission Returns
+      summary: Retrieve a VPD return
+      description: |-
+        Retrieve a VPD return by acknowledgement reference OR by approval number + period.
+        Response includes enriched trader details from customer system.
+
+        **Platform Feature**: Sparse fieldsets automatically supported via
+        `fields[submission-returns]=field1,field2` query parameter. See `fields[submission-returns]` parameter below.
+      operationId: getReturn
+      parameters:
+        - $ref: '#/components/parameters/X-Correlation-Id-Header'
+        - $ref: '#/components/parameters/acknowledgementReference'
+        - $ref: '#/components/parameters/vpdApprovalNumber'
+        - $ref: '#/components/parameters/periodKey'
+        - name: fields[submission-returns]
+          in: query
+          description: |-
+            **Platform-provided sparse fieldsets.** Request specific fields from the response.
+
+            Format: `fields[submission-returns]=field1,field2,field3`
+
+            Multiple fields are comma-separated. Invalid field names return 400.
+
+            **Nested fields supported**: Use dot notation to access nested fields (e.g., `submission.basicInformation`, `trader.name`, `submission.basicInformation.submittedBy.name`).
+
+            **Available top-level fields**: acknowledgementReference, vpdApprovalNumber, periodKey, customerId, submission, calculations, warnings, submittedAt, status, trader
+
+            **Example nested fields**: submission.basicInformation, trader.name, trader.type, calculations.totalDutyDue.amount
+          required: false
+          schema:
+            type: string
+          style: form
+          explode: false
+          examples:
+            singleField:
+              summary: Request single field
+              value: periodKey
+            multipleFields:
+              summary: Request multiple fields
+              value: periodKey,calculations,trader
+            nestedFields:
+              summary: Request nested fields
+              value: submission.basicInformation,trader.name
+            deeplyNested:
+              summary: Request deeply nested field
+              value: submission.basicInformation.submittedBy.name
+            mixedFields:
+              summary: Mix top-level and nested fields
+              value: acknowledgementReference,submission.basicInformation,trader.name
+            minimalResponse:
+              summary: Minimal response
+              value: acknowledgementReference,status
+      responses:
+        '200':
+          description: Submission found
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id-Response'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrichedSubmission'
+              examples:
+                full:
+                  $ref: '#/components/examples/EnrichedSubmissionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+components:
+  parameters:
+    acknowledgementReference:
+      name: acknowledgementReference
+      in: query
+      description: Acknowledgement reference from submission (mutually exclusive with vpdApprovalNumber+periodKey)
+      schema:
+        type: string
+        pattern: ^ACK-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$
+        example: ACK-2026-01-27-000123
+      required: false
+    vpdApprovalNumber:
+      name: vpdApprovalNumber
+      in: query
+      description: VPD approval number (requires periodKey)
+      schema:
+        type: string
+        pattern: ^VPD[0-9]{6}$
+        example: VPD123456
+      required: false
+    periodKey:
+      name: periodKey
+      in: query
+      description: Period key (requires vpdApprovalNumber)
+      schema:
+        $ref: '#/components/schemas/PeriodKey'
+      required: false
+    X-Correlation-Id-Header:
+      name: X-Correlation-Id
+      in: header
+      description: |
+        Correlation ID for request tracing across services.
+        If not provided, the platform will generate one.
+      schema:
+        type: string
+        format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+      required: false
+    X-Idempotency-Key-Header:
+      name: X-Idempotency-Key
+      in: header
+      description: |
+        Idempotency key for safe retries of non-idempotent operations (POST, PATCH, DELETE).
+
+        The platform ensures:
+        - Same key + same request = same response (cached)
+        - Same key + different request = 409 Conflict
+
+        Keys should be unique per logical operation (e.g., UUID, timestamp+nonce).
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+        example: abc-123-def-456
+      required: true
+  schemas:
+    SubmissionRequest:
+      type: object
+      required:
+        - vpdApprovalNumber
+        - periodKey
+        - basicInformation
+      properties:
+        vpdApprovalNumber:
+          type: string
+          pattern: ^VPD[0-9]{6}$
+          description: VPD approval number
+          example: VPD123456
+        periodKey:
+          $ref: '#/components/schemas/PeriodKey'
+        basicInformation:
+          $ref: '#/components/schemas/BasicInformation'
+        dutyProducts:
+          type: array
+          description: List of duty products in this return
+          items:
+            $ref: '#/components/schemas/DutyProduct'
+    BasicInformation:
+      type: object
+      required:
+        - returnType
+        - submittedBy
+      properties:
+        returnType:
+          type: string
+          enum:
+            - ORIGINAL
+            - AMENDMENT
+          description: Type of return
+        submittedBy:
+          type: object
+          required:
+            - type
+            - name
+          properties:
+            type:
+              type: string
+              enum:
+                - ORG
+                - INDIVIDUAL
+            name:
+              type: string
+              minLength: 1
+              maxLength: 255
+              example: Example Vapes Ltd
+    DutyProduct:
+      type: object
+      description: Duty product details (placeholder for POC)
+      properties:
+        productCode:
+          type: string
+        quantity:
+          type: number
+          minimum: 0
+        dutyRate:
+          type: number
+          minimum: 0
+    SubmissionResponse:
+      type: object
+      required:
+        - acknowledgementReference
+        - vpdApprovalNumber
+        - periodKey
+        - status
+        - storedAt
+      properties:
+        acknowledgementReference:
+          type: string
+          description: Unique acknowledgement reference
+          pattern: ^ACK-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$
+          example: ACK-2026-01-27-000123
+        vpdApprovalNumber:
+          type: string
+          pattern: ^VPD[0-9]{6}$
+          example: VPD123456
+        periodKey:
+          $ref: '#/components/schemas/PeriodKey'
+        status:
+          type: string
+          enum:
+            - RECEIVED
+            - VALIDATED
+            - REJECTED
+          description: Processing status
+          example: RECEIVED
+        storedAt:
+          $ref: '#/components/schemas/Timestamp'
+        warnings:
+          type: array
+          description: Non-blocking validation warnings
+          items:
+            $ref: '#/components/schemas/Warning'
+    EnrichedSubmission:
+      type: object
+      required:
+        - acknowledgementReference
+        - vpdApprovalNumber
+        - periodKey
+        - customerId
+        - submission
+        - calculations
+        - warnings
+        - submittedAt
+        - status
+        - trader
+      properties:
+        acknowledgementReference:
+          type: string
+          description: Unique acknowledgement reference
+          pattern: ^ACK-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$
+          example: ACK-2026-01-27-000123
+        vpdApprovalNumber:
+          type: string
+          pattern: ^VPD[0-9]{6}$
+          example: VPD123456
+        periodKey:
+          $ref: '#/components/schemas/PeriodKey'
+        customerId:
+          type: string
+          description: Customer ID from excise backend
+          example: CUST789
+        submission:
+          type: object
+          description: Full submission payload from client
+          properties:
+            basicInformation:
+              $ref: '#/components/schemas/BasicInformation'
+            dutyProducts:
+              type: array
+              items:
+                $ref: '#/components/schemas/DutyProduct'
+        calculations:
+          type: object
+          description: Duty and VAT calculations from excise
+          properties:
+            totalDutyDue:
+              $ref: '#/components/schemas/Money'
+            vat:
+              $ref: '#/components/schemas/Money'
+            calculationHash:
+              type: string
+              description: Hash of calculation inputs for audit
+              example: sha256:abc123def456
+        warnings:
+          type: array
+          description: Non-blocking validation warnings
+          items:
+            $ref: '#/components/schemas/Warning'
+        submittedAt:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          enum:
+            - RECEIVED
+            - VALIDATED
+            - REJECTED
+          description: Processing status
+          example: RECEIVED
+        trader:
+          type: object
+          description: Enriched trader details from customer system
+          properties:
+            name:
+              type: string
+              example: Example Vapes Ltd
+            type:
+              type: string
+              enum:
+                - ORG
+                - INDIVIDUAL
+            address:
+              $ref: '#/components/schemas/Address'
+    Warning:
+      type: object
+      required:
+        - code
+        - text
+      properties:
+        code:
+          type: string
+          description: Warning code
+          example: WARN-VD-001
+        text:
+          type: string
+          description: Human-readable warning message
+          example: Spoilt product close to upper threshold
+        path:
+          type: string
+          description: JSON path to the field (optional)
+          example: /dutyProducts/0/quantity
+    PeriodKey:
+      type: string
+      description: |
+        Period key in format: YYQN (Year, Quarter, Number)
+        - YY: Last two digits of year
+        - Q: Quarter (A for Q1-Q4, B for monthly)
+        - N: Period number within quarter
+      pattern: ^[0-9]{2}[AB][0-9]$
+      example: 24A1
+    Money:
+      type: object
+      required:
+        - amount
+        - currency
+      properties:
+        amount:
+          type: number
+          format: double
+          description: Monetary amount (supports decimal precision)
+          example: 12345.67
+        currency:
+          type: string
+          description: ISO 4217 currency code
+          pattern: ^[A-Z]{3}$
+          example: GBP
+    Timestamp:
+      type: string
+      format: date-time
+      description: ISO 8601 timestamp (RFC 3339)
+      example: '2026-01-27T14:51:02Z'
+    Address:
+      type: object
+      description: UK postal address
+      properties:
+        line1:
+          type: string
+          maxLength: 100
+          example: 123 High Street
+        line2:
+          type: string
+          maxLength: 100
+          example: Suite 100
+        line3:
+          type: string
+          maxLength: 100
+        city:
+          type: string
+          maxLength: 50
+          example: London
+        county:
+          type: string
+          maxLength: 50
+          example: Greater London
+        postcode:
+          type: string
+          pattern: ^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$
+          example: AB1 2CD
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          pattern: ^[A-Z]{2}$
+          default: GB
+          example: GB
+    ErrorDetail:
+      type: object
+      description: Detailed information about a specific error
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Specific error code
+          example: FIELD_REQUIRED
+        message:
+          type: string
+          description: Human-readable error message
+          example: Field is required
+        path:
+          type: string
+          description: JSON path to the field with the error
+          example: /dutyProducts/0/quantity
+        value:
+          description: The invalid value that caused the error
+          example: -5
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+          example: Validation failed
+        details:
+          type: array
+          description: Detailed error information (e.g., field-level validation errors)
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+        correlationId:
+          type: string
+          format: uuid
+          description: Correlation ID for tracing this error
+          example: 550e8400-e29b-41d4-a716-446655440000
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Basic authentication for k8s-lab public endpoint (username:password)
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 bearer token (platform-provided authentication)
+  examples:
+    ValidSubmissionRequest:
+      summary: Valid submission request
+      value:
+        vpdApprovalNumber: VPD123456
+        periodKey: 24A1
+        basicInformation:
+          returnType: ORIGINAL
+          submittedBy:
+            type: ORG
+            name: Example Vapes Ltd
+        dutyProducts: []
+    SubmissionSuccessResponse:
+      summary: Successful submission
+      value:
+        acknowledgementReference: ACK-2026-01-27-000123
+        vpdApprovalNumber: VPD123456
+        periodKey: 24A1
+        status: RECEIVED
+        storedAt: '2026-01-27T14:51:02Z'
+        warnings: []
+    EnrichedSubmissionResponse:
+      summary: Enriched submission with trader details
+      value:
+        acknowledgementReference: ACK-2026-01-27-000123
+        vpdApprovalNumber: VPD123456
+        periodKey: 24A1
+        customerId: CUST789
+        submission:
+          basicInformation:
+            returnType: ORIGINAL
+            submittedBy:
+              type: ORG
+              name: Example Vapes Ltd
+          dutyProducts: []
+        calculations:
+          totalDutyDue:
+            amount: 12345.67
+            currency: GBP
+          vat:
+            amount: 2469.13
+            currency: GBP
+          calculationHash: sha256:abc123def456
+        warnings: []
+        submittedAt: '2026-01-27T14:51:02Z'
+        status: RECEIVED
+        trader:
+          name: Example Vapes Ltd
+          type: ORG
+          address:
+            line1: 123 High Street
+            city: London
+            postcode: AB1 2CD
+            country: GB
+  headers:
+    X-Correlation-Id-Response:
+      description: Correlation ID echoed from request or generated by platform
+      schema:
+        type: string
+        format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+    X-RateLimit-Limit:
+      description: Maximum number of requests allowed in the current time window
+      schema:
+        type: integer
+        example: 100
+    X-RateLimit-Remaining:
+      description: Number of requests remaining in the current time window
+      schema:
+        type: integer
+        example: 95
+    X-RateLimit-Reset:
+      description: Unix timestamp when the rate limit window resets
+      schema:
+        type: integer
+        format: int64
+        example: 1706371200
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters, malformed payload, or invalid query syntax
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            malformedJson:
+              summary: Malformed JSON payload
+              value:
+                code: MALFORMED_JSON
+                message: Request body contains invalid JSON
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+            invalidParameter:
+              summary: Invalid query parameter
+              value:
+                code: INVALID_PARAMETER
+                message: Invalid query parameter value
+                details:
+                  - code: INVALID_FORMAT
+                    message: Parameter must be a valid date
+                    path: /query/fromDate
+                    value: not-a-date
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    Unauthorized:
+      description: Unauthorized - missing or invalid authentication token
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+        WWW-Authenticate:
+          description: Authentication scheme required
+          schema:
+            type: string
+            example: Bearer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingToken:
+              summary: Missing authentication token
+              value:
+                code: MISSING_TOKEN
+                message: Authentication token is required
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+            invalidToken:
+              summary: Invalid or expired token
+              value:
+                code: INVALID_TOKEN
+                message: Authentication token is invalid or expired
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    Forbidden:
+      description: Forbidden - authenticated but insufficient permissions
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            insufficientScope:
+              summary: Insufficient OAuth scope
+              value:
+                code: INSUFFICIENT_SCOPE
+                message: 'Token does not have required scope: vpd:submit'
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            resourceNotFound:
+              summary: Resource not found
+              value:
+                code: NOT_FOUND
+                message: Requested resource does not exist
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+        X-RateLimit-Limit:
+          $ref: '#/components/headers/X-RateLimit-Limit'
+        X-RateLimit-Remaining:
+          $ref: '#/components/headers/X-RateLimit-Remaining'
+        X-RateLimit-Reset:
+          $ref: '#/components/headers/X-RateLimit-Reset'
+        Retry-After:
+          description: Seconds until rate limit resets
+          schema:
+            type: integer
+            example: 60
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            rateLimitExceeded:
+              summary: Rate limit exceeded
+              value:
+                code: RATE_LIMIT_EXCEEDED
+                message: Rate limit exceeded. Retry after 60 seconds.
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    InternalServerError:
+      description: Internal server error - unexpected platform or service failure
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            internalError:
+              summary: Internal server error
+              value:
+                code: INTERNAL_ERROR
+                message: An unexpected error occurred. Please try again later.
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    ServiceUnavailable:
+      description: Service temporarily unavailable - maintenance or downstream service failure
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+        Retry-After:
+          description: Seconds until service is expected to be available
+          schema:
+            type: integer
+            example: 300
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            maintenance:
+              summary: Service under maintenance
+              value:
+                code: SERVICE_UNAVAILABLE
+                message: Service is temporarily unavailable for maintenance
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    Conflict:
+      description: Conflict - resource state conflict or idempotency key reused with different payload
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            idempotencyConflict:
+              summary: Idempotency key conflict
+              value:
+                code: IDEMPOTENCY_CONFLICT
+                message: Idempotency key already used with different payload
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+            resourceConflict:
+              summary: Resource state conflict
+              value:
+                code: RESOURCE_CONFLICT
+                message: Period already filed - cannot submit new return
+                correlationId: 550e8400-e29b-41d4-a716-446655440000
+    ValidationError:
+      description: Validation failed - business rule violations or invalid data
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/X-Correlation-Id-Response'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validationFailed:
+              summary: Multiple validation errors
+              value:
+                code: VALIDATION_ERROR
+                message: Validation failed
+                details:
+                  - code: FIELD_REQUIRED
+                    message: Field is required
+                    path: /basicInformation/returnType
+                  - code: VALUE_OUT_OF_RANGE
+                    message: Quantity must be greater than zero
+                    path: /dutyProducts/0/quantity
+                    value: -5
+                correlationId: 550e8400-e29b-41d4-a716-446655440000

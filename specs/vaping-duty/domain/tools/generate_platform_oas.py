@@ -286,9 +286,23 @@ class PlatformOASGenerator:
         print(f"Saving platform OAS: {output_path}")
         self.save_yaml(platform_oas, output_path)
 
+        # Generate bundled version (all $ref resolved inline)
+        bundled_path = output_path.with_suffix('.bundled.yaml')
+        print(f"Generating bundled OAS: {bundled_path}")
+        import subprocess
+        result = subprocess.run(
+            ['npx', '@redocly/cli', 'bundle', str(output_path), '-o', str(bundled_path)],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            print(f"   Bundled OAS: {bundled_path}")
+        else:
+            print(f"   ⚠️  Bundling failed: {result.stderr.strip()}")
+
         print("\n✅ Platform OAS generated successfully!")
         print(f"   Producer OAS: {self.producer_oas_path}")
         print(f"   Platform OAS: {output_path}")
+        print(f"   Bundled OAS:  {bundled_path}")
 
         return output_path
 
