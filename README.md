@@ -10,6 +10,64 @@ The VPD (Vaping Products Duty) Submission Returns Domain API orchestrates three 
 - **customer** - Trader/customer master data
 - **tax-platform** - Submission storage and retrieval
 
+## k8s-lab Deployment
+
+The full stack is deployed to k8s-lab with public endpoints protected by HTTP Basic Auth.
+
+### Public Endpoints
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Domain API | `https://vpd-domain-api.lab.ctoaas.co` | Orchestration API |
+| Excise Mock | `https://excise-mock-vpd.lab.ctoaas.co` | WireMock (XML responses) |
+| Customer Mock | `https://customer-mock-vpd.lab.ctoaas.co` | Prism (JSON) |
+| Tax Platform Mock | `https://tax-platform-mock-vpd.lab.ctoaas.co` | Prism (JSON) |
+| Docs / API Explorer | `https://vpd-docs.lab.ctoaas.co` | Swagger UI + docs |
+
+All public endpoints require HTTP Basic Auth. Credentials are stored in the cluster's `central-secret-store`.
+
+### Internal Endpoints (no auth)
+
+| Service | URL |
+|---------|-----|
+| Domain API | `https://vpd-domain-api.lab.local.ctoaas.co` |
+| Excise Mock | `https://excise-mock-vpd.lab.local.ctoaas.co` |
+| Customer Mock | `https://customer-mock-vpd.lab.local.ctoaas.co` |
+| Tax Platform Mock | `https://tax-platform-mock-vpd.lab.local.ctoaas.co` |
+| Docs / API Explorer | `https://vpd-docs.lab.local.ctoaas.co` |
+
+### Example Requests
+
+```bash
+# Domain API - get submission by acknowledgement reference
+curl -u <user>:<pass> \
+  "https://vpd-domain-api.lab.ctoaas.co/duty/vpd/submission-returns/v1?acknowledgementReference=ACK-2026-01-26-000123"
+
+# Domain API - get submission by approval + period
+curl -u <user>:<pass> \
+  "https://vpd-domain-api.lab.ctoaas.co/duty/vpd/submission-returns/v1?vpdApprovalNumber=VPD123456&periodKey=24A1"
+
+# Customer mock
+curl -u <user>:<pass> \
+  "https://customer-mock-vpd.lab.ctoaas.co/customers/CUST789"
+
+# Excise mock - health check
+curl -u <user>:<pass> \
+  "https://excise-mock-vpd.lab.ctoaas.co/__admin/health"
+```
+
+### OAS Specification
+
+The OpenAPI spec is available at:
+```
+https://vpd-docs.lab.ctoaas.co/specs/vaping-duty/domain/platform/vpd-submission-returns-api.yaml
+```
+
+The interactive API explorer is at:
+```
+https://vpd-docs.lab.ctoaas.co/explorer.html
+```
+
 ## Quick Start
 
 ```bash
