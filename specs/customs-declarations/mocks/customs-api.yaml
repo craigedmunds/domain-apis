@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: Customs Backend API — Mock
+  version: 1.0.0
+  description: |
+    Backend API for customs trader registration, authorisations, and licence checks.
+
+servers:
+  - url: http://localhost:4012
+    description: Local mock server
+  - url: http://customs-mock:8080
+    description: Docker internal
+
+paths:
+  /customs/traders/{eori}:
+    get:
+      summary: Get trader registration
+      operationId: getTraderRegistration
+      parameters:
+        - name: eori
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trader registration found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderRegistration'
+              examples:
+                registered:
+                  value:
+                    eori: GB123456789000
+                    traderName: "Acme Imports Ltd"
+                    registrationDate: "2019-04-01"
+                    status: REGISTERED
+        '404':
+          description: Trader not registered
+
+  /customs/traders/{eori}/authorisations:
+    get:
+      summary: Get AEO status and authorisations
+      operationId: getTraderAuthorisations
+      parameters:
+        - name: eori
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Authorisation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraderAuthorisations'
+              examples:
+                authorised:
+                  value:
+                    eori: GB123456789000
+                    aeoStatus: AUTHORISED
+                    authorisationTypes:
+                      - SIMPLIFIED_DECLARATION
+                      - ENTRY_IN_DECLARANTS_RECORDS
+
+  /customs/licences:
+    get:
+      summary: Check import licence for controlled goods
+      operationId: checkLicence
+      parameters:
+        - name: eori
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: commodityCode
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Licence found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LicenceResult'
+        '404':
+          description: No licence found for this trader/commodity combination
+
+components:
+  schemas:
+    TraderRegistration:
+      type: object
+      properties:
+        eori:
+          type: string
+        traderName:
+          type: string
+        registrationDate:
+          type: string
+        status:
+          type: string
+
+    TraderAuthorisations:
+      type: object
+      properties:
+        eori:
+          type: string
+        aeoStatus:
+          type: string
+        authorisationTypes:
+          type: array
+          items:
+            type: string
+
+    LicenceResult:
+      type: object
+      properties:
+        licenceRequired:
+          type: boolean
+        licenceRef:
+          type: string
+        expiryDate:
+          type: string
+        status:
+          type: string

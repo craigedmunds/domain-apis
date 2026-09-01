@@ -1,0 +1,45 @@
+# Tax Platform Get Declaration Kamelet
+# Retrieves a previously stored customs declaration by ID.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: tax-platform-getDeclaration
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Tax Platform — Get Declaration
+    description: Retrieves a stored customs declaration by ID
+    required:
+      - declarationId
+    properties:
+      declarationId:
+        title: Declaration ID
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - to:
+            uri: "http://tax-platform-mock:8080/customs/declarations/{{declarationId}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: taxPlatformResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 500"
+                steps:
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "Tax platform lookup failed: HTTP ${exchangeProperty.taxPlatformResponseCode}"

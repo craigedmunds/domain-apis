@@ -1,0 +1,57 @@
+# Customs Declarations Domain API — Common Routes
+#
+# Shared utilities used across all declaration pipeline routes.
+# Pattern: Pipes and Filters (reusable filter steps via direct:)
+
+# =============================================================================
+# Route: Health check
+# =============================================================================
+- route:
+    id: health
+    from:
+      uri: direct:health
+      steps:
+        - setBody:
+            constant: '{"status":"UP","service":"customs-declarations-api"}'
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: CamelHttpResponseCode
+            constant: 200
+
+# =============================================================================
+# Route: Extract standard headers into exchange properties
+# Isolates HTTP header access — downstream steps use exchange properties only.
+# This implements the Envelope Wrapper pattern: strips transport metadata.
+# =============================================================================
+- route:
+    id: extractStandardHeaders
+    from:
+      uri: direct:extractStandardHeaders
+      steps:
+        - setProperty:
+            name: correlationId
+            groovy: |
+              def id = exchange.in.getHeader('X-Correlation-Id', String)
+              return id ?: UUID.randomUUID().toString()
+        - setProperty:
+            name: requestContentType
+            simple: "${header.Content-Type}"
+        - removeHeaders:
+            pattern: "CamelHttp*"
+
+# =============================================================================
+# Route: Inject standard response headers
+# =============================================================================
+- route:
+    id: injectResponseHeaders
+    from:
+      uri: direct:injectResponseHeaders
+      steps:
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"

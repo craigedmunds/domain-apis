@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: VAT Registration API — Mock
+  version: 1.0.0
+  description: |
+    Backend API for VAT trader registrations.
+    Used in the Scatter-Gather pattern for the trader overview endpoint.
+
+servers:
+  - url: http://localhost:4014
+    description: Local mock server
+  - url: http://vat-mock:8080
+    description: Docker internal
+
+paths:
+  /vat/traders/{eori}:
+    get:
+      summary: Get VAT registration by EORI
+      operationId: getVatRegistration
+      parameters:
+        - name: eori
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: VAT registration found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VatRegistration'
+              examples:
+                registered:
+                  value:
+                    eori: GB123456789000
+                    vrn: GB987654321
+                    vatRegistrationStatus: registered
+                    effectiveDate: "2017-04-01"
+        '404':
+          description: Not VAT registered
+
+components:
+  schemas:
+    VatRegistration:
+      type: object
+      properties:
+        eori:
+          type: string
+        vrn:
+          type: string
+        vatRegistrationStatus:
+          type: string
+        effectiveDate:
+          type: string

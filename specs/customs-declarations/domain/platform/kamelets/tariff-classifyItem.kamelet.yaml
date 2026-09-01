@@ -1,0 +1,60 @@
+# Tariff Classification Kamelet
+# Classifies a goods item against the UK Global Tariff.
+# Returns duty rate, applicable preference, and controlled-goods flag.
+#
+# POC uses HTTP. Production deployment should use HTTPS or service mesh mTLS.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: tariff-classifyItem
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Tariff — Classify Goods Item
+    description: Looks up a commodity code in the UK Global Tariff and returns classification details
+    required:
+      - commodityCode
+    properties:
+      commodityCode:
+        title: Commodity Code
+        description: 8-digit commodity code to classify
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - to:
+            uri: "http://tariff-mock:8080/tariff/commodities/{{commodityCode}}?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: tariffResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} >= 400"
+                steps:
+                  - log:
+                      message: "Tariff API error for ${exchangeProperty.currentItem[commodityCode]}: ${header.CamelHttpResponseCode}"
+                      loggingLevel: ERROR
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "Tariff classification failed: HTTP ${exchangeProperty.tariffResponseCode}"
+            otherwise:
+              steps:
+                - setProperty:
+                    name: classificationResult
+                    groovy: |
+                      import groovy.json.JsonSlurper
+                      def text = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                      return new JsonSlurper().parseText(text)

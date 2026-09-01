@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: Excise Backend API — Mock
+  version: 1.0.0
+  description: |
+    Backend API for excise trader registrations.
+    Used in the Scatter-Gather pattern for the trader overview endpoint.
+
+servers:
+  - url: http://localhost:4013
+    description: Local mock server
+  - url: http://excise-mock:8080
+    description: Docker internal
+
+paths:
+  /excise/traders/{eori}/registration:
+    get:
+      summary: Get excise trader registration
+      operationId: getExciseRegistration
+      parameters:
+        - name: eori
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excise registration found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExciseRegistration'
+              examples:
+                active:
+                  value:
+                    eori: GB123456789000
+                    exciseRegistrationNumber: WK1234567890
+                    registrationStatus: active
+                    registrationDate: "2018-01-15"
+        '404':
+          description: Not registered for excise
+
+components:
+  schemas:
+    ExciseRegistration:
+      type: object
+      properties:
+        eori:
+          type: string
+        exciseRegistrationNumber:
+          type: string
+        registrationStatus:
+          type: string
+        registrationDate:
+          type: string

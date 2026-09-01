@@ -1,0 +1,63 @@
+# Tax Platform Store Declaration Kamelet
+# Stores a classified customs declaration in the tax platform.
+# Returns declarationId and timestamp.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: tax-platform-storeDeclaration
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Tax Platform — Store Declaration
+    description: Stores a classified customs declaration and returns a declaration ID
+    required:
+      - requestBody
+    properties:
+      requestBody:
+        title: Request Body
+        description: The complete classified declaration as JSON
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "POST"
+        - setHeader:
+            name: Content-Type
+            constant: "application/json"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - setBody:
+            simple: "{{requestBody}}"
+        - to:
+            uri: "http://tax-platform-mock:8080/customs/declarations?bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: taxPlatformResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} == 201"
+                steps:
+                  - setProperty:
+                      name: storeDeclarationResponse
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        def text = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        return new JsonSlurper().parseText(text)
+              - simple: "${header.CamelHttpResponseCode} >= 500"
+                steps:
+                  - log:
+                      message: "Tax platform store failed: ${header.CamelHttpResponseCode}"
+                      loggingLevel: ERROR
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "Tax platform store failed: HTTP ${exchangeProperty.taxPlatformResponseCode}"

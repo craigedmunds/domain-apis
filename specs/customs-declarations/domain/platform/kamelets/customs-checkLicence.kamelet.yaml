@@ -1,0 +1,68 @@
+# Customs Licence Check Kamelet
+# Checks whether a trader holds a valid licence for controlled goods.
+# Used in the Composed Message Processor pattern for per-item licence validation.
+apiVersion: camel.apache.org/v1
+kind: Kamelet
+metadata:
+  name: customs-checkLicence
+  labels:
+    camel.apache.org/kamelet.type: action
+spec:
+  definition:
+    title: Customs — Check Import Licence
+    description: Checks whether the trader holds a valid licence for a controlled commodity
+    required:
+      - commodityCode
+      - eori
+    properties:
+      commodityCode:
+        title: Commodity Code
+        type: string
+      eori:
+        title: EORI Number
+        type: string
+  template:
+    from:
+      uri: kamelet:source
+      steps:
+        - removeHeaders:
+            pattern: "CamelHttp*"
+        - setHeader:
+            name: CamelHttpMethod
+            constant: "GET"
+        - setHeader:
+            name: Accept
+            constant: "application/json"
+        - setHeader:
+            name: X-Correlation-Id
+            simple: "${exchangeProperty.correlationId}"
+        - to:
+            uri: "http://customs-mock:8080/customs/licences?eori={{eori}}&commodityCode={{commodityCode}}&bridgeEndpoint=true&throwExceptionOnFailure=false"
+        - setProperty:
+            name: licenceResponseCode
+            simple: "${header.CamelHttpResponseCode}"
+        - choice:
+            when:
+              - simple: "${header.CamelHttpResponseCode} == 200"
+                steps:
+                  - setProperty:
+                      name: licenceResult
+                      groovy: |
+                        import groovy.json.JsonSlurper
+                        def text = body instanceof byte[] ? new String(body, 'UTF-8') : body.toString()
+                        return new JsonSlurper().parseText(text)
+              - simple: "${header.CamelHttpResponseCode} == 404"
+                steps:
+                  - setProperty:
+                      name: licenceResult
+                      groovy: |
+                        return [
+                          licenceRequired: true,
+                          licenceRef: null,
+                          status: 'NO_LICENCE_FOUND'
+                        ]
+              - simple: "${header.CamelHttpResponseCode} >= 500"
+                steps:
+                  - throwException:
+                      exceptionType: java.lang.RuntimeException
+                      message: "Licence check service unavailable: HTTP ${exchangeProperty.licenceResponseCode}"

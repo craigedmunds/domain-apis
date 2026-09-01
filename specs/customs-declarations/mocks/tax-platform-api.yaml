@@ -1,0 +1,63 @@
+openapi: 3.0.3
+info:
+  title: Tax Platform Customs API — Mock
+  version: 1.0.0
+  description: |
+    Backend API for storing and retrieving customs declarations in the tax platform.
+
+servers:
+  - url: http://localhost:4015
+    description: Local mock server
+  - url: http://tax-platform-mock:8080
+    description: Docker internal
+
+paths:
+  /customs/declarations:
+    post:
+      summary: Store a classified customs declaration
+      operationId: storeDeclaration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Declaration stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreResult'
+              examples:
+                accepted:
+                  value:
+                    declarationId: CDEC-2026-001234
+                    storedAt: "2026-03-28T10:00:00Z"
+
+  /customs/declarations/{declarationId}:
+    get:
+      summary: Get a stored declaration by ID
+      operationId: getDeclaration
+      parameters:
+        - name: declarationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Declaration found
+        '404':
+          description: Declaration not found
+
+components:
+  schemas:
+    StoreResult:
+      type: object
+      properties:
+        declarationId:
+          type: string
+        storedAt:
+          type: string
+          format: date-time
